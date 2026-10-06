@@ -1,0 +1,17 @@
+/bin/
+/out/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+*.tfplan
+/examples/**/.tfrc
+
+# Binaries built with `go build ./cmd/<name>` at the repository root.
+/controller
+/platform
+/seat-runner
+/steadmesh-tools
+/orgctl
+/fakes
+/terraform-provider-steadmesh

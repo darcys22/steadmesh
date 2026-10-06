@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview · Steadmesh</title>
+<meta name="description" content="Run a persistent organisation of AI agents on Kubernetes, declared in Terraform and reachable over Slack.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Overview</h1>
+<p class="lede">Run a persistent organisation of AI agents on Kubernetes, declared in Terraform and reachable over Slack.</p>
+<p>You describe an organisation in an infrastructure repository: its culture, teams, seats, harnesses, memory, tools, communication routes and external connections. Running <code>terraform apply</code> provisions it on Kubernetes. When the apply reports ready, each person can message their own <strong>representative</strong> over Slack. The representative uses persistent context, delegates to other seats and reports back. Work the agents produce, such as projects and tasks, appears in a connected tracker like Linear.</p>
+
+<div class="cards">
+  <a class="card" href="quickstart.html"><strong>Quickstart →</strong><span>Run everything locally on kind with deterministic fakes. No accounts needed.</span></a>
+  <a class="card" href="tutorial.html"><strong>Tutorial →</strong><span>Build an organisation declaration step by step and follow a request end to end.</span></a>
+  <a class="card" href="real-services.html"><strong>Connect real services →</strong><span>Slack, Linear and the Claude Code harness.</span></a>
+  <a class="card" href="configuration.html"><strong>Configuration reference →</strong><span>Every field, default and validation rule.</span></a>
+</div>
+
+<h2>How it fits together</h2>
+<svg class="diagram" viewBox="0 0 880 300" role="img" aria-label="Infrastructure repository applies Terraform, which writes the organisation; the controller runs seats; humans reach representatives through Slack via the platform service">
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+  <rect class="box" x="10" y="20" width="180" height="56" rx="8"/><text x="24" y="44">Infrastructure repo</text><text class="sub" x="24" y="62">Terraform roots + modules</text>
+  <rect class="box hl" x="240" y="20" width="190" height="56" rx="8"/><text x="254" y="44">steadmesh provider</text><text class="sub" x="254" y="62">validates, plans, waits for ready</text>
+  <rect class="box" x="480" y="20" width="180" height="56" rx="8"/><text x="494" y="44">AgentOrganization</text><text class="sub" x="494" y="62">Kubernetes custom resource</text>
+  <rect class="box hl" x="700" y="20" width="170" height="56" rx="8"/><text x="714" y="44">Controller</text><text class="sub" x="714" y="62">seats, lifecycle, readiness</text>
+  <rect class="box" x="700" y="130" width="170" height="64" rx="8"/><text x="714" y="154">Seat Pods</text><text class="sub" x="714" y="172">harness + seat-runner,</text><text class="sub" x="714" y="186">persistent workspace</text>
+  <rect class="box hl" x="400" y="130" width="230" height="64" rx="8"/><text x="414" y="154">Platform service</text><text class="sub" x="414" y="172">inbox, memory, tools gateway,</text><text class="sub" x="414" y="186">operation ledger, model proxy</text>
+  <rect class="box" x="140" y="130" width="190" height="64" rx="8"/><text x="154" y="154">Slack</text><text class="sub" x="154" y="172">people message their</text><text class="sub" x="154" y="186">representatives</text>
+  <rect class="box" x="140" y="230" width="190" height="56" rx="8"/><text x="154" y="254">Linear</text><text class="sub" x="154" y="272">projects and tasks</text>
+  <rect class="box" x="400" y="230" width="230" height="56" rx="8"/><text x="414" y="254">Postgres + Secrets</text><text class="sub" x="414" y="272">durable state; credentials stay here</text>
+  <path class="edge" d="M190,48 H236"/><path class="edge" d="M430,48 H476"/><path class="edge" d="M660,48 H696"/>
+  <path class="edge" d="M785,76 V126"/>
+  <path class="edge" d="M696,162 H634"/><path class="edge" d="M634,170 H696"/>
+  <path class="edge" d="M330,162 H396"/><path class="edge" d="M396,170 H330"/>
+  <path class="edge" d="M440,194 L330,240"/>
+  <path class="edge" d="M515,194 V226"/>
+</svg>
+
+<p>Terraform is the desired-state interface. The controller keeps running after Terraform exits: it wakes sleeping seats when messages arrive, stops idle ones, recovers crashed ones and reports readiness. Agents never hold external credentials. They call tools on the platform service, which checks each call against the grants you declared before acting.</p>
+
+<h2>Core concepts</h2>
+<table>
+<tr><th>Concept</th><th>What it means</th></tr>
+<tr><td><strong>Organisation</strong></td><td>One <code>steadmesh_organization</code> resource, which becomes one <code>AgentOrganization</code> object in its own namespace.</td></tr>
+<tr><td><strong>Seat</strong></td><td>A continuing agent identity with durable state: a workspace volume, memory, conversation history and an inbox. Starting a process <em>activates</em> a seat. Replacing its container does not create a new colleague.</td></tr>
+<tr><td><strong>Representative</strong></td><td>A seat bound to one human through a channel binding. Normal human input goes through representatives, and each has a private conversation history.</td></tr>
+<tr><td><strong>Team</strong> and <strong>template</strong></td><td>A team groups seats and gives them shared instructions and resources. Templates are reusable; for example, <code>engineering</code> extends <code>base</code>. Membership is declared on the seat.</td></tr>
+<tr><td><strong>Instructions</strong></td><td>Culture, team and role guidance, stored as content-addressed bundles. They are applied in order: organisation, then teams, then role, then seat. Instructions shape behaviour but never grant permissions.</td></tr>
+<tr><td><strong>Harness</strong></td><td>The agent engine that runs inside a seat: <code>claude-code</code>, or the deterministic <code>fake</code> used in tests. It can be replaced without losing the seat's identity or memory.</td></tr>
+<tr><td><strong>Memory store</strong></td><td>A searchable, revisioned record store scoped as personal, team or organisation. Agents decide what to write; the platform enforces who can read what.</td></tr>
+<tr><td><strong>Connection</strong> and <strong>grant</strong></td><td>A connection describes an external service (Slack, Linear, a model API) by reference. A grant lets a seat or team perform specific operations on a connection, memory store or workspace.</td></tr>
+<tr><td><strong>Message route</strong></td><td>Which seats may message which other seats, and whether replies are allowed.</td></tr>
+</table>
+
+<h2>What the platform deliberately does not decide</h2>
+<p>The platform provides participants, context, execution environments and capabilities. It does not impose a CEO, a project owner, an approval chain or a definition of "done". The agents decide how projects are formed, coordinated, reviewed and completed, guided by their instructions. Projects and tasks are business records in your tracker, never Terraform resources.</p>
+
+<div class="callout"><p><strong>Status.</strong> The first release covers the design's Milestones 1–4. The full flow from apply to conversation passes end to end on a local kind cluster with deterministic fakes. A run against real Slack, Linear and a real model is still pending; see <a href="status.html">Acceptance status</a>.</p></div>
+<div class="pager"><span></span><a href="quickstart.html" style="text-align:right"><small>Next</small>Quickstart</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

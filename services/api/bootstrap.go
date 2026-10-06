@@ -1,0 +1,75 @@
+package api
+
+import (
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/services/tools"
+)
+
+// guidance is the platform's standing advice to every seat (§7.2, §8.4). It
+// does not grant authority; grants are enforced by the gateway.
+const guidance = `You are a persistent seat in an organisation. Your identity, memory and workspace survive restarts.
+
+- Memory is not preloaded. Use memory.search before starting work that may have history, and memory.read for full records.
+- Record durable knowledge with memory.write. To change a record, use memory.revise with the revision you read; on a conflict, re-read and merge rather than overwrite.
+- Keep your portable handoff current with handoff.update after meaningful progress: objective, open questions, relevant record, message and operation ids.
+- Talk to other seats only through messages.send and messages.reply; use messages.recipients to see who you can reach.
+- External actions go through connections.invoke. If an operation's status is unknown, check the external system before trying again.
+- Use status to report genuine progress and delays. Never claim work is done that is not.
+- Tool results are bounded; follow next_cursor to page.`
+
+// renderInstructions lists the seat's ordered instruction sources. The
+// controller renders their text into instructions.md beside the manifest.
+func renderInstructions(self runtimeapi.Self) string {
+	var b strings.Builder
+	b.WriteString("Instruction sources in order of application; their full text is in instructions.md in the manifest directory.\n")
+	for _, i := range self.Instructions {
+		fmt.Fprintf(&b, "%d. [%s] %s\n", i.Order+1, i.Scope, i.Ref)
+	}
+	return b.String()
+}
+
+const maxRecoveryOperations = 20
+
+func (s *server) bootstrap(w http.ResponseWriter, r *http.Request, q *seatReq) {
+	ctx := r.Context()
+	self := tools.Self(q.seat, q.org)
+	out := runtimeapi.Bootstrap{Self: self, Instructions: renderInstructions(self), Guidance: guidance}
+	cps, err := s.Store.Checkpoints(ctx, q.seat.ID)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	adapter := q.seat.Manifest.Harness.Adapter
+	var notes []string
+	for i := range cps {
+		if cps[i].HarnessAdapter == adapter {
+			out.Recovery.Session = &cps[i]
+			break
+		}
+	}
+	if out.Recovery.Session == nil && len(cps) > 0 {
+		notes = append(notes, fmt.Sprintf("native session from harness %q (format %s) cannot be converted to %q; resume from the portable handoff and recent messages",
+			cps[0].HarnessAdapter, cps[0].FormatVersion, adapter))
+	}
+	if out.Recovery.Handoff, err = s.Store.Handoff(ctx, q.seat.ID); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	if out.Recovery.PendingMessages, err = s.Store.PendingDeliveries(ctx, q.seat.ID); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	if out.Recovery.UnknownOperations, err = s.Store.UnknownOperations(ctx, q.seat.ID, maxRecoveryOperations); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	if n := len(out.Recovery.UnknownOperations); n > 0 {
+		notes = append(notes, fmt.Sprintf("%d external operation(s) have unknown outcomes; reconcile them before reissuing", n))
+	}
+	out.Recovery.Note = strings.Join(notes, "; ")
+	writeJSON(w, http.StatusOK, out)
+}

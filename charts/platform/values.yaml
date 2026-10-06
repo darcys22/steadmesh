@@ -1,0 +1,39 @@
+# Image tag and pull policy shared by the controller and platform images.
+image:
+  controllerRepository: steadmesh/controller
+  platformRepository: steadmesh/platform
+  tag: dev
+  pullPolicy: IfNotPresent
+
+# Platform database. The URL is read from an existing Secret in the release
+# namespace; the chart never holds credentials.
+database:
+  secretName: steadmesh-db
+  secretKey: url
+
+# Optional Vault (Kubernetes auth with the platform ServiceAccount token).
+vault:
+  enabled: false
+  address: ""
+  role: steadmesh-platform
+  mount: secret
+  jwtPath: /var/run/secrets/kubernetes.io/serviceaccount/token
+
+controller:
+  replicas: 1
+  leaderElect: true
+  # Defaults to http://steadmesh-platform.<release namespace>.svc:8080.
+  platformURL: ""
+  seatImagePullPolicy: IfNotPresent
+  netprobeImage: steadmesh/seat-fake:dev
+  netprobeDeniedURL: https://kubernetes.default.svc:443/livez
+  dnsNamespace: kube-system
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: "1", memory: 256Mi}
+
+platform:
+  replicas: 1
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "2", memory: 512Mi}

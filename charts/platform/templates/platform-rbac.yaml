@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: steadmesh-platform
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: platform
+---
+# TokenReview for seat (steadmesh-gateway audience) and controller tokens.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: steadmesh-platform-auth-delegator
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: steadmesh-platform
+    namespace: {{ .Release.Namespace }}
+---
+# k8s:<name> secret references resolve in the control-plane namespace only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: steadmesh-platform-secrets
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: steadmesh-platform-secrets
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: steadmesh-platform-secrets
+subjects:
+  - kind: ServiceAccount
+    name: steadmesh-platform
+    namespace: {{ .Release.Namespace }}

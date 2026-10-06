@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operating an organisation · Steadmesh</title>
+<meta name="description" content="Check readiness, understand seat lifecycle, change configuration safely, retire seats and troubleshoot.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Operating an organisation</h1>
+<p class="lede">Check readiness, understand seat lifecycle, change configuration safely, retire seats and troubleshoot.</p>
+<h2>The deployment workflow</h2>
+<p>An infrastructure repository applies three stages in order. The example roots live in <code>examples/</code>:</p>
+<table>
+<tr><th>Stage</th><th>Creates</th><th>Typical owner</th></tr>
+<tr><td><code>foundation</code></td><td>Cluster prerequisites: namespaces, Postgres, the secret manager integration, credential Secrets</td><td>Platform/infra team</td></tr>
+<tr><td><code>platform</code></td><td>The Helm chart: CRDs, controller, platform service</td><td>Platform/infra team</td></tr>
+<tr><td><code>organisation</code></td><td>The <code>steadmesh_organization</code> resource and its instruction bundles</td><td>Whoever owns the organisation's structure</td></tr>
+</table>
+<table>
+<tr><th>Command</th><th>What it does</th></tr>
+<tr><td><code>make -C examples apply</code></td><td>Plans and applies each stage in order, then runs a fresh <code>orgctl verify</code>. The first failing stage stops the run.</td></tr>
+<tr><td><code>make -C examples plan</code></td><td>Plans every stage. Later stages need the earlier ones applied.</td></tr>
+<tr><td><code>make -C examples status</code></td><td>Organisations, seats and readiness.</td></tr>
+<tr><td><code>make -C examples verify</code></td><td>A fresh readiness check with no Terraform involved.</td></tr>
+<tr><td><code>make -C examples teardown</code></td><td>Destroys organisation, platform and foundation. The cluster stays.</td></tr>
+<tr><td><code>make -C examples apply-&lt;stage&gt;</code></td><td>One stage only.</td></tr>
+</table>
+<p>Every saved plan, rendered plan, log and output goes to <code>examples/out/</code> for review.</p>
+
+<h2>Checking readiness</h2>
+<pre><code>bin/orgctl status --context kind-steadmesh --namespace steadmesh-example
+bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeout 10m</code></pre>
+<p><code>status</code> prints the current conditions, the seats and the representative endpoints. <code>verify</code> asks the controller for a completely fresh pass: it re-verifies connections and re-probes every seat. It exits non-zero unless the organisation is <code>OperationalReady</code>. A no-change <code>terraform apply</code> is not a health check, so run <code>verify</code> after every deploy.</p>
+
+<h3>Conditions</h3>
+<p>The conditions are evaluated in this order. The first one that is not <code>True</code> becomes the reason for <code>OperationalReady</code>.</p>
+<table>
+<tr><th>Condition</th><th>True when</th><th>Common reasons for False</th></tr>
+<tr><td><code>Configured</code></td><td>The specification compiles, and all instruction digests match their content.</td><td><code>InvalidSpec</code>, digest mismatch</td></tr>
+<tr><td><code>IdentitiesReady</code></td><td>Every seat has a durable identity in the platform.</td><td><code>PlatformUnavailable</code></td></tr>
+<tr><td><code>ConnectionsAuthenticated</code></td><td>Every required connection authenticates.</td><td><code>ConnectionUnauthenticated</code> with the adapter error</td></tr>
+<tr><td><code>IngressReady</code></td><td>The Slack Socket Mode connection is established.</td><td><code>IngressUnavailable: connecting</code></td></tr>
+<tr><td><code>BindingsValid</code></td><td>Every bound human exists in the workspace.</td><td>Unknown or deleted user</td></tr>
+<tr><td><code>StorageReady</code></td><td>Every seat's workspace volume is bound.</td><td>Pending PVC, no storage class</td></tr>
+<tr><td><code>HarnessCompatible</code></td><td>The harness profiles are supported.</td><td>Unsupported adapter or capability</td></tr>
+<tr><td><code>SandboxEnforced</code></td><td>A probe Pod has proved that the NetworkPolicy actually blocks traffic, and any requested RuntimeClass exists.</td><td>CNI without NetworkPolicy support, missing RuntimeClass</td></tr>
+<tr><td><code>RoutesExecutable</code></td><td>Every seat passed a synthetic probe for its current revision: a tool call, a workspace write/read and, if it has a model connection, a model ping.</td><td><code>ProbePending</code>, <code>ProbeFailed</code></td></tr>
+</table>
+<p>A seat that is stopped but has passed its probe still counts as ready. The probe never creates business work and never sends messages to people.</p>
+
+<h2>Seat lifecycle</h2>
+<p>Seats have technical execution states, separate from any project's business status:</p>
+<table>
+<tr><th>State</th><th>Meaning</th></tr>
+<tr><td><code>Provisioning</code></td><td>The workspace, identity or Pod is being prepared.</td></tr>
+<tr><td><code>Warm</code></td><td>The runtime is up and waiting for work.</td></tr>
+<tr><td><code>Executing</code></td><td>The harness is processing a message under an execution lease.</td></tr>
+<tr><td><code>Quiescing</code></td><td>The runtime is finishing the current turn and checkpointing before it stops.</td></tr>
+<tr><td><code>Stopped</code></td><td>The Pod is gone, but every durable piece of state remains.</td></tr>
+<tr><td><code>Recovering</code></td><td>The runtime failed. The old writer is being fenced off before a new one starts.</td></tr>
+<tr><td><code>Blocked</code></td><td>A dependency or required capability is unavailable. Messages are kept, and the reason is shown.</td></tr>
+<tr><td><code>Retired</code></td><td>The seat was removed from the declaration. Its data is retained by default.</td></tr>
+</table>
+<p>The controller acts on these rules:</p>
+<ul>
+<li><strong>Wake.</strong> A pending message for a stopped seat scales it to one replica. This usually takes a few seconds.</li>
+<li><strong>Idle stop.</strong> With <code>idle_policy = "warm_then_stop"</code>, a warm seat with no pending work is stopped once <code>idle_timeout</code> has passed since its last activity.</li>
+<li><strong>Configuration change.</strong> When a seat's configuration revision changes, its Pod is replaced at a safe boundary: the runner finishes or interrupts the turn, checkpoints, then exits.</li>
+<li><strong>Crash.</strong> The controller confirms the old Pod is gone, never force-deleting it, before the new runner's lease takes over. Stale writers are rejected by lease generation.</li>
+</ul>
+
+<h2>Changing an organisation</h2>
+<ul>
+<li><strong>Instructions or templates.</strong> The plan's <code>resolved_seats</code> shows which seats get a new configuration revision. Each execution records the revision it ran with.</li>
+<li><strong>Grants.</strong> A revocation takes effect for the next tool call, before the apply reports ready. Information a model has already read cannot be un-read. Revocation stops future access only.</li>
+<li><strong>Seats.</strong> Adding a seat creates a new identity. Removing one retires it. Renaming a seat key is a retirement plus a new seat. To carry data over, set <code>adopt_from = "&lt;old seat id&gt;"</code> on the new seat.</li>
+<li><strong>Harness.</strong> Changing <code>harness_profile</code> keeps identity, memory, workspace and messages. A native session that cannot be converted is replaced by a portable handoff, with a recovery note.</li>
+</ul>
+<p>Agents can change the organisation only the way people do: through the infrastructure repository and its deployment workflow, and only if you grant them access to that repository. Seat credentials have no access to the Kubernetes API.</p>
+
+<h2>Administrative controls</h2>
+<p>These are infrastructure controls. Normal business steering goes through representatives.</p>
+<pre><code><span class="c"># Stop a seat's execution without editing its prompt or workspace</span>
+kubectl --context kind-steadmesh -n steadmesh-example patch agentseat &lt;seat-name&gt; \
+  --type merge -p '{"spec":{"adminSuspended":true}}'
+
+<span class="c"># Resume it</span>
+kubectl --context kind-steadmesh -n steadmesh-example patch agentseat &lt;seat-name&gt; \
+  --type merge -p '{"spec":{"adminSuspended":false}}'
+
+<span class="c"># Inspect a seat</span>
+kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-name&gt; -o yaml
+kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-name&gt;-0</code></pre>
+<p>Seat object names look like <code>seat-representative-sean-bd156bfb</code>. Find them with <code>kubectl get agentseats -l steadmesh.io/seat=&lt;seat key&gt;</code>.</p>
+
+<h2>Retention and deletion</h2>
+<ul>
+<li><strong>Retiring a seat</strong> stops new deliveries, revokes its capabilities and removes its Pod. Its workspace volume and database records are kept, because the volume has no garbage-collecting owner.</li>
+<li><strong>Destroying the organisation with <code>data_retention = "retain"</code></strong> removes the runtime and revokes everything, but keeps volumes and records. With <code>"delete"</code>, the volumes go too.</li>
+<li><strong>External resources are never deleted.</strong> That covers Slack workspaces, Linear projects and accounts, because connections are <code>ownership = "external"</code>.</li>
+<li><strong>Deleting a namespace or database</strong> from outside the platform bypasses retention. Protect them in the infrastructure repository, and use a <code>Retain</code> reclaim policy for production storage classes.</li>
+</ul>
+
+<h2>Observability</h2>
+<p>Every component logs structured JSON. Each line carries organisation, seat, execution and message IDs, so one inbound message can be traced from acceptance, through wake and harness execution, to tool calls and the reply. The platform exports Prometheus metrics on <code>:8080/metrics</code>:</p>
+<table>
+<tr><th>Metric</th><th>Meaning</th></tr>
+<tr><td><code>steadmesh_ingress_events_total</code></td><td>Inbound events by outcome: accepted, duplicate, unknown user, over cap</td></tr>
+<tr><td><code>steadmesh_messages_accepted_total</code>, <code>steadmesh_messages_rejected_total</code></td><td>Message acceptance</td></tr>
+<tr><td><code>steadmesh_inbox_oldest_pending_seconds</code></td><td>Queue age per seat</td></tr>
+<tr><td><code>steadmesh_seats</code></td><td>Seats by execution state</td></tr>
+<tr><td><code>steadmesh_deliveries_dead_lettered_total</code></td><td>Poison messages set aside after 5 attempts</td></tr>
+<tr><td><code>steadmesh_memory_conflicts_total</code></td><td>Stale-revision memory writes</td></tr>
+<tr><td><code>steadmesh_connector_operations_total</code>, <code>steadmesh_connector_retries_total</code>, <code>steadmesh_connector_unknown_outcomes_total</code></td><td>External operations, retries and outcomes the platform could not confirm</td></tr>
+<tr><td><code>steadmesh_tool_calls_total</code>, <code>steadmesh_wake_schedules_fired_total</code></td><td>Tool usage and scheduled wakes</td></tr>
+<tr><td><code>steadmesh_http_requests_total</code>, <code>steadmesh_http_request_duration_seconds</code></td><td>API traffic</td></tr>
+</table>
+
+<h2>Troubleshooting</h2>
+<table>
+<tr><th>Symptom</th><th>Cause and fix</th></tr>
+<tr><td>Apply times out on <strong>create</strong>, and the next plan wants to replace the organisation</td><td>Terraform marks a resource tainted when its create fails. Fix the reported condition, then run <code>terraform -chdir=examples/organisation untaint steadmesh_organization.this</code>. Timeouts on update don't taint.</td></tr>
+<tr><td><code>SandboxEnforced=False</code> naming the NetworkPolicy</td><td>The cluster's CNI doesn't enforce NetworkPolicy, or the probe Pod is still running. Seats are deliberately not started without enforcement. Use a CNI that enforces it (kind's default does).</td></tr>
+<tr><td><code>IngressReady=False: connecting</code> right after a Slack outage</td><td>Socket Mode is reconnecting with backoff. Re-run <code>orgctl verify</code> after a short wait.</td></tr>
+<tr><td><code>ConnectionUnauthenticated: invalid_auth</code></td><td>A wrong or revoked token in the Secret named by <code>secret_ref</code>. Update the Secret, then run <code>orgctl verify</code>. If the old credential is still in use, restart the platform: <code>kubectl --context kind-steadmesh -n steadmesh-system rollout restart deploy/steadmesh-platform</code>.</td></tr>
+<tr><td>A seat crash-loops, logging "seat directory … is not writable"</td><td>The workspace volume's directories belong to another user. Use a storage class that honours <code>fsGroup</code>, or fix ownership on the volume.</td></tr>
+<tr><td><code>terraform init</code>: "local package … doesn't match any of the checksums"</td><td>A rebuilt dev provider. The example Makefile regenerates the lock file on every init; if you run Terraform by hand, delete <code>.terraform.lock.hcl</code>.</td></tr>
+<tr><td>A reply never arrives, and the seat shows <code>Blocked</code></td><td>Read the seat's condition message. The message is kept in its inbox and is delivered once the dependency recovers.</td></tr>
+<tr><td>An external operation shows <code>unknown</code></td><td>The external API may have applied it, but the response was lost and could not be confirmed. The platform never replays it blindly. The agent sees it in its recovery context and reconciles it.</td></tr>
+</table>
+<div class="pager"><a href="real-services.html"><small>Previous</small>Connect Slack, Linear and Claude</a><a href="configuration.html" style="text-align:right"><small>Next</small>Configuration reference</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

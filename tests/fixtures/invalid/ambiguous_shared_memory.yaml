@@ -1,0 +1,76 @@
+# expect: ambiguous conflict
+key: example-company
+display_name: Example Company
+culture_refs: ["configmap:culture/culture.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+team_templates:
+  base:
+    instruction_refs: ["configmap:team-base/base.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    roles:
+      member: "configmap:roles/member.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  engineering:
+    extends: base
+    instruction_refs: ["configmap:team-eng/engineering.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    roles:
+      reviewer: "configmap:roles/reviewer.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    shared_memory:
+      engineering: [read, search, write, revise]
+teams:
+  engineering:
+    template: engineering
+    shared_memory:
+      engineering: [read]
+memory_stores:
+  organisation: {}
+  engineering: {}
+  rep_sean: {}
+  reviewer: {}
+harness_profiles:
+  fake:
+    adapter: fake
+    image_digest: steadmesh/seat-fake:dev
+execution_profiles:
+  interactive:
+    backend: kubernetes
+sandbox_profiles:
+  standard: {}
+connections:
+  slack:
+    adapter: slack
+    account_id: T0000
+    secret_ref: k8s:slack-credentials
+  tracker:
+    adapter: linear
+    secret_ref: vault:steadmesh/linear
+seats:
+  representative_sean:
+    role_ref: "configmap:roles/representative.md#sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    harness_profile: fake
+    execution_profile: interactive
+    sandbox_profile: standard
+    personal_memory: rep_sean
+  reviewer:
+    role_ref: "role:reviewer"
+    teams: [engineering]
+    harness_profile: fake
+    execution_profile: interactive
+    sandbox_profile: standard
+    personal_memory: reviewer
+grants:
+  reviewer_tracker:
+    subject: seat:reviewer
+    resource: connection:tracker
+    operations: [project.read, project.create, task.write]
+  org_memory:
+    subject: seat:representative_sean
+    resource: memory:organisation
+    operations: [read, search]
+message_routes:
+  rep_to_reviewer:
+    from: seat:representative_sean
+    to: seat:reviewer
+    reply: true
+channel_bindings:
+  sean:
+    connection: slack
+    external_user_id: U0SEAN
+    seat: representative_sean

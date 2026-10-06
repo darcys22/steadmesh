@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture · Steadmesh</title>
+<meta name="description" content="Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Architecture</h1>
+<p class="lede">Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.</p>
+<p>This page is the binding description of how the components fit together: who owns what, the contract every seat Pod follows, and how messages, tools and readiness work. The design rationale is in <a href="decisions.html">Design decisions</a>.</p>
+
+<h2 id="components">Components</h2>
+<table>
+<tr><th>Component</th><th>Code</th><th>Responsibility</th></tr>
+<tr><td>Specification and compiler</td><td><code>pkg/spec</code>, <code>pkg/compile</code></td><td>The schema, plus the single validator used by both the provider and the controller. Resolves templates, applies versioned defaults, expands grants and routes, and computes per-seat revisions.</td></tr>
+<tr><td>Kubernetes API</td><td><code>api/v1alpha1</code></td><td><code>AgentOrganization</code> (declared) and <code>AgentSeat</code> (owned by the controller).</td></tr>
+<tr><td>Terraform provider</td><td><code>provider/</code></td><td>Writes the resolved organisation with server-side apply (field manager <code>terraform-provider-steadmesh</code>, never forced). Waits for readiness, imports, detects drift.</td></tr>
+<tr><td>Controller</td><td><code>controller/</code>, <code>runtime/</code></td><td>Reconciles organisations into seats, runs seat lifecycle (wake, idle stop, safe restarts, fenced recovery, retirement), runs the sandbox backend and reports readiness.</td></tr>
+<tr><td>Platform service</td><td><code>services/</code></td><td>The trusted runtime: identity, durable inbox and outbox, memory, the tools gateway, the operation ledger, the scheduler, the model proxy, Slack ingress, verification and probes.</td></tr>
+<tr><td>Connectors</td><td><code>connectors/</code></td><td>Slack (Socket Mode), Linear (GraphQL), Anthropic (model proxy), and secret resolvers for Kubernetes and Vault.</td></tr>
+<tr><td>Seat runtime</td><td><code>cmd/seat-runner</code>, <code>harnesses/</code>, <code>cmd/steadmesh-tools</code></td><td>The in-Pod supervisor (lease, inbox, checkpoints, probes), the harness adapters and the tool client.</td></tr>
+<tr><td>Packaging</td><td><code>charts/platform</code>, <code>build/</code></td><td>The Helm chart (CRDs, controller, platform service) and container images.</td></tr>
+</table>
+<p>The controller and the platform service never execute agent-written code inside their own processes. Agents run only in seat sandboxes.</p>
+
+<h2 id="ownership">Ownership</h2>
+<p>Each piece of configuration has exactly one writer:</p>
+<ul>
+<li>The provider owns the declared fields of an <code>AgentOrganization</code>.</li>
+<li>The controller owns generated <code>AgentSeat</code> objects and their Kubernetes children, and writes only the <em>status</em> of organisations.</li>
+<li>Helm installs CRDs and software, but does not also manage the organisation object.</li>
+<li>Agents cannot change declarations through their runtime tools.</li>
+</ul>
+<table>
+<tr><th>Information</th><th>Authoritative location</th><th>Writer</th></tr>
+<tr><td>Organisation declaration</td><td>Infrastructure source, applied to the Kubernetes spec</td><td>Deployment workflow</td></tr>
+<tr><td>Readiness and effective revision</td><td>Kubernetes status</td><td>Controller</td></tr>
+<tr><td>Seat identity and retirement</td><td>Platform database</td><td>Controller, through the platform</td></tr>
+<tr><td>Messages and pending wakes</td><td>Platform database</td><td>Ingress and runtime services</td></tr>
+<tr><td>Memory</td><td>Platform database</td><td>Agents, through tools</td></tr>
+<tr><td>Workspace files</td><td>Per-seat persistent volume</td><td>The seat's process</td></tr>
+<tr><td>Projects and tasks</td><td>The work tracker</td><td>Agents, through connectors</td></tr>
+<tr><td>External operation attempts</td><td>Operation ledger</td><td>Gateway</td></tr>
+<tr><td>Credentials</td><td>Kubernetes Secrets or Vault</td><td>Credential owners</td></tr>
+</table>
+<p>Terraform state holds identifiers, declared values and computed outputs. It never holds conversations, memory or credentials, and runtime activity never causes drift.</p>
+
+<h2 id="namespaces">Namespaces and services</h2>
+<ul>
+<li><strong>Control-plane namespace</strong> (<code>steadmesh-system</code>): the controller (ServiceAccount <code>steadmesh-controller</code>), the platform service (ServiceAccount <code>steadmesh-platform</code>, Service <code>steadmesh-platform:8080</code>) and, in the example foundation, Postgres.</li>
+<li><strong>Organisation namespace:</strong> created by the infrastructure repository. It holds one <code>AgentOrganization</code>, the seats and the instruction ConfigMaps.</li>
+<li><strong>Platform URL</strong> for seats and the controller: <code>http://steadmesh-platform.steadmesh-system.svc:8080</code>.</li>
+</ul>
+
+<h2 id="secrets">Secrets</h2>
+<ul>
+<li><code>k8s:&lt;name&gt;</code> refers to a Secret in the <strong>control-plane</strong> namespace, readable only by the platform ServiceAccount.</li>
+<li><code>vault:&lt;path&gt;</code> refers to Vault KV v2. The platform logs in with Kubernetes auth, using its own ServiceAccount token.</li>
+<li>Seats never receive external credentials. They use tools through the gateway and the model through the proxy. Credential values never appear in prompts, logs, manifests or tool configuration.</li>
+<li>The resolvers are in <code>connectors/secretref</code>.</li>
+</ul>
+
+<h2 id="names">Deterministic names</h2>
+<p>For seat key <code>k</code> in organisation <code>o</code>, the base name is <code>seat-</code> plus <code>k</code> lowercased with <code>_</code> replaced by <code>-</code>, truncated to 40 characters. The suffix <code>-</code> plus the first 8 hex characters of <code>sha256(o + "/" + k)</code> is then appended. The result stays under the 52-character limit for StatefulSet names. The code is in <code>pkg/names</code>.</p>
+<table>
+<tr><th>Object</th><th>Name</th></tr>
+<tr><td>AgentSeat, StatefulSet, ServiceAccount, NetworkPolicy</td><td><code>name</code></td></tr>
+<tr><td>Pod</td><td><code>name-0</code></td></tr>
+<tr><td>Workspace volume claim (no owner reference, so it is retained)</td><td><code>ws-name</code></td></tr>
+<tr><td>Manifest ConfigMap</td><td><code>name-manifest</code></td></tr>
+</table>
+<p>Labels: <code>steadmesh.io/organization</code>, <code>steadmesh.io/seat</code> and <code>steadmesh.io/component=seat</code>. ServiceAccounts are annotated with <code>steadmesh.io/seat-id</code> and <code>steadmesh.io/organization-id</code>.</p>
+
+<h2 id="seat-pod">Seat Pod contract</h2>
+<ul>
+<li><strong>Workload.</strong> A StatefulSet with 0 or 1 replicas and one container running <code>/usr/local/bin/seat-runner</code>. It runs as uid 1000 and non-root, with a read-only root filesystem, all capabilities dropped and the <code>RuntimeDefault</code> seccomp profile. <code>automountServiceAccountToken</code> is false.</li>
+<li><strong>Identity.</strong> A projected token at <code>/var/run/steadmesh/token</code> with audience <code>steadmesh-gateway</code>, valid for 3600s and rotated by the kubelet. This is the seat's only credential, and the Kubernetes API rejects it.</li>
+<li><strong>Volumes.</strong> <code>/seat</code> is the persistent workspace: <code>workspace/</code> is the harness's working directory, <code>home/</code> is <code>HOME</code> and holds harness sessions, and <code>runner/</code> holds runner state. <code>/etc/steadmesh/manifest</code> is read-only and contains <code>manifest.json</code> (the resolved seat manifest) and <code>instructions.md</code> (the rendered instructions, in order). <code>/tmp</code> is an emptyDir. The runner creates the seat directories itself and fails clearly if they are not writable.</li>
+<li><strong>Environment.</strong> <code>STEADMESH_PLATFORM_URL</code>, <code>STEADMESH_TOKEN_FILE</code>, <code>STEADMESH_ORG_ID</code>, <code>STEADMESH_SEAT_ID</code>, <code>STEADMESH_SEAT_KEY</code>, <code>STEADMESH_CONFIG_REVISION</code>, <code>STEADMESH_HARNESS</code>, <code>STEADMESH_MODEL_CONNECTION</code>, <code>STEADMESH_MODEL</code>, <code>STEADMESH_MANIFEST_DIR</code>, and <code>POD_UID</code> from the downward API.</li>
+<li><strong>Probes.</strong> <code>:8081/healthz</code>; <code>:8081/readyz</code> reports ready once the runner holds the lease and has loaded its bootstrap.</li>
+<li><strong>Termination.</strong> Grace period 300s. On SIGTERM the runner enters Quiescing: it lets the turn finish (interrupting it after 240s), checkpoints, reports Stopped and releases the lease.</li>
+<li><strong>Network.</strong> Ingress is denied. Egress is allowed only to the platform Pods on TCP 8080 and to DNS. The controller proves this with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
+<li><strong>Restarts.</strong> The StatefulSet uses the <code>OnDelete</code> update strategy, so only the controller decides when a Pod restarts.</li>
+</ul>
+
+<h2 id="auth">Authentication and fencing</h2>
+<p>There are three kinds of caller, each with its own credential: infrastructure management (the Kubernetes API), the controller (<code>/internal/v1/*</code>, using its ServiceAccount token, which must match an allow-listed username), and seats (<code>/v1/*</code>).</p>
+<ol>
+<li>A seat's token is checked with a TokenReview for audience <code>steadmesh-gateway</code>. The resulting <code>system:serviceaccount:&lt;ns&gt;:&lt;sa&gt;</code> identity maps to exactly one active seat. The Pod UID comes from the token's bound claims. A client cannot pick a different principal.</li>
+<li><code>POST /v1/lease/acquire</code> succeeds when the lease is free, expired, or already held by the same Pod. It increments the <strong>generation</strong>. The TTL is 30s, and the runner renews every 10s.</li>
+<li>Every mutating call carries <code>X-Steadmesh-Generation</code>. The platform compares it with the current generation in the same transaction as the write, and stale or missing generations get <code>409 fenced</code>. This covers inbox leases and acks, memory writes, events, checkpoints, handoffs and connector operations.</li>
+<li>A runner whose renewal is fenced kills its harness immediately and exits.</li>
+<li>The controller calls <code>/internal/v1/seats/{id}/fence</code> only after it has confirmed that the previous Pod no longer exists. It never force-deletes a Pod on a node it cannot reach, so availability waits until fencing is reliable.</li>
+</ol>
+
+<h2 id="inbox">Messages, inbox and execution</h2>
+<ul>
+<li><strong>Envelope.</strong> Each message carries its ID, organisation, conversation, origin (human, seat, system, schedule or probe), sender and recipient, parent and correlation IDs, external event ID, body and reply route. Trusted ingress assigns the origin fields; agent text cannot set them.</li>
+<li><strong>Ingress.</strong> A Slack event is authorised from the verified team and user IDs matching a channel binding. It is stored before the event is acknowledged, and deduplicated by connection and event ID. The request handler never waits for a model.</li>
+<li><strong>Inbox.</strong> <code>GET /v1/inbox/next</code> long-polls, then atomically leases the oldest eligible delivery. Order is preserved within a conversation, and the call creates an execution record with the seat's configuration revision. A delivery lease lasts 15 minutes. If it expires, the message is requeued with backoff (1s, 8s, 64s, then 5m), and after 5 attempts it is dead-lettered so it never blocks the seat. Each seat holds at most 1000 pending internal messages.</li>
+<li><strong>Outbox.</strong> Replies to humans are written to an outbox in the same transaction as the reply. Each send is recorded as a connector operation, and an ambiguous send is marked unknown rather than resent.</li>
+<li><strong>Probes.</strong> Probe messages are handled by the runner itself, not the harness. The runner makes a tool call through <code>steadmesh-tools</code>, a workspace write and read, and a model ping when a model connection exists, then reports the checks.</li>
+</ul>
+
+<h2 id="gateway">Gateway and operation ledger</h2>
+<p><code>connections.invoke</code> works as follows:</p>
+<ol>
+<li>Check the grant: the seat's capability for <code>connection:&lt;k&gt;</code> must include the operation and match the target restrictions.</li>
+<li>Insert a <code>pending</code> ledger row. The idempotency key defaults to a hash of the seat, operation and canonical parameters; read-only operations get a fresh key each time.</li>
+<li>If the key already exists, return the recorded operation instead of running it again.</li>
+<li>Call the adapter and record the outcome:
+  <ul>
+  <li>success becomes <code>succeeded</code>, with the receipt;</li>
+  <li>a permanent error becomes <code>failed</code>;</li>
+  <li>a retryable error is retried with bounded backoff;</li>
+  <li>an ambiguous or unclassified error triggers a read-back. The effect is either found (<code>succeeded</code>) or not confirmed (<code>unknown</code>), and an unknown operation is never re-run automatically.</li>
+  </ul>
+</li>
+</ol>
+<p>The effective authority is the intersection of three things: the platform grant, what the adapter implements, and what the external account allows.</p>
+
+<h2 id="readiness">Readiness flow</h2>
+<p>On each reconcile of the current generation, the controller works through these steps in order:</p>
+<ol>
+<li>Compile the specification and verify instruction digests (<code>Configured</code>).</li>
+<li>Sync identities with the platform. This retires removed seats and activates the new policy revision before returning (<code>IdentitiesReady</code>).</li>
+<li>Ensure each seat's objects: ServiceAccount, volume, manifest, NetworkPolicy and StatefulSet (<code>StorageReady</code>, <code>HarnessCompatible</code>).</li>
+<li>Run the NetworkPolicy enforcement probe (<code>SandboxEnforced</code>).</li>
+<li>Have the platform verify connections, Slack ingress and bound users (<code>ConnectionsAuthenticated</code>, <code>IngressReady</code>, <code>BindingsValid</code>).</li>
+<li>Probe each seat once per configuration revision, waking it if needed (<code>RoutesExecutable</code>).</li>
+<li>Aggregate the results into <code>OperationalReady</code>, which is true only when every condition is true for the current generation.</li>
+</ol>
+<p><code>orgctl verify</code> annotates the organisation with <code>steadmesh.io/verify-request=&lt;nonce&gt;</code>. The controller runs a completely fresh pass and echoes the nonce in <code>steadmesh.io/verify-observed</code> only once every check has reached a terminal result. Transient states such as a conflicting update or a probe Pod that is still running keep the pass open.</p>
+
+<h2 id="lifecycle">Lifecycle decisions</h2>
+<p>One poller per organisation reads <code>/internal/v1/organizations/{id}/runtime</code> every 2s and feeds a pure decision function:</p>
+<ul>
+<li><strong>Wake:</strong> pending deliveries and 0 replicas lead to 1 replica.</li>
+<li><strong>Idle:</strong> a Warm seat with no pending work, past <code>last_activity + idle_timeout</code>, scales to 0 replicas, and the runner quiesces.</li>
+<li><strong>Revision change:</strong> when the adopted revision differs from the declared one, the Pod is deleted at a safe boundary.</li>
+<li><strong>Admin suspension:</strong> <code>spec.adminSuspended</code> keeps the seat at 0 replicas and Blocked.</li>
+<li><strong>Failure:</strong> the seat goes to Recovering. The controller confirms the old Pod is gone, then fences and restarts.</li>
+</ul>
+
+<h2 id="api">Runtime API</h2>
+<table>
+<tr><th>Seat paths (<code>/v1</code>)</th><th>Controller paths (<code>/internal/v1</code>)</th></tr>
+<tr><td>
+<code>POST lease/acquire</code>, <code>lease/renew</code>, <code>lease/release</code><br>
+<code>POST state</code>; <code>GET self</code>, <code>bootstrap</code><br>
+<code>GET tools</code>; <code>POST tools/{name}</code><br>
+<code>GET inbox/next?wait=</code>; <code>POST inbox/{id}/ack</code><br>
+<code>POST executions/{id}/events</code>; <code>PUT checkpoint</code><br>
+<code>/v1/model/{connection}/…</code> (model proxy)
+</td><td>
+<code>POST organizations:sync</code><br>
+<code>GET organizations/{id}/runtime</code><br>
+<code>POST organizations/{id}/verify</code><br>
+<code>DELETE organizations/{id}?retention=</code><br>
+<code>POST seats/{id}/fence</code><br>
+<code>POST seats/{id}/probe</code>; <code>GET seats/{id}/probe/{probe}</code>
+</td></tr>
+</table>
+<p>The wire types are in <code>pkg/runtimeapi</code>. Errors are JSON <code>{code, message}</code>, with codes unauthenticated, forbidden, fenced, conflict, not_found, invalid, blocked and unavailable. <code>/healthz</code> (liveness) and <code>/readyz</code> (database reachable) are separate, and <code>/metrics</code> serves Prometheus.</p>
+
+<h2 id="data">Durable data model</h2>
+<p>All durable data is in Postgres (migrations in <code>services/store/migrations</code>), scoped by organisation in every query and index:</p>
+<ul>
+<li>organizations, seats (immutable IDs; one active key per organisation; retired rows kept)</li>
+<li>execution leases, executions and events</li>
+<li>conversations, messages (unique external event ID), deliveries, outbox</li>
+<li>memory stores, records (full-text search) and append-only revisions</li>
+<li>sessions (harness checkpoints) and handoffs</li>
+<li>connector operations (unique idempotency key)</li>
+<li>wake schedules and connection checks</li>
+</ul>
+<p>Uniqueness and optimistic concurrency are enforced by database constraints, not only by application code.</p>
+<div class="pager"><a href="tools.html"><small>Previous</small>Agent tools</a><a href="decisions.html" style="text-align:right"><small>Next</small>Design decisions</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

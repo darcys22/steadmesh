@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuration reference · Steadmesh</title>
+<meta name="description" content="Every record of the organisation specification, with defaults, validation rules and the provider's computed attributes.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Configuration reference</h1>
+<p class="lede">Every record of the organisation specification, with defaults, validation rules and the provider's computed attributes.</p>
+<p>The same schema is used everywhere: in Terraform's typed <code>spec</code> attribute, in the <code>AgentOrganization</code> CRD, and in the controller. One compiler validates it at <code>terraform plan</code> time and again in the controller, so the two can never disagree. Field names are snake_case. Map keys are stable keys matching <code>^[a-z][a-z0-9_]{0,62}$</code>.</p>
+
+<h2>Provider</h2>
+<pre><code>provider "steadmesh" {
+  kubeconfig_path = "~/.kube/config"   <span class="c"># optional; standard loading rules otherwise</span>
+  kube_context    = "kind-steadmesh"    <span class="c"># required; the ambient context is never used</span>
+  namespace       = "steadmesh-example" <span class="c"># required; the organisation namespace</span>
+}</code></pre>
+<p>The provider fails early if the cluster does not serve <code>steadmesh.io/v1alpha1</code>, which means the platform stage has not been applied.</p>
+
+<h2>Resource <code>steadmesh_organization</code></h2>
+<table>
+<tr><th>Attribute</th><th>Kind</th><th>Description</th></tr>
+<tr><td><code>key</code></td><td>required</td><td>Stable organisation key, 1–40 characters. It is also the object name. Changing it means a new organisation.</td></tr>
+<tr><td><code>display_name</code></td><td>required</td><td>Human-readable name.</td></tr>
+<tr><td><code>spec</code></td><td>required</td><td>The organisation records described below.</td></tr>
+<tr><td><code>data_retention</code></td><td>optional, default <code>retain</code></td><td><code>retain</code> or <code>delete</code>: what happens to volumes and records when the organisation is destroyed.</td></tr>
+<tr><td><code>wait_for_ready</code></td><td>optional, default <code>true</code></td><td>Create and update wait for <code>OperationalReady</code> on the current generation.</td></tr>
+<tr><td><code>timeouts</code></td><td>block</td><td><code>create</code>, <code>update</code>, <code>delete</code>, default 20m. A timeout keeps state and never cleans up.</td></tr>
+<tr><td><code>id</code></td><td>computed</td><td>Immutable organisation ID.</td></tr>
+<tr><td><code>manifest_digest</code></td><td>computed at plan time</td><td>Digest of the resolved organisation. A change in it without a config change means drift.</td></tr>
+<tr><td><code>resolved_seats</code></td><td>computed at plan time</td><td>Per seat: <code>config_revision</code>, <code>teams</code>, <code>harness_profile</code> and the resolved <code>role_ref</code>.</td></tr>
+<tr><td><code>conditions</code></td><td>computed</td><td>Readiness conditions: <code>type</code>, <code>status</code>, <code>reason</code>, <code>message</code>.</td></tr>
+<tr><td><code>effective_revision</code></td><td>computed</td><td>The revision the controller has adopted.</td></tr>
+<tr><td><code>connection_details</code></td><td>computed</td><td><code>organization_id</code>, <code>namespace</code>, <code>status_endpoint</code>, and <code>representatives</code> (seat, connection, adapter, external user, mode). Contains no secrets.</td></tr>
+</table>
+<p><strong>Import.</strong> <code>terraform import steadmesh_organization.this &lt;namespace&gt;/&lt;key&gt;</code>. Objects managed by Helm are rejected. An object with no owner annotation needs explicit adoption: <code>&lt;namespace&gt;/&lt;key&gt;/adopt</code>.</p>
+
+<h2>Spec records</h2>
+
+<h3><code>culture_refs</code></h3>
+<p>A list of instruction references applied to every seat, first.</p>
+
+<h3 id="refs">Reference formats</h3>
+<table>
+<tr><th>Kind</th><th>Format</th></tr>
+<tr><td>Instruction</td><td><code>configmap:&lt;name&gt;/&lt;key&gt;#sha256:&lt;hex&gt;</code>, where the ConfigMap is in the organisation namespace, or <code>https://…#sha256:&lt;hex&gt;</code>. The digest is required and is checked before use. The <code>instruction-bundle</code> module produces these.</td></tr>
+<tr><td>Secret</td><td><code>k8s:&lt;secret-name&gt;</code> (a Secret in the control-plane namespace) or <code>vault:&lt;path&gt;</code> (Vault KV v2). Raw credentials are rejected.</td></tr>
+<tr><td>Subject</td><td><code>seat:&lt;key&gt;</code> or <code>team:&lt;key&gt;</code></td></tr>
+<tr><td>Resource</td><td><code>connection:&lt;key&gt;</code>, <code>memory:&lt;key&gt;</code> or <code>workspace:&lt;key&gt;</code></td></tr>
+</table>
+
+<h3><code>team_templates</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>extends</code></td><td>Another template key. Cycles are rejected.</td></tr>
+<tr><td><code>instruction_refs</code></td><td>Ordered. They are concatenated after the parent's, and duplicates keep their first position.</td></tr>
+<tr><td><code>roles</code></td><td>Map of role name to instruction reference. Seats select one with <code>role_ref = "role:&lt;name&gt;"</code>. A derived template overrides the parent.</td></tr>
+<tr><td><code>shared_memory</code></td><td>Map of memory store to operations, granted to the members of teams using this template. The same key with different operations in parent and child is rejected as ambiguous.</td></tr>
+<tr><td><code>parameters</code></td><td>Map of strings. A derived template overrides the parent.</td></tr>
+</table>
+<p>Templates are resolved by the provider. The object written to Kubernetes contains only concrete teams.</p>
+
+<h3><code>teams</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>template</code></td><td>Template to instantiate (optional).</td></tr>
+<tr><td><code>instruction_refs</code>, <code>shared_memory</code>, <code>parameters</code></td><td>Applied on top of the template, as the most derived layer.</td></tr>
+</table>
+<p>Teams have no member list. Seats declare their teams.</p>
+
+<h3><code>seats</code></h3>
+<table>
+<tr><th>Field</th><th>Required</th><th>Description</th></tr>
+<tr><td><code>role_ref</code></td><td>yes</td><td>An instruction reference, or <code>role:&lt;name&gt;</code> from the seat's team templates. A role defined differently by two of the seat's teams is rejected.</td></tr>
+<tr><td><code>teams</code></td><td></td><td>Ordered list of team keys. The order sets the order of team instructions.</td></tr>
+<tr><td><code>harness_profile</code>, <code>execution_profile</code>, <code>sandbox_profile</code></td><td>yes</td><td>Profile keys.</td></tr>
+<tr><td><code>personal_memory</code></td><td></td><td>A memory store owned by this seat. A store can be the personal memory of only one seat, and it cannot be shared with a team.</td></tr>
+<tr><td><code>workspace</code></td><td>default <code>{ persistent = true }</code></td><td><code>persistent</code>, plus <code>shared</code>: shared workspace keys. Each shared workspace also needs an explicit <code>workspace:</code> grant.</td></tr>
+<tr><td><code>display_name</code></td><td>default: the key</td><td></td></tr>
+<tr><td><code>instruction_refs</code></td><td></td><td>Seat-scoped instructions, applied last.</td></tr>
+<tr><td><code>adopt_from</code></td><td></td><td>The ID of a retired seat whose retained data this seat explicitly adopts.</td></tr>
+</table>
+
+<h3><code>memory_stores</code></h3>
+<table>
+<tr><th>Field</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>retention</code></td><td><code>retain</code></td><td><code>retain</code> or <code>delete</code></td></tr>
+<tr><td><code>backing_class</code></td><td><code>postgres</code></td><td>The only supported value in this release.</td></tr>
+<tr><td><code>capacity_mb</code></td><td></td><td>Declared capacity (informational).</td></tr>
+</table>
+
+<h3><code>shared_workspaces</code></h3>
+<p>Fields: <code>access_mode</code> (required; <code>ReadWriteMany</code> or <code>ReadOnlyMany</code>, which the storage class must support), <code>storage_class</code>, <code>size_gb</code> (default 5) and <code>retention</code>. Declaring and granting shared workspaces is validated, but mounting them into seats is not implemented yet in this release.</p>
+
+<h3><code>harness_profiles</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>adapter</code></td><td><code>claude-code</code> or <code>fake</code></td></tr>
+<tr><td><code>image_digest</code></td><td>Required. The seat image; pin <code>image@sha256:…</code> in production.</td></tr>
+<tr><td><code>model_connection</code></td><td>A connection with a model adapter. Required for <code>claude-code</code>.</td></tr>
+<tr><td><code>model</code></td><td>Model name passed to the harness (optional).</td></tr>
+<tr><td><code>required_capabilities</code></td><td>Must be a subset of the adapter's capabilities. <code>claude-code</code>: tools, mcp, event_stream, session_resume, interrupt, application_checkpoint. <code>fake</code>: tools, event_stream, interrupt, application_checkpoint.</td></tr>
+<tr><td><code>config</code></td><td>Adapter options, for example <code>bare = "false"</code> for the full Claude Code tool set.</td></tr>
+</table>
+
+<h3><code>execution_profiles</code></h3>
+<table>
+<tr><th>Field</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>backend</code></td><td>required</td><td><code>kubernetes</code></td></tr>
+<tr><td><code>service_class</code></td><td><code>interactive</code></td><td><code>interactive</code> or <code>background</code></td></tr>
+<tr><td><code>idle_policy</code></td><td><code>warm_then_stop</code></td><td><code>warm</code> (always on), <code>warm_then_stop</code> (stop when idle, wake on messages). <code>suspend</code> is rejected: the backend cannot suspend processes.</td></tr>
+<tr><td><code>idle_timeout</code></td><td><code>15m</code></td><td>Duration of at least 1m.</td></tr>
+<tr><td><code>cpu_request</code> / <code>cpu_limit</code></td><td><code>250m</code> / <code>2</code></td><td>Kubernetes quantities. The request cannot exceed the limit.</td></tr>
+<tr><td><code>memory_request</code> / <code>memory_limit</code></td><td><code>512Mi</code> / <code>2Gi</code></td><td></td></tr>
+<tr><td><code>workspace_size_gb</code></td><td><code>5</code></td><td>Size of the seat's persistent volume.</td></tr>
+<tr><td><code>storage_class</code></td><td>cluster default</td><td>Storage class of the workspace volume.</td></tr>
+<tr><td><code>required_features</code></td><td></td><td>Backend features that must be present: warm_idle, application_stop_restore, network_policy, resource_limits, persistent_workspace, runtime_class, non_root, read_only_root, seccomp.</td></tr>
+</table>
+
+<h3><code>sandbox_profiles</code></h3>
+<table>
+<tr><th>Field</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>network_policy_ref</code></td><td><code>deny_all_except_platform</code></td><td>Ingress is denied. Egress is allowed only to the platform service and DNS.</td></tr>
+<tr><td><code>filesystem_policy_ref</code></td><td><code>workspace_only</code></td><td>Read-only image; writable <code>/seat</code> and <code>/tmp</code> only.</td></tr>
+<tr><td><code>runtime_class</code></td><td></td><td>A RuntimeClass, for example gVisor or Kata. It is verified to exist; otherwise the seat is Blocked.</td></tr>
+<tr><td><code>required_enforcement</code></td><td>always includes <code>network_policy</code>, <code>non_root</code>, <code>resource_limits</code></td><td><code>gvisor</code> or <code>microvm</code> require a <code>runtime_class</code> that provides them. A plain container is never treated as a microVM.</td></tr>
+</table>
+
+<h3><code>connections</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker) or <code>anthropic</code> (model)</td></tr>
+<tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; Anthropic <code>api_key</code>.</td></tr>
+<tr><td><code>account_id</code></td><td>The authorised account: the Slack team ID (checked against <code>auth.test</code>), or the Linear organisation ID or URL key.</td></tr>
+<tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints.</td></tr>
+<tr><td><code>config</code></td><td>Adapter options. For Linear, <code>team_id</code> is the default team.</td></tr>
+<tr><td><code>required</code></td><td>Default <code>true</code>: the organisation is not ready until this connection authenticates.</td></tr>
+<tr><td><code>ownership</code></td><td><code>external</code> (default): never deleted by the platform. <code>managed</code> is rejected in this release.</td></tr>
+</table>
+<p>Operations a grant can name: Slack <code>channel.reply</code> (normally implicit through bindings); Linear <code>project.read</code>, <code>project.create</code>, <code>task.read</code>, <code>task.write</code>, <code>comment.write</code>; Anthropic <code>model.infer</code> (normally implicit through the harness).</p>
+
+<h3><code>grants</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>subject</code></td><td><code>seat:&lt;key&gt;</code> or <code>team:&lt;key&gt;</code>. Team grants apply to the team's members at each policy revision.</td></tr>
+<tr><td><code>resource</code></td><td><code>connection:</code>, <code>memory:</code> or <code>workspace:</code> plus a key.</td></tr>
+<tr><td><code>operations</code></td><td>Memory: read, search, write, revise, archive, publish, history. Workspace: read, write. Connection: the adapter's operations.</td></tr>
+<tr><td><code>targets</code></td><td>Optional restriction on targets: exact values, <code>*</code>, or a <code>prefix*</code>. The target is read from the operation's <code>target</code>, <code>project_id</code>, <code>team_id</code> or <code>issue_id</code> parameter.</td></tr>
+</table>
+<p>Only three permissions are implicit: a seat's own <code>personal_memory</code> (all memory operations), <code>model.infer</code> on its harness's model connection, and <code>channel.reply</code> to the human it is bound to. Each appears in the seat's capability manifest with an <code>implicit:</code> source.</p>
+
+<h3><code>message_routes</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>from</code>, <code>to</code></td><td>Seat or team subjects. A team expands to its members, and a seat never routes to itself.</td></tr>
+<tr><td><code>reply</code></td><td>The recipient may reply within conversations opened on this route.</td></tr>
+<tr><td><code>bidirectional</code></td><td>Both directions, each with reply.</td></tr>
+</table>
+
+<h3><code>channel_bindings</code></h3>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>connection</code></td><td>A communication connection.</td></tr>
+<tr><td><code>external_user_id</code></td><td>The verified external user, for example a Slack member ID. One identity can be bound only once.</td></tr>
+<tr><td><code>seat</code></td><td>The representative. A seat can represent only one human.</td></tr>
+<tr><td><code>mode</code></td><td><code>direct_message</code> (the default and only mode).</td></tr>
+</table>
+
+<h2>Limits</h2>
+<ul>
+<li>The serialised specification is limited to 256 KiB. Reference large documents by digest instead of inlining them.</li>
+<li>Seat object names are derived deterministically and kept short enough for Kubernetes: <code>seat-&lt;key&gt;-&lt;8 hex&gt;</code>.</li>
+<li>The defaults above belong to <code>defaults_version = 1</code>, which is recorded in every effective manifest.</li>
+</ul>
+
+<h2>Modules</h2>
+<table>
+<tr><th>Module</th><th>Inputs</th><th>Outputs</th></tr>
+<tr><td><code>modules/instruction-bundle</code></td><td><code>name</code>, <code>namespace</code>, <code>source_path</code></td><td><code>ref</code></td></tr>
+<tr><td><code>modules/team-base</code></td><td><code>namespace</code></td><td><code>template_key</code>, <code>team_templates</code></td></tr>
+<tr><td><code>modules/team-engineering</code></td><td><code>namespace</code>, <code>extends</code>, <code>shared_memory</code>, <code>extra_roles</code>, <code>extra_instruction_refs</code>, <code>parameters</code>, <code>template_key</code></td><td><code>template_key</code>, <code>team_templates</code> (roles <code>engineering_lead</code>, <code>engineer</code>, <code>reviewer</code>)</td></tr>
+<tr><td><code>modules/team-accounting</code></td><td>as above</td><td>an accounting specialisation of <code>base</code></td></tr>
+<tr><td><code>modules/representative</code></td><td><code>human</code>, <code>external_user_id</code>, <code>role_ref</code>, <code>connection</code>, <code>display_name</code>, profile keys, <code>seat_key</code>, <code>memory_store_key</code>, <code>memory_retention</code></td><td><code>seat_key</code>, <code>seats</code>, <code>memory_stores</code>, <code>channel_bindings</code> (seat <code>representative_&lt;human&gt;</code>, store <code>rep_&lt;human&gt;</code>)</td></tr>
+</table>
+<div class="pager"><a href="operations.html"><small>Previous</small>Operating an organisation</a><a href="tools.html" style="text-align:right"><small>Next</small>Agent tools</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

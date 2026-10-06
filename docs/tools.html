@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent tools · Steadmesh</title>
+<meta name="description" content="The platform tools every seat can call, how they are authorised, and the fake harness script language used in tests.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Agent tools</h1>
+<p class="lede">The platform tools every seat can call, how they are authorised, and the fake harness script language used in tests.</p>
+<p>Agents interact with the platform only through tools. Every call goes to the platform service, which authenticates the seat from its identity token. The platform checks the seat's current execution lease and its capability manifest, built from your grants, before acting. A seat cannot claim to be someone else, and a tool is never less restricted because it was called from a shell instead of through MCP.</p>
+
+<h2>Transports</h2>
+<table>
+<tr><th>Transport</th><th>How</th><th>Names</th></tr>
+<tr><td>MCP (Claude Code)</td><td><code>steadmesh-tools mcp</code> runs as a stdio MCP server inside the seat</td><td>Dots become underscores: <code>memory_search</code>, or <code>mcp__steadmesh__memory_search</code> in Claude Code</td></tr>
+<tr><td>CLI</td><td><code>steadmesh-tools call &lt;name&gt; '&lt;json&gt;'</code>, <code>steadmesh-tools list</code></td><td>Dotted names. Exit code 1 means a tool error; 4 means the caller's lease was fenced.</td></tr>
+<tr><td>HTTP</td><td><code>GET /v1/tools</code>, <code>POST /v1/tools/{name}</code> on the platform service</td><td>Dotted names</td></tr>
+</table>
+<p>Each seat sees only the tools it can use. Results are JSON, capped at 16 KiB, and lists are paginated with <code>cursor</code>.</p>
+
+<h2>Identity and status</h2>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>self</code></td><td>none</td><td>The seat's identity, instruction sources, memory stores, recipients and connections.</td></tr>
+<tr><td><code>status</code></td><td><code>seats?</code> (up to 20)</td><td>Technical state (running, stopped, queued work) of this seat and the seats it talks to. Representatives use it to explain real delays instead of inventing progress.</td></tr>
+<tr><td><code>handoff.update</code></td><td><code>objective</code>, <code>unresolved[]</code>, <code>record_ids[]</code>, <code>pending_message_ids[]</code>, <code>operation_ids[]</code>, <code>notes</code></td><td>Replaces the seat's portable handoff, which is restored after restarts and harness changes.</td></tr>
+</table>
+
+<h2>Memory</h2>
+<p>Memory stores are scopes the platform enforces. Inside a store, agents decide how to organise records. Search is authorised <em>before</em> it runs, so result counts, titles and snippets from stores a seat cannot read are never revealed.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>memory.stores</code></td><td>none</td><td>Stores available to this seat and the operations allowed on each.</td></tr>
+<tr><td><code>memory.search</code></td><td><code>query</code> (web-search syntax), <code>stores[]</code>, <code>tags[]</code>, <code>limit</code> (≤25), <code>cursor</code></td><td>Full-text search over authorised stores. An empty query lists recent records.</td></tr>
+<tr><td><code>memory.read</code></td><td><code>record_id</code>, <code>revision?</code>, <code>offset?</code></td><td>A record or a past revision. Long bodies are returned in chunks.</td></tr>
+<tr><td><code>memory.write</code></td><td><code>store</code>, <code>title</code>, <code>body</code>, <code>tags[]</code>, <code>source_refs[]</code></td><td>Creates a record. The author seat and generation are recorded.</td></tr>
+<tr><td><code>memory.revise</code></td><td><code>record_id</code>, <code>expected_revision</code>, plus the changed fields</td><td>Compare-and-swap. If someone else changed the record first, the result is a conflict with the current revision, and nothing is overwritten.</td></tr>
+<tr><td><code>memory.archive</code></td><td><code>record_id</code>, <code>expected_revision</code></td><td>Hides the record from normal retrieval and keeps its history.</td></tr>
+<tr><td><code>memory.publish</code></td><td><code>record_id</code>, <code>destination</code>, <code>title?</code>, <code>body?</code> (a summary)</td><td>An attributed copy into another store the seat can write. Provenance is recorded, and access to the original never changes.</td></tr>
+<tr><td><code>memory.history</code></td><td><code>record_id</code>, <code>limit</code>, <code>cursor</code></td><td>Revisions with their authors, newest first.</td></tr>
+</table>
+
+<h2>Messages</h2>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>messages.recipients</code></td><td>none</td><td>Seats this seat may message, and whether they can reply.</td></tr>
+<tr><td><code>messages.send</code></td><td><code>to</code> (seat key), <code>body</code> (≤12 KiB), <code>conversation_id?</code>, <code>correlation_id?</code></td><td>Sends over a declared route. A sleeping recipient is woken. The recipient sees the sender identity the platform assigned, never anything taken from the text. Fails with <code>inbox_full</code> when the recipient has 1000 pending messages.</td></tr>
+<tr><td><code>messages.reply</code></td><td><code>message_id</code> <em>or</em> <code>binding</code>, <code>body</code></td><td>Replies to a received message. With <code>binding</code>, a representative sends an unprompted update to its own human.</td></tr>
+<tr><td><code>messages.history</code></td><td><code>conversation_id?</code>, <code>limit</code>, <code>cursor</code></td><td>Lists conversations, or reads one this seat takes part in. Human conversations are visible only to their representative.</td></tr>
+</table>
+
+<h2>Wake schedules</h2>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>wake.schedule</code></td><td><code>at</code> (RFC 3339) or <code>every</code> (e.g. <code>24h</code>, at least 1m), <code>note</code></td><td>A durable future trigger, stored outside Terraform. The seat is woken with the note, even if it has stopped.</td></tr>
+<tr><td><code>wake.list</code></td><td>none</td><td>This seat's active schedules.</td></tr>
+<tr><td><code>wake.cancel</code></td><td><code>id</code></td><td>Cancels a schedule.</td></tr>
+</table>
+
+<h2>External connections</h2>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>connections.list</code></td><td>none</td><td>Connections this seat may use, with the granted operations and targets.</td></tr>
+<tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation, such as <code>project.create</code> on Linear. Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation instead of repeating it.</td></tr>
+<tr><td><code>operations.get</code></td><td><code>id</code></td><td>One recorded operation: status, receipt and result.</td></tr>
+</table>
+<p>Linear parameters:</p>
+<ul>
+<li><code>project.create</code>: <code>{name, description, content, team_ids}</code>. Team IDs default to the connection's <code>team_id</code>, and <code>description</code> is limited to 255 characters.</li>
+<li><code>project.read</code>: <code>{id}</code> or <code>{query, first}</code>.</li>
+<li><code>task.write</code>: <code>{title, description, team_id, project_id, state_id, assignee_id, priority}</code>. Passing an <code>id</code> turns a create into an update.</li>
+<li><code>task.read</code>: exactly one of <code>{id}</code>, <code>{query}</code> or <code>{project_id}</code>.</li>
+<li><code>comment.write</code>: <code>{issue_id, body}</code>.</li>
+</ul>
+
+<h3>Operation outcomes</h3>
+<table>
+<tr><th>Status</th><th>Meaning</th></tr>
+<tr><td><code>succeeded</code></td><td>Applied, with an external receipt such as a project ID or issue identifier.</td></tr>
+<tr><td><code>failed</code></td><td>Rejected and not applied.</td></tr>
+<tr><td><code>unknown</code></td><td>The request may have been applied, but the response was lost. The platform tried to read the effect back and could not confirm it. It is never repeated automatically: the agent should check the tracker. Unknown operations are listed in the seat's recovery context after a restart.</td></tr>
+</table>
+<p>Because Linear has no idempotency keys, created records carry a marker <code>steadmesh-op:&lt;operation id&gt;</code>. After a lost response, the gateway searches for that marker to find out whether the first attempt landed.</p>
+
+<h2 id="fake-harness">The fake harness script language</h2>
+<p>The <code>fake</code> harness never calls a model. It reads each message body as a small script, which makes infrastructure tests and the quickstart deterministic. Lines that start with <code>/</code> are commands; a body without any commands gets the reply <code>ack: &lt;text&gt;</code>. Every tool call goes through the <code>steadmesh-tools</code> binary, the same path and authority a real harness has.</p>
+<table>
+<tr><th>Command</th><th>Effect</th></tr>
+<tr><td><code>/tool &lt;name&gt; [json]</code></td><td>Calls a platform tool and records the result as output.</td></tr>
+<tr><td><code>/reply &lt;text&gt;</code></td><td>Replies to the triggering message.</td></tr>
+<tr><td><code>/report</code></td><td>Replies with all output collected so far.</td></tr>
+<tr><td><code>/file write &lt;path&gt; &lt;text&gt;</code>, <code>/file read &lt;path&gt;</code></td><td>Writes or reads a file in the seat's workspace.</td></tr>
+<tr><td><code>/delegate &lt;seat&gt; &lt;text…&gt;</code></td><td>Sends the rest of the message to another seat. When the reply comes back, it is forwarded to the original human.</td></tr>
+<tr><td><code>/task</code> (as the first line of a message from a seat)</td><td>Runs the remaining lines and replies to the sender with their output.</td></tr>
+<tr><td><code>/sleep &lt;duration&gt;</code></td><td>Waits (up to 10m); useful for testing interruption.</td></tr>
+<tr><td><code>/claim &lt;text&gt;</code></td><td>Records an agent claim that a task is done. The platform treats this as information only.</td></tr>
+<tr><td><code>/fail &lt;text&gt;</code></td><td>Fails the turn technically.</td></tr>
+</table>
+<p>For example, to delegate a tracker task from a human message:</p>
+<pre><code>/delegate eng_lead /task
+/tool connections.invoke {"connection":"linear","operation":"project.create","params":{"name":"Onboarding"}}</code></pre>
+<div class="pager"><a href="configuration.html"><small>Previous</small>Configuration reference</a><a href="architecture.html" style="text-align:right"><small>Next</small>Architecture</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

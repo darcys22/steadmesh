@@ -1,0 +1,513 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: agentorganizations.steadmesh.io
+spec:
+  group: steadmesh.io
+  names:
+    kind: AgentOrganization
+    listKind: AgentOrganizationList
+    plural: agentorganizations
+    shortNames:
+    - aorg
+    singular: agentorganization
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=="OperationalReady")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="OperationalReady")].reason
+      name: Reason
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AgentOrganization declares an organisation of persistent agents.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AgentOrganizationSpec is the resolved organisation declaration.
+            properties:
+              channel_bindings:
+                additionalProperties:
+                  properties:
+                    connection:
+                      type: string
+                    external_user_id:
+                      type: string
+                    mode:
+                      description: Mode is direct_message.
+                      type: string
+                    seat:
+                      type: string
+                  required:
+                  - connection
+                  - external_user_id
+                  - seat
+                  type: object
+                type: object
+              connections:
+                additionalProperties:
+                  properties:
+                    account_id:
+                      type: string
+                    adapter:
+                      description: Adapter is slack, linear, anthropic or fake-* in
+                        tests.
+                      type: string
+                    config:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    endpoint_ref:
+                      type: string
+                    ownership:
+                      description: Ownership is external (default, never deleted)
+                        or managed.
+                      type: string
+                    required:
+                      description: Required connections must authenticate before the
+                        organisation is ready.
+                      type: boolean
+                    secret_ref:
+                      description: SecretRef points at a secret in a supported manager
+                        (vault:..., k8s:...).
+                      type: string
+                  required:
+                  - adapter
+                  type: object
+                type: object
+              culture_refs:
+                items:
+                  type: string
+                type: array
+              data_retention:
+                description: 'DataRetention applies to the organisation when it is
+                  deleted: retain or delete.'
+                type: string
+              display_name:
+                description: DisplayName is the human-readable organisation name.
+                type: string
+              execution_profiles:
+                additionalProperties:
+                  properties:
+                    backend:
+                      description: Backend is the sandbox backend, initially kubernetes.
+                      type: string
+                    cpu_limit:
+                      type: string
+                    cpu_request:
+                      type: string
+                    idle_policy:
+                      description: IdlePolicy is warm, warm_then_stop or suspend.
+                      type: string
+                    idle_timeout:
+                      type: string
+                    memory_limit:
+                      type: string
+                    memory_request:
+                      type: string
+                    required_features:
+                      items:
+                        type: string
+                      type: array
+                    service_class:
+                      description: ServiceClass is interactive or background.
+                      type: string
+                    storage_class:
+                      description: |-
+                        StorageClass is the storage class of the seat workspace volume. Empty
+                        uses the cluster default.
+                      type: string
+                    workspace_size_gb:
+                      format: int64
+                      type: integer
+                  required:
+                  - backend
+                  type: object
+                type: object
+              grants:
+                additionalProperties:
+                  properties:
+                    operations:
+                      items:
+                        type: string
+                      type: array
+                    resource:
+                      description: Resource is connection:<key>, memory:<key> or workspace:<key>.
+                      type: string
+                    subject:
+                      description: Subject is seat:<key> or team:<key>.
+                      type: string
+                    targets:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - operations
+                  - resource
+                  - subject
+                  type: object
+                type: object
+              harness_profiles:
+                additionalProperties:
+                  properties:
+                    adapter:
+                      description: Adapter is the harness adapter name, e.g. claude-code
+                        or fake.
+                      type: string
+                    config:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    image_digest:
+                      description: ImageDigest pins the harness image (image@sha256:...
+                        or a local tag in dev).
+                      type: string
+                    model:
+                      type: string
+                    model_connection:
+                      description: ModelConnection names a connection with a model
+                        adapter.
+                      type: string
+                    required_capabilities:
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - adapter
+                  - image_digest
+                  type: object
+                type: object
+              key:
+                description: Key is the stable organisation key.
+                type: string
+              memory_stores:
+                additionalProperties:
+                  properties:
+                    backing_class:
+                      type: string
+                    capacity_mb:
+                      format: int64
+                      type: integer
+                    retention:
+                      description: Retention is retain or delete.
+                      type: string
+                  type: object
+                type: object
+              message_routes:
+                additionalProperties:
+                  properties:
+                    bidirectional:
+                      description: Bidirectional permits both directions.
+                      type: boolean
+                    from:
+                      description: From is seat:<key> or team:<key>.
+                      type: string
+                    reply:
+                      description: Reply permits the recipient to reply within conversations
+                        opened on this route.
+                      type: boolean
+                    to:
+                      description: To is seat:<key> or team:<key>.
+                      type: string
+                  required:
+                  - from
+                  - to
+                  type: object
+                type: object
+              sandbox_profiles:
+                additionalProperties:
+                  properties:
+                    filesystem_policy_ref:
+                      type: string
+                    network_policy_ref:
+                      description: NetworkPolicy is deny_all_except_platform (default)
+                        or a named policy ref.
+                      type: string
+                    required_enforcement:
+                      items:
+                        type: string
+                      type: array
+                    runtime_class:
+                      type: string
+                  type: object
+                type: object
+              seats:
+                additionalProperties:
+                  properties:
+                    adopt_from:
+                      description: AdoptFrom explicitly adopts the retained data of
+                        a retired seat ID (§4.1).
+                      type: string
+                    display_name:
+                      type: string
+                    execution_profile:
+                      type: string
+                    harness_profile:
+                      type: string
+                    instruction_refs:
+                      items:
+                        type: string
+                      type: array
+                    personal_memory:
+                      type: string
+                    role_ref:
+                      type: string
+                    sandbox_profile:
+                      type: string
+                    teams:
+                      items:
+                        type: string
+                      type: array
+                    workspace:
+                      properties:
+                        persistent:
+                          type: boolean
+                        shared:
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                  required:
+                  - execution_profile
+                  - harness_profile
+                  - role_ref
+                  - sandbox_profile
+                  type: object
+                type: object
+              shared_workspaces:
+                additionalProperties:
+                  properties:
+                    access_mode:
+                      description: AccessMode is ReadWriteMany or ReadOnlyMany.
+                      type: string
+                    retention:
+                      type: string
+                    size_gb:
+                      format: int64
+                      type: integer
+                    storage_class:
+                      type: string
+                  required:
+                  - access_mode
+                  type: object
+                type: object
+              team_templates:
+                additionalProperties:
+                  description: |-
+                    TeamTemplate is a reusable team definition. Templates may extend one other
+                    template; merge rules are documented in pkg/compile.
+                  properties:
+                    extends:
+                      type: string
+                    instruction_refs:
+                      items:
+                        type: string
+                      type: array
+                    parameters:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    roles:
+                      additionalProperties:
+                        type: string
+                      description: Roles maps a role key to its role instruction reference.
+                      type: object
+                    shared_memory:
+                      additionalProperties:
+                        items:
+                          type: string
+                        type: array
+                      description: SharedMemory names memory stores granted to the
+                        team instantiating the template.
+                      type: object
+                  type: object
+                type: object
+              teams:
+                additionalProperties:
+                  description: Team is a concrete grouping of seats. Membership is
+                    declared on seats only.
+                  properties:
+                    instruction_refs:
+                      items:
+                        type: string
+                      type: array
+                    parameters:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    shared_memory:
+                      additionalProperties:
+                        items:
+                          type: string
+                        type: array
+                      description: SharedMemory maps memory store keys to operations
+                        granted to members.
+                      type: object
+                    template:
+                      type: string
+                  type: object
+                type: object
+            required:
+            - display_name
+            - key
+            type: object
+          status:
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              connectionDetails:
+                description: ConnectionDetails are stable, non-secret details returned
+                  after readiness.
+                properties:
+                  namespace:
+                    type: string
+                  organizationID:
+                    type: string
+                  representatives:
+                    additionalProperties:
+                      properties:
+                        adapter:
+                          type: string
+                        connection:
+                          type: string
+                        externalUserID:
+                          type: string
+                        mode:
+                          type: string
+                        seat:
+                          type: string
+                        seatID:
+                          type: string
+                      required:
+                      - adapter
+                      - connection
+                      - externalUserID
+                      - mode
+                      - seat
+                      - seatID
+                      type: object
+                    type: object
+                  statusEndpoint:
+                    type: string
+                type: object
+              defaultsVersion:
+                type: integer
+              effectiveRevision:
+                type: string
+              lastVerifiedTime:
+                description: LastVerifiedTime is the time of the last successful synthetic
+                  verification.
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              organizationID:
+                type: string
+              seats:
+                additionalProperties:
+                  properties:
+                    adoptedRevision:
+                      type: string
+                    configRevision:
+                      type: string
+                    ready:
+                      type: boolean
+                    reason:
+                      type: string
+                    seatID:
+                      type: string
+                    state:
+                      description: ExecutionState is the technical execution state
+                        of a seat (§6.2).
+                      type: string
+                  required:
+                  - ready
+                  - seatID
+                  type: object
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

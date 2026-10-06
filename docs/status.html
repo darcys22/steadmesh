@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acceptance status · Steadmesh</title>
+<meta name="description" content="Which acceptance scenarios from the design are proven, partially proven or still pending.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Acceptance status</h1>
+<p class="lede">Which acceptance scenarios from the design are proven, partially proven or still pending.</p>
+<p>The design defines 27 acceptance scenarios. This page shows where each one stands. The detailed record, with test names, is <code>tests/acceptance/RESULTS.md</code>.</p>
+
+<div class="callout warn"><p><strong>Not yet proven with real services.</strong> The design does not allow the platform to be called usable on mocked connectors alone. Everything marked <span class="tag pass">pass</span> has been proven on a local kind cluster with the deterministic harness and fake Slack/Linear servers, plus integration suites against real Postgres, a Kubernetes API server, Terraform and the real Claude Code binary. The scenarios marked <span class="tag pending">live</span> also need a run with real Slack, Linear and a model (<code>make live</code>).</p></div>
+
+<h2>How to reproduce</h2>
+<pre><code>make test               <span class="c"># unit tests</span>
+make test-integration   <span class="c"># Postgres via testcontainers, envtest, Terraform acceptance, Claude Code feasibility</span>
+make e2e                <span class="c"># the full apply-to-conversation suite on a fresh kind cluster</span>
+make live               <span class="c"># real Slack, Linear and Claude (credentials required)</span></code></pre>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>ID</th><th>Scenario</th><th>Status</th><th>Evidence</th></tr>
+<tr><td>A01</td><td>Apply a prepared organisation</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: <code>make -C examples apply</code> ends with a fresh verify of OperationalReady and representative details</td></tr>
+<tr><td>A02</td><td>Connector lacks authorisation</td><td><span class="tag pass">pass</span></td><td>Provider and controller integration: the blocking condition names the connection</td></tr>
+<tr><td>A03</td><td>Repeat the same apply</td><td><span class="tag pass">pass</span></td><td>e2e: plan exit code 0, still five seats</td></tr>
+<tr><td>A04</td><td>First human message</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: Slack DM, then a reply from the representative</td></tr>
+<tr><td>A05</td><td>Two representatives</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: separate histories; a forged identity in message text is ignored</td></tr>
+<tr><td>A06</td><td>Delegate to another seat</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: representative to lead and back, correlated</td></tr>
+<tr><td>A07</td><td>Contact a sleeping seat</td><td><span class="tag pass">pass</span></td><td>e2e: the seat scales to 0, wakes on a message, and its file is intact</td></tr>
+<tr><td>A08</td><td>Kill a running Pod</td><td><span class="tag pass">pass</span></td><td>e2e: same ID, same workspace, new lease generation</td></tr>
+<tr><td>A09</td><td>Replay an inbound event</td><td><span class="tag pass">pass</span></td><td>e2e: the same event ID twice produces one reply</td></tr>
+<tr><td>A10</td><td>Lose an external response</td><td><span class="tag pass">pass</span></td><td>e2e: committed but the response dropped; read back, exactly one project</td></tr>
+<tr><td>A11</td><td>Concurrent shared-memory edit</td><td><span class="tag pass">pass</span></td><td>Integration: the stale revision conflicts, both revisions are attributed</td></tr>
+<tr><td>A12</td><td>Search inaccessible memory</td><td><span class="tag pass">pass</span></td><td>e2e and integration: nothing leaks</td></tr>
+<tr><td>A13</td><td>Remove a membership or grant</td><td><span class="tag partial">partial</span></td><td>Denied on the next call (integration); quiescing live work is unit-tested only</td></tr>
+<tr><td>A14</td><td>Change role or culture instructions</td><td><span class="tag partial">partial</span></td><td>Only affected seats change revision; executions record it. No live e2e</td></tr>
+<tr><td>A15</td><td>Replace a harness</td><td><span class="tag partial">partial</span></td><td>Handoff fallback is tested; a full migration of one seat has not been run</td></tr>
+<tr><td>A16</td><td>Unsupported sandbox feature</td><td><span class="tag pass">pass</span></td><td>Rejected at plan time; a missing RuntimeClass blocks the seat with no fallback</td></tr>
+<tr><td>A17</td><td>Management API from a seat</td><td><span class="tag pass">pass</span></td><td>e2e: no RBAC, no token automount, gateway-only token audience</td></tr>
+<tr><td>A18</td><td>Retire and recreate a seat</td><td><span class="tag pass">pass</span></td><td>Integration: no inherited private data without <code>adopt_from</code></td></tr>
+<tr><td>A19</td><td>Destroy with retention</td><td><span class="tag pass">pass</span></td><td>Integration: volumes and records kept</td></tr>
+<tr><td>A20</td><td>Restart control-plane services</td><td><span class="tag pass">pass</span></td><td>e2e: no duplicates, messages still answered</td></tr>
+<tr><td>A21</td><td>An agent creates a project</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e with the fake tracker; no Terraform record</td></tr>
+<tr><td>A22</td><td>Request authority in natural language</td><td><span class="tag partial">partial</span></td><td>Enforced structurally on the server; not yet exercised with a real model</td></tr>
+<tr><td>A23</td><td>No raw credentials in plans or configuration</td><td><span class="tag pass">pass</span></td><td>e2e: organisation and platform plans, state and runtime objects are clean</td></tr>
+<tr><td>A24</td><td>Configuration change through CI</td><td><span class="tag deferred">not run</span></td><td>The same <code>make apply</code> path; no CI is wired up</td></tr>
+<tr><td>A25</td><td>No-change deploy still detects failures</td><td><span class="tag pass">pass</span></td><td>e2e: verify fails while the connections are down and passes after they recover</td></tr>
+<tr><td>A26</td><td>Restore from backup</td><td><span class="tag deferred">Milestone 5</span></td><td></td></tr>
+<tr><td>A27</td><td>Background vs interactive load</td><td><span class="tag deferred">Milestone 6</span></td><td>No DSec features are claimed</td></tr>
+</table>
+
+<h2>Known limitations of this release</h2>
+<ul>
+<li>Shared workspaces are validated but not yet mounted into seats.</li>
+<li>Artifact storage and backup/restore are not implemented.</li>
+<li>Deleting an organisation waits for the platform to revoke its capabilities. If the platform is permanently unavailable, deletion is blocked, and there is no admin override yet.</li>
+<li>A readiness timeout on the first create taints the Terraform resource; untaint it after fixing the cause.</li>
+<li>The example foundation stage keeps credential values in its own Terraform state.</li>
+</ul>
+<div class="pager"><a href="decisions.html"><small>Previous</small>Design decisions</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

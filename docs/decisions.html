@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Design decisions · Steadmesh</title>
+<meta name="description" content="The decisions behind the first release and the evidence for each.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Design decisions</h1>
+<p class="lede">The decisions behind the first release and the evidence for each.</p>
+<p>The design document left seven choices to be settled during implementation. Each is recorded here with its evidence and consequences.</p>
+<table>
+<tr><th>#</th><th>Decision</th><th>Status</th></tr>
+<tr><td>1</td><td><a href="#harness">Claude Code as the first real harness</a></td><td><span class="tag pass">Accepted</span></td></tr>
+<tr><td>2</td><td><a href="#backend">Direct Kubernetes execution backend</a></td><td><span class="tag pass">Accepted</span></td></tr>
+<tr><td>3</td><td><a href="#adapters">Slack (Socket Mode) and Linear as first adapters</a></td><td><span class="tag pass">Accepted</span></td></tr>
+<tr><td>4</td><td><a href="#schema">One schema and one validator</a></td><td><span class="tag pass">Accepted</span></td></tr>
+<tr><td>5</td><td><a href="#fencing">Workspace fencing and checkpoints</a></td><td><span class="tag pass">Accepted</span></td></tr>
+<tr><td>6</td><td><a href="#capacity">Capacity, retention and backup</a></td><td><span class="tag partial">Interim defaults</span></td></tr>
+<tr><td>7</td><td><a href="#size">Aggregate resource size limit</a></td><td><span class="tag pass">Accepted</span></td></tr>
+</table>
+
+<h2 id="harness">1. Claude Code as the first harness</h2>
+<p>The first real harness is Claude Code <strong>2.1.289</strong>, pinned exactly in <code>build/seat-claudecode.Dockerfile</code>.</p>
+<ul>
+<li><strong>Turns.</strong> Each delivered message runs one <code>claude -p --output-format stream-json</code> process, resuming the seat's session with <code>--resume</code>. The prompt goes on stdin, and the process environment is an allow-list.</li>
+<li><strong>Tools.</strong> Platform tools come from <code>steadmesh-tools mcp</code>, with <code>--strict-mcp-config</code>.</li>
+<li><strong>Prompts.</strong> Permission prompts are disabled: an unattended seat must never hang waiting for a human, and the sandbox is the boundary.</li>
+<li><strong>Model access.</strong> Model calls go to <code>&lt;platform&gt;/v1/model/&lt;connection&gt;</code>. An <code>apiKeyHelper</code> re-reads the rotating seat token, which Claude Code sends as both <code>Authorization: Bearer</code> and <code>X-Api-Key</code>. The proxy authenticates the seat, strips both headers, injects the real key and answers the <code>HEAD /api/hello</code> startup check locally.</li>
+<li><strong>Retries.</strong> <code>CLAUDE_CODE_MAX_RETRIES=4</code> makes a rejected credential fail in about 18s instead of retrying for minutes.</li>
+<li><strong>Checkpoints.</strong> A checkpoint is <code>claude-code-session/&lt;version&gt;</code> plus the session ID, with the guarantee <code>application_checkpoint</code>. If a resume fails, the seat starts a new session from the portable handoff and records a visible recovery note.</li>
+</ul>
+<p><strong>Feasibility evidence.</strong> All of the following were tested against a stub model API, with no user credentials:</p>
+<ul>
+<li>unattended start;</li>
+<li>MCP registration and tool calls, carrying the generation and execution headers;</li>
+<li>stream-json parsing;</li>
+<li>resume within a seat and after a restart;</li>
+<li>fallback when the session is missing;</li>
+<li>SIGINT interruption in about 0.3s;</li>
+<li>token rotation between turns.</li>
+</ul>
+<p>The harness conformance suite passes against the real binary inside the seat image: read-only root, uid 1000, no capabilities.</p>
+<p><strong>Not yet verified.</strong> A real model through the real proxy (the live test), very long sessions with auto-compaction, and transcript compatibility across Claude Code versions (a version change is treated as a format change).</p>
+
+<h2 id="backend">2. Direct Kubernetes backend</h2>
+<p>The design asked for a comparison of three options against the backend contract.</p>
+<h3>Agentcontainers (Kubedoll Heavy Industries)</h3>
+<p>Evaluated at commit <code>abf4c01</code> (10 July 2026):</p>
+<ul>
+<li>It is labelled pre-alpha, with an unstable schema. "Linux K8s" is still in its planning milestone, and the runtimes are Docker, Compose and Docker Sandbox only.</li>
+<li>Its eBPF enforcer sidecar runs with <code>PidMode: host</code> and extra capabilities, and bind-mounts <code>/sys/fs/cgroup</code> and <code>/sys/fs/bpf</code>. Its own Kubernetes test job runs <code>privileged: true</code> with <code>hostPID</code>.</li>
+<li>Its default escalation is an interactive human prompt.</li>
+</ul>
+<p>Wrapping it in a Pod would put a container runtime socket or privileged host access next to a seat, which the design forbids. <strong>Not adopted.</strong> We keep its ideas (explicit capability lists, secrets from providers, digest pinning), and the sandbox profile leaves room for a future node-level enforcer feature.</p>
+<h3>Kubernetes Agent Sandbox</h3>
+<p>It offers a <code>Sandbox</code> CRD with templates, claims and warm pools, plus stable identity, persistent storage, <code>runtimeClass</code> and "hibernation". Its documentation does not specify whether volumes are retained when a Sandbox is deleted, or what the hibernation guarantee is. Our retirement semantics and honest suspension claims depend on both. <strong>Deferred:</strong> it can become a second implementation of the backend interface, and its controller would then be reused rather than duplicated.</p>
+<h3>Chosen: direct implementation</h3>
+<p>Each seat gets a ServiceAccount without an API token, a projected token with the gateway audience, a retained volume claim with no owner, a manifest ConfigMap, a default-deny NetworkPolicy and a StatefulSet with 0 or 1 replicas.</p>
+<ul>
+<li>The StatefulSet never runs two Pods for one ordinal. Together with the RWO volume and the lease generation, that guarantees a single writer.</li>
+<li>Stopping a seat means scaling it to 0, and waking it means scaling it back to 1. Only application-level checkpoints are claimed, so <code>idle_policy = "suspend"</code> is rejected.</li>
+<li>A <code>runtime_class</code> is passed through and must exist. A plain container is never presented as a microVM.</li>
+<li>NetworkPolicy enforcement is proved by a probe Pod. Clusters that ignore NetworkPolicy report <code>SandboxEnforced=False</code> instead of running seats unrestricted.</li>
+</ul>
+
+<h2 id="adapters">3. Slack and Linear</h2>
+<p><strong>Slack over Socket Mode.</strong> No public ingress is needed, which suits private clusters and kind. Events are persisted before they are acknowledged and deduplicated by event ID. One app installation serves every representative. <code>chat.postMessage</code> has no idempotency key, so an ambiguous send is marked unknown and never resent.</p>
+<p><strong>Linear over GraphQL.</strong> Created records embed <code>steadmesh-op:&lt;id&gt;</code>, so a lost response can be resolved by reading back.</p>
+<p>Both default to <code>ownership = "external"</code>. Destroying an organisation never deletes a workspace, app, project or issue. Setup is described in <a href="real-services.html">Connect real services</a>.</p>
+
+<h2 id="schema">4. One schema and one validator</h2>
+<p><code>pkg/spec</code> is embedded in the CRD and mirrored field for field by the provider's typed schema; a test checks that the two stay in step. <code>pkg/compile</code> runs at plan time, where errors carry attribute paths, and again in the controller (<code>Configured=False/InvalidSpec</code>). Recompiling a resolved specification gives the same result, which is also tested.</p>
+<ul>
+<li>Defaults are versioned (<code>defaults_version = 1</code>) and written into the effective manifest. No security or resource setting inherits a permissive cluster default.</li>
+<li>Instruction references must carry a digest. Secret references must be <code>vault:</code> or <code>k8s:</code>.</li>
+<li>Only three permissions are implicit, and each is visible in the seat's manifest.</li>
+</ul>
+
+<h2 id="fencing">5. Fencing and checkpoints</h2>
+<p>Three layers keep a single writer:</p>
+<ol>
+<li>Kubernetes runs at most one Pod per seat, with a RWO volume, and the controller never force-deletes.</li>
+<li>An execution lease with an incrementing generation; the controller's fence call is made only after the old Pod is confirmed gone.</li>
+<li>Every fenced write compares the caller's generation in the same transaction.</li>
+</ol>
+<p>Checkpoints are application-level: a harness session reference plus a portable handoff (objective, open questions, and the relevant records, messages and operations). Persistent disk survives a restart; running processes and open network sessions do not, and the API says so. Process and microVM snapshots are not supported in this release.</p>
+
+<h2 id="capacity">6. Capacity, retention and backup (interim)</h2>
+<table>
+<tr><th>Item</th><th>Interim default</th></tr>
+<tr><td>Seat resources</td><td>CPU 250m request, 2 limit; memory 512Mi request, 2Gi limit; 5 GiB workspace</td></tr>
+<tr><td>Inbox</td><td>5 attempts (1s, 8s, 64s, then 5m), then dead-letter; at most 1000 pending internal messages per seat</td></tr>
+<tr><td>Payloads</td><td>16 KiB tool results, 12 KiB message bodies, 8 KiB event payloads</td></tr>
+<tr><td>Harness turns</td><td>20 minute limit</td></tr>
+<tr><td>Retention</td><td>Retain by default, for organisations, seats, memory and workspaces</td></tr>
+</table>
+<p>A backup must cover the database and the workspace volumes together, with the infrastructure revision; metadata alone is not enough. The backup and restore procedure, recovery objectives and volume reclaim policy are Milestone 5 work. Measured activation costs are Milestone 6.</p>
+
+<h2 id="size">7. Aggregate resource size</h2>
+<p>One <code>steadmesh_organization</code> owns one object. Its specification is limited to 256 KiB, well under etcd's object limit, and instructions are always referenced, never inlined. At around 200 seats, or when teams need independent ownership, the plan is to split into per-team or per-seat resources through a state migration. At every step each field keeps a single owner, never competing writers.</p>
+<div class="pager"><a href="architecture.html"><small>Previous</small>Architecture</a><a href="status.html" style="text-align:right"><small>Next</small>Acceptance status</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+# Deterministic fake Slack and Linear servers for the e2e suite. Users and
+# team ids match the examples/organisation defaults.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: steadmesh-fakes
+  namespace: steadmesh-system
+  labels: {app: steadmesh-fakes}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: steadmesh-fakes}
+  template:
+    metadata:
+      labels: {app: steadmesh-fakes}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 1000}
+      containers:
+        - name: fakes
+          image: steadmesh/fakes:dev
+          imagePullPolicy: IfNotPresent
+          args:
+            - --slack-addr=:8090
+            - --linear-addr=:8091
+            - --slack-team=T0FAKE
+            - --slack-users=U0SEAN=sean,U0ALEX=alex
+            - --linear-teams=TEAM-FAKE=ENG
+          ports:
+            - {name: slack, containerPort: 8090}
+            - {name: linear, containerPort: 8091}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8090}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: steadmesh-fakes
+  namespace: steadmesh-system
+spec:
+  selector: {app: steadmesh-fakes}
+  ports:
+    - {name: slack, port: 8090, targetPort: 8090}
+    - {name: linear, port: 8091, targetPort: 8091}

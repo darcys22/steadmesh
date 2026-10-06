@@ -1,0 +1,12 @@
+# Suggested repository-root .dockerignore (the root is outside the build/
+# stream's paths; build/build.sh applies the same exclusions via tar).
+.git
+bin
+out
+examples
+modules
+docs
+**/.terraform
+**/node_modules
+*.tfstate
+*.tfstate.*

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connect Slack, Linear and Claude · Steadmesh</title>
+<meta name="description" content="Replace the fakes with a real Slack app, a Linear workspace and the Claude Code harness.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Connect Slack, Linear and Claude</h1>
+<p class="lede">Replace the fakes with a real Slack app, a Linear workspace and the Claude Code harness.</p>
+<p>This guide moves the example organisation from the fakes to a real Slack workspace, a real Linear team and the Claude Code harness backed by an Anthropic model. The deployment workflow stays the same. Only the credentials and a few variables change.</p>
+
+<h2>What you need</h2>
+<table>
+<tr><th>Item</th><th>Who provides it</th><th>Used for</th></tr>
+<tr><td>A Slack workspace where you can install apps</td><td>Slack workspace admin</td><td>Human ↔ representative conversations</td></tr>
+<tr><td>A Linear workspace and team, plus an API key with write access</td><td>Linear admin</td><td>Projects and tasks created by agents</td></tr>
+<tr><td>An Anthropic API key</td><td>Your Anthropic account</td><td>Model inference for the Claude Code harness</td></tr>
+<tr><td>The Slack member IDs (<code>U…</code>) of at least two people</td><td>Each person: Slack profile → ⋮ → Copy member ID</td><td>Channel bindings</td></tr>
+</table>
+
+<h2>1. Create the Slack app</h2>
+<ol class="steps">
+<li><p>Go to <a href="https://api.slack.com/apps">api.slack.com/apps</a>, choose <strong>Create New App → From a manifest</strong>, select your workspace and paste <a href="assets/slack-app-manifest.yaml">slack-app-manifest.yaml</a>. The manifest enables Socket Mode, the App Home messages tab, the bot scopes <code>chat:write</code>, <code>im:history</code>, <code>im:read</code>, <code>im:write</code> and <code>users:read</code>, and the <code>message.im</code> event.</p></li>
+<li><p>Under <strong>Basic Information → App-Level Tokens</strong>, create a token with the <code>connections:write</code> scope. This is your <code>xapp-…</code> token.</p></li>
+<li><p>Under <strong>Install App</strong>, install the app to the workspace and copy the <strong>Bot User OAuth Token</strong> (<code>xoxb-…</code>).</p></li>
+<li><p>Note the workspace's team ID (<code>T…</code>). It appears in the workspace URL, or in the <code>auth.test</code> response.</p></li>
+</ol>
+<p>Socket Mode means Slack never has to reach your cluster: the platform opens an outbound websocket. One app installation serves every representative.</p>
+
+<h2>2. Prepare Linear</h2>
+<p>Create an API key under <strong>Settings → Security &amp; access → Personal API keys</strong> (or a workspace key) with write access, and find the ID of the team agents should work in. Start with a dedicated team, because agents with <code>project.create</code> really do create projects.</p>
+
+<h2>3. Provide the credentials</h2>
+<p>Credentials go into the <strong>foundation</strong> stage only. It stores them as Kubernetes Secrets in <code>steadmesh-system</code>, where only the platform service can read them. The organisation stage refers to them by name, for example <code>k8s:slack-credentials</code>, so they never appear in its plans or state.</p>
+<pre><code>export TF_VAR_slack_bot_token=xoxb-…
+export TF_VAR_slack_app_token=xapp-…
+export TF_VAR_linear_api_key=lin_api_…
+export TF_VAR_anthropic_api_key=sk-ant-…</code></pre>
+<div class="callout warn"><p>The Kubernetes provider stores Secret values in the <em>foundation</em> stage's Terraform state, so protect that state. Alternatively, create the Secrets <code>slack-credentials</code> (keys <code>bot_token</code>, <code>app_token</code>), <code>linear-credentials</code> (<code>api_key</code>) and <code>anthropic-credentials</code> (<code>api_key</code>) out of band, and leave the placeholder defaults. Vault is also supported: set <code>secret_ref = "vault:&lt;path&gt;"</code> and enable Vault in the chart values.</p></div>
+
+<h2>4. Configure the organisation</h2>
+<pre><code>unset TF_VAR_slack_endpoint_ref TF_VAR_linear_endpoint_ref   <span class="c"># use the real services</span>
+export TF_VAR_harness=claude-code
+export TF_VAR_slack_workspace_id=T0123ABCD
+export TF_VAR_linear_team_id=&lt;team id&gt;
+export TF_VAR_humans='{sean={slack_user_id="U0SEAN123"},alex={slack_user_id="U0ALEX456"}}'</code></pre>
+<p><code>harness = "claude-code"</code> switches every seat to the Claude Code image and adds a <code>model</code> connection (adapter <code>anthropic</code>). Each seat is implicitly allowed <code>model.infer</code> on that connection.</p>
+
+<h2>5. Apply</h2>
+<pre><code>make kind-up kind-load provider build
+make -C examples apply</code></pre>
+<p>Readiness now checks the real services:</p>
+<ul>
+<li>Slack <code>auth.test</code> passes, and the team matches <code>account_id</code>.</li>
+<li><code>users.info</code> succeeds for every bound human.</li>
+<li>The Socket Mode connection is up.</li>
+<li>The Linear <code>viewer</code> query succeeds.</li>
+<li><code>GET /v1/models</code> succeeds at Anthropic.</li>
+</ul>
+<p>If anything is missing, the apply stops and names it, for example:</p>
+<pre><code>OperationalReady  False  ConnectionsAuthenticated  connection slack: unauthorized: invalid_auth</code></pre>
+
+<h2>6. Talk to your representative</h2>
+<p>In Slack, open the app (Apps → Steadmesh) and send it a direct message. Your representative replies in the same DM. Try asking it to remember a preference, delegate something to engineering, or create a Linear project for a small task.</p>
+
+<h2>How the Claude Code harness runs</h2>
+<ul>
+<li><strong>One process per turn.</strong> Each delivered message runs one <code>claude -p</code> process that resumes the seat's session. The session files live on the seat's persistent volume, so the conversation continues across restarts.</li>
+<li><strong>Tools.</strong> Platform tools are exposed over MCP by <code>steadmesh-tools mcp</code> (they appear as <code>mcp__steadmesh__memory_search</code> and so on). Built-in tools default to Bash, Edit and Read in the seat's workspace.</li>
+<li><strong>Model access.</strong> Requests go through the platform's model proxy. The seat authenticates with its own rotating identity token, and the platform swaps it for the real Anthropic key. The API key never enters the sandbox.</li>
+<li><strong>Unattended operation.</strong> There are no permission prompts. The sandbox (network policy, non-root, read-only image, resource limits) and the platform's grant checks are the boundary.</li>
+<li><strong>Version pinning.</strong> The Claude Code version is pinned exactly in <code>build/seat-claudecode.Dockerfile</code>. A version change is treated as a session format change: the seat resumes from a portable handoff and records that it did.</li>
+</ul>
+
+<h2>Run the live acceptance test</h2>
+<p><code>make live</code> automates this guide. It needs the variables above plus user tokens for two test humans, so it can message the bot as them. See <code>tests/live/README.md</code> for the exact list. Use test accounts and a dedicated Linear team.</p>
+<div class="pager"><a href="tutorial.html"><small>Previous</small>Tutorial: build an organisation</a><a href="operations.html" style="text-align:right"><small>Next</small>Operating an organisation</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>
