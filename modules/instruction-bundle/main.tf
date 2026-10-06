@@ -23,7 +23,7 @@ resource "kubernetes_config_map_v1" "this" {
     namespace = var.namespace
     labels = merge(var.labels, {
       "app.kubernetes.io/managed-by" = "terraform"
-      "steadmesh.io/component"        = "instruction-bundle"
+      "steadmesh.io/component"       = "instruction-bundle"
     })
     annotations = {
       "steadmesh.io/bundle-sha256" = local.digest

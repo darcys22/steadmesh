@@ -1,0 +1,59 @@
+# Builds the Terraform provider for the Terraform Registry (darcys22/steadmesh).
+# The Registry only reads releases of a repository named
+# terraform-provider-<name>, so the release is published to
+# darcys22/terraform-provider-steadmesh; this repository keeps the source.
+# Run by .github/workflows/release.yml on a v* tag.
+version: 2
+project_name: terraform-provider-steadmesh
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - main: ./cmd/terraform-provider-steadmesh
+    env:
+      - CGO_ENABLED=0
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    binary: "{{ .ProjectName }}_v{{ .Version }}"
+
+archives:
+  - formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+  extra_files:
+    - glob: terraform-registry-manifest.json
+      name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
+
+signs:
+  - artifacts: checksum
+    args:
+      - --batch
+      - --local-user
+      - "{{ .Env.GPG_FINGERPRINT }}"
+      - --output
+      - "${signature}"
+      - --detach-sign
+      - "${artifact}"
+
+release:
+  github:
+    owner: darcys22
+    name: terraform-provider-steadmesh
+  extra_files:
+    - glob: terraform-registry-manifest.json
+      name_template: "{{ .ProjectName }}_{{ .Version }}_manifest.json"
+  footer: |
+    Source: https://github.com/darcys22/steadmesh/releases/tag/{{ .Tag }}
+
+changelog:
+  disable: true

@@ -18,6 +18,7 @@
     <ul>
       <li><a href="index.html">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
     </ul>
     <div class="nav-group">Guides</div>
@@ -38,16 +39,25 @@
 <main>
 <h1>Tutorial: build an organisation</h1>
 <p class="lede">Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.</p>
-<p>This tutorial builds an organisation declaration from scratch: a culture, a representative for one person, and an engineering team that can create work in Linear. Each section adds one kind of record and explains what the platform does with it. The finished file is close to <code>examples/organisation/main.tf</code>, which uses the reusable modules to say the same thing more compactly.</p>
+<p>This tutorial builds an organisation declaration from scratch: a culture, a representative for one person, and an engineering team that can create work in Linear. Each section adds one kind of record and explains what the platform does with it. The finished file is close to the quickstart's <code>organisation/main.tf</code>, which uses the reusable modules to say the same thing more compactly.</p>
 
-<div class="callout"><p>Complete the <a href="quickstart.html">Quickstart</a> first. You need the foundation and platform stages applied, and the provider built. Put your file in the <code>examples/organisation/</code> root, or in a copy of it, so that the provider configuration and <code>make</code> targets work unchanged.</p></div>
+<div class="callout"><p>Complete the <a href="quickstart.html">Quickstart</a> first, so the platform is installed. Work in a copy of its <code>organisation/</code> directory, which already reads the cluster, namespace and secret references from the platform stage. The examples below use literal values to keep them readable. If you <a href="from-source.html">run from source</a> instead, work in <code>examples/organisation/</code>, where module sources are local paths such as <code>../../modules/instruction-bundle</code>.</p></div>
 
 <h2>1. The provider and the organisation resource</h2>
 <p>The provider writes a single <code>AgentOrganization</code> object and then watches it converge. <code>kube_context</code> is required on purpose: the provider never falls back to whatever context happens to be current.</p>
-<pre><code>provider "steadmesh" {
+<pre><code>terraform {
+  required_providers {
+    steadmesh = {
+      source  = "darcys22/steadmesh"   <span class="c"># from the Terraform Registry</span>
+      version = "~> 0.1.0"
+    }
+  }
+}
+
+provider "steadmesh" {
   kubeconfig_path = "~/.kube/config"
-  kube_context    = "kind-steadmesh"
-  namespace       = "steadmesh-example"   <span class="c"># created by the foundation stage</span>
+  kube_context    = "my-cluster"
+  namespace       = "steadmesh"            <span class="c"># created by the platform stage</span>
 }
 
 resource "steadmesh_organization" "this" {
@@ -69,17 +79,17 @@ resource "steadmesh_organization" "this" {
 <h2>2. Culture and instructions</h2>
 <p>Instructions are versioned text, stored outside the organisation object and referenced by content digest. That way a change is always a visible, reviewable diff. The <code>instruction-bundle</code> module publishes a markdown file as a ConfigMap and outputs a reference such as <code>configmap:steadmesh-culture/culture.md#sha256:9f2c…</code>.</p>
 <pre><code>module "culture" {
-  source      = "../../modules/instruction-bundle"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.1.0"
   name        = "steadmesh-culture"
-  namespace   = "steadmesh-example"
-  source_path = "../../bundles/culture/culture.md"
+  namespace   = "steadmesh"
+  source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "../../modules/instruction-bundle"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.1.0"
   name        = "steadmesh-role-representative"
-  namespace   = "steadmesh-example"
-  source_path = "../../bundles/roles/representative.md"
+  namespace   = "steadmesh"
+  source_path = "${path.module}/instructions/representative.md"
 }</code></pre>
 <pre><code>  spec = {
     culture_refs = [module.culture.ref]</code></pre>
@@ -234,7 +244,7 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
 <p>Several people can share one Slack app installation. Each person gets their own representative and a private history that other representatives cannot read.</p>
 
 <h2>10. Plan</h2>
-<pre><code>make -C examples plan-organisation</code></pre>
+<pre><code>terraform plan    <span class="c"># from source: make -C examples plan-organisation</span></code></pre>
 <p>The plan validates the whole organisation before anything is applied. Errors point at exact attributes:</p>
 <pre><code>Error: Invalid organisation specification
 
@@ -246,8 +256,8 @@ already the personal memory of seat "representative_sean"</code></pre>
 <p>A valid plan shows <code>resolved_seats</code>: each seat's resolved role, teams and configuration revision. When you change a shared template or culture bundle, these revisions show exactly which seats the change affects.</p>
 
 <h2>11. Apply and verify</h2>
-<pre><code>make -C examples apply</code></pre>
-<p><code>terraform apply</code> returns only when the current generation is <code>OperationalReady</code>. That means storage, identities, harness compatibility, sandbox enforcement, connections, Slack ingress, human bindings and a synthetic probe of every seat have all passed. <code>make apply</code> then runs <code>orgctl verify</code>, which repeats these checks even if Terraform had nothing to change. A broken integration is caught on every deploy.</p>
+<pre><code>terraform apply   <span class="c"># from source: make -C examples apply</span></code></pre>
+<p><code>terraform apply</code> returns only when the current generation is <code>OperationalReady</code>. That means storage, identities, harness compatibility, sandbox enforcement, connections, Slack ingress, human bindings and a synthetic probe of every seat have all passed. To repeat these checks even when Terraform has nothing to change, run <code>orgctl verify</code>. <code>make -C examples apply</code> does this after every apply. That way a broken integration is caught on every deploy.</p>
 
 <h2>12. Follow a request</h2>
 <p>When Sean messages the bot, the platform does the following:</p>
@@ -277,7 +287,7 @@ already the personal memory of seat "representative_sean"</code></pre>
 <tr><td>Seat removed from the declaration</td><td>Its data, retained by default. Capabilities are revoked. Reuse needs explicit <code>adopt_from</code>.</td></tr>
 <tr><td>Organisation destroyed with <code>data_retention = "retain"</code></td><td>Database records and workspace volumes. External Slack workspaces and Linear projects are never deleted.</td></tr>
 </table>
-<div class="pager"><a href="quickstart.html"><small>Previous</small>Quickstart</a><a href="real-services.html" style="text-align:right"><small>Next</small>Connect Slack, Linear and Claude</a></div>
+<div class="pager"><a href="from-source.html"><small>Previous</small>Run from source</a><a href="real-services.html" style="text-align:right"><small>Next</small>Connect Slack, Linear and Claude</a></div>
 <p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
 </main>
 </div>

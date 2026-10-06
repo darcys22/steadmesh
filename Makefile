@@ -11,7 +11,7 @@ IMAGES := controller platform console seat-fake seat-claudecode fakes
 ENVTEST_K8S ?= 1.37.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration e2e e2e-reset images kind-up kind-down kind-load provider orgctl live tools
+.PHONY: all generate build lint test test-integration e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider orgctl live tools
 
 all: generate build test
 
@@ -69,6 +69,13 @@ e2e: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
 	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -timeout 40m ./tests/e2e/...
+
+# quickstart/ as a user runs it (terraform init -from-module, two stages), on a
+# fresh kind cluster, with local builds standing in for the published release.
+quickstart-test: images provider
+	$(MAKE) e2e-reset
+	$(MAKE) kind-up kind-load
+	hack/quickstart-test.sh
 
 e2e-reset:
 	kind delete cluster --name $(KIND_CLUSTER)

@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and fill in. Keep terraform.tfvars out of version
+# control: it holds credentials.
+
+kube_context = "my-cluster" # kubectl config get-contexts
+
+slack_bot_token   = "xoxb-..."
+slack_app_token   = "xapp-..."
+anthropic_api_key = "sk-ant-..."
+# linear_api_key  = "lin_api_..."
+
+# enable_console = true

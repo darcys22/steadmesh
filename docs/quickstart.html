@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart · Steadmesh</title>
-<meta name="description" content="Run the example organisation on your laptop with deterministic fakes and talk to a representative, in about fifteen minutes.">
+<meta name="description" content="Install Steadmesh into your Kubernetes cluster with Terraform from a published release, and talk to your representative in Slack.">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -18,6 +18,7 @@
     <ul>
       <li><a href="index.html">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
     </ul>
     <div class="nav-group">Guides</div>
@@ -37,105 +38,95 @@
 </aside>
 <main>
 <h1>Quickstart</h1>
-<p class="lede">Run the example organisation on your laptop with deterministic fakes and talk to a representative, in about fifteen minutes.</p>
-<p>This quickstart deploys the example organisation to a local <a href="https://kind.sigs.k8s.io/">kind</a> cluster: two human representatives and an engineering team of three. Slack and Linear are replaced by deterministic fake servers from the repository, and seats run the <code>fake</code> harness. That harness executes scripted commands instead of calling a model, so the quickstart needs no accounts or API keys.</p>
+<p class="lede">Install Steadmesh into your Kubernetes cluster from a published release, declare a small organisation, and talk to your representative in Slack. No clone needed.</p>
+<p>Terraform downloads everything:</p>
+<ul>
+<li>the <code>darcys22/steadmesh</code> provider from the Terraform Registry;</li>
+<li>the platform chart and images from <code>ghcr.io/darcys22/steadmesh</code>;</li>
+<li>the modules from GitHub.</li>
+</ul>
+<p>You get one personal representative per person, plus an engineering lead and an engineer that representatives can delegate to. Agents run Claude Code.</p>
 
-<div class="callout"><p>Every command pins the kubectl context <code>kind-steadmesh</code>. Nothing here uses or changes your current kubectl context.</p></div>
-
-<h2>Prerequisites</h2>
+<h2>What you need</h2>
 <table>
-<tr><th>Tool</th><th>Version</th><th>Notes</th></tr>
-<tr><td>Go</td><td>1.27</td><td>Builds the binaries, the provider and the images.</td></tr>
-<tr><td>Docker</td><td>any recent</td><td>Docker Desktop or Colima, running. Give it at least 4 CPUs and 8 GB of memory.</td></tr>
-<tr><td>kind</td><td>0.24 or later</td><td><code>brew install kind</code>. Its default CNI enforces NetworkPolicy, which the platform checks before it starts any seat.</td></tr>
-<tr><td>kubectl, Helm</td><td>kubectl 1.30+, Helm 3</td><td></td></tr>
-<tr><td>Terraform</td><td>1.5 or later</td><td>Tested with 1.5.7. <code>terraform init</code> needs network access for the kubernetes, helm and random providers.</td></tr>
+<tr><th>Item</th><th>Notes</th></tr>
+<tr><td>A Kubernetes cluster and a kubeconfig context for it</td><td>A CNI that enforces NetworkPolicy, because seats start only once their sandbox is verified. kind's default CNI, Calico and Cilium all qualify. You also need a default StorageClass, and about 4 CPUs and 8 GB of memory free.</td></tr>
+<tr><td>Terraform 1.5+ and kubectl</td><td></td></tr>
+<tr><td>A Slack app</td><td>Go to <a href="https://api.slack.com/apps">api.slack.com/apps</a>, choose Create New App → From a manifest, and paste <a href="assets/slack-app-manifest.yaml">slack-app-manifest.yaml</a>. Create an app-level token with <code>connections:write</code> (<code>xapp-…</code>), install the app and copy the bot token (<code>xoxb-…</code>). Note the workspace ID (<code>T…</code>) and each person's member ID (<code>U…</code>; profile → ⋮ → Copy member ID). See <a href="real-services.html">Connect real services</a> for details.</td></tr>
+<tr><td>An Anthropic API key</td><td>For the Claude Code harness.</td></tr>
+<tr><td>Optional: a Linear API key and team ID</td><td>Lets agents create projects and issues.</td></tr>
 </table>
 
-<h2>Run it</h2>
+<h2>Install</h2>
 <ol class="steps">
 <li>
-<p><strong>Build the tools and binaries.</strong> This installs <code>controller-gen</code> and <code>setup-envtest</code> into <code>./bin</code>, then builds every command, including the Terraform provider and <code>orgctl</code>.</p>
-<pre><code>make tools build</code></pre>
+<p><strong>Get the quickstart.</strong> This copies two small Terraform roots into a new directory. <code>platform/</code> installs Steadmesh, and <code>organisation/</code> declares your agents. They are separate stages because the organisation's provider needs the platform's CRDs to exist before it can plan.</p>
+<pre><code>mkdir steadmesh &amp;&amp; cd steadmesh
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.1.0"</code></pre>
 </li>
 <li>
-<p><strong>Create the cluster and load the images.</strong> The first image build takes a few minutes; the Claude Code image is the largest.</p>
-<pre><code>make kind-up kind-load</code></pre>
+<p><strong>Install the platform.</strong> Set <code>kube_context</code> and your tokens in <code>terraform.tfvars</code>.</p>
+<pre><code>cd platform
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply</code></pre>
+<p>This creates:</p>
+<ul>
+<li>the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces;</li>
+<li>Postgres;</li>
+<li>the platform chart, which holds the CRDs, the controller and the platform service;</li>
+<li>the credential Secrets.</li>
+</ul>
+<p>Terraform only ever uses the context you name, never your current one. The tokens are stored in this stage's Terraform state, so keep the state private.</p>
 </li>
 <li>
-<p><strong>Apply the foundation stage.</strong> This creates the namespaces <code>steadmesh-system</code> and <code>steadmesh-example</code>, Postgres, and the credential Secrets. The Secrets hold placeholder values, which the fakes accept.</p>
-<pre><code>make -C examples apply-foundation</code></pre>
+<p><strong>Declare your organisation.</strong> Set your Slack workspace ID and the people who get a representative.</p>
+<pre><code>cd ../organisation
+cp terraform.tfvars.example terraform.tfvars
+terraform init
+terraform apply</code></pre>
+<p>This stage reads the cluster, namespace, images and secret references from the platform stage's state. <code>terraform apply</code> returns once every seat has passed its readiness checks. The first time, that takes a few minutes while the seat images are pulled. If a check fails, the error names the condition. See <a href="operations.html#checking-readiness">Checking readiness</a>.</p>
 </li>
 <li>
-<p><strong>Start the fake Slack and Linear servers.</strong></p>
-<pre><code>kubectl --context kind-steadmesh apply -f tests/e2e/manifests/fakes.yaml
-kubectl --context kind-steadmesh -n steadmesh-system rollout status deploy/steadmesh-fakes</code></pre>
-</li>
-<li>
-<p><strong>Point the organisation at the fakes and apply everything else.</strong> <code>make apply</code> installs the platform chart, applies the organisation through the <code>steadmesh</code> provider, waits for readiness, then runs a fresh verification. Setting a 1-minute idle timeout lets you watch seats go to sleep.</p>
-<pre><code>export TF_VAR_slack_endpoint_ref=http://steadmesh-fakes.steadmesh-system.svc:8090
-export TF_VAR_linear_endpoint_ref=http://steadmesh-fakes.steadmesh-system.svc:8091
-export TF_VAR_seat_idle_timeout=1m
-make -C examples apply</code></pre>
-<p>The run ends with a readiness report like this:</p>
-<pre><code>CONDITION                 STATUS  REASON     MESSAGE
-Configured                True    Compiled   5 seats resolved; defaults version 1
-IdentitiesReady           True    Synced     5 seat identities active
-ConnectionsAuthenticated  True    Verified   2 connection verified
-IngressReady              True    Verified   1 ingress verified
-BindingsValid             True    Verified   2 binding verified
-StorageReady              True    Ready      5 seat workspaces provisioned
-HarnessCompatible         True    Ready      harness profiles compatible
-SandboxEnforced           True    Ready      sandbox restrictions verified
-RoutesExecutable          True    Ready      ...
-OperationalReady          True    Ready      ...
-
-HUMAN  REPRESENTATIVE       CHANNEL        USER
-alex   representative_alex  slack (slack)  U0ALEX
-sean   representative_sean  slack (slack)  U0SEAN</code></pre>
-</li>
-<li>
-<p><strong>Message your representative.</strong> The fake Slack server has test endpoints that inject a direct message from a user and list what the bot posted. Forward its port, then send a message as Sean:</p>
-<pre><code>kubectl --context kind-steadmesh -n steadmesh-system port-forward svc/steadmesh-fakes 8090:8090 &amp;
-
-curl -s localhost:8090/_test/dm -d '{"user":"U0SEAN","text":"hello from sean"}'
-sleep 20   <span class="c"># a sleeping seat takes a few seconds to wake</span>
-curl -s localhost:8090/_test/posted | jq -r '.[] | "\(.channel): \(.text)"'</code></pre>
-<pre><code>D0SEAN: ack: hello from sean</code></pre>
-<p>That reply went from the message, through the platform's durable inbox, to Sean's representative seat, which woke up, ran a turn and replied through the outbox to Slack. No manual command was involved.</p>
-</li>
-<li>
-<p><strong>Delegate work and create a tracker project.</strong> The fake harness runs lines that start with <code>/</code> as commands (see <a href="tools.html#fake-harness">the script language</a>). This message asks the representative to delegate to the engineering lead. The lead creates a Linear project and the result comes back to Sean:</p>
-<pre><code>curl -s localhost:8090/_test/dm -d @- &lt;&lt;'JSON'
-{"user":"U0SEAN","text":"/delegate eng_lead /task\n/tool connections.invoke {\"connection\":\"linear\",\"operation\":\"project.create\",\"params\":{\"name\":\"Onboarding checklist\"}}"}
-JSON
-sleep 30
-curl -s localhost:8090/_test/posted | jq -r '.[-1].text'</code></pre>
-<pre><code>Update from eng_lead: task result from eng_lead:
-tool connections.invoke: {"id":"…","connection":"linear","operation":"project.create","status":"succeeded","external_receipt":"proj-…"}</code></pre>
-<p>Confirm the project exists in the fake tracker:</p>
-<pre><code>kubectl --context kind-steadmesh -n steadmesh-system port-forward svc/steadmesh-fakes 8091:8091 &amp;
-curl -s localhost:8091/_test/state | jq '.projects[].name'</code></pre>
-</li>
-<li>
-<p><strong>Watch the seats.</strong> After a minute without work, seats scale to zero and keep their workspace and memory. The next message wakes them.</p>
-<pre><code>make -C examples status
-kubectl --context kind-steadmesh -n steadmesh-example get agentseats -w</code></pre>
+<p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM. Try:</p>
+<ul>
+<li>asking it to remember a preference;</li>
+<li>asking it to have engineering look into something;</li>
+<li>with Linear connected, asking for a project for a small task.</li>
+</ul>
 </li>
 </ol>
 
-<h2>Clean up</h2>
-<pre><code>make -C examples teardown   <span class="c"># destroy organisation, platform and foundation</span>
-make kind-down              <span class="c"># delete the kind cluster</span></code></pre>
+<h2>Watch the agents work</h2>
+<p>Set <code>enable_console = true</code> in <code>platform/terraform.tfvars</code> and apply that stage. Then open the read-only <a href="operations.html">console</a>:</p>
+<pre><code>kubectl --context &lt;your-context&gt; -n steadmesh-system port-forward deploy/steadmesh-console 8090
+<span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
 
-<div class="callout"><p>The same flow, with many more checks, is automated by <code>make e2e</code>. That suite covers replayed events, lost API responses, Pod kills, sleeping seats, control-plane restarts and credential leaks. See <a href="status.html">Acceptance status</a>.</p></div>
+<h2>Shape your organisation</h2>
+<p>Everything about your organisation lives in <code>organisation/</code>:</p>
+<table>
+<tr><th>To change</th><th>Edit</th></tr>
+<tr><td>How everyone works</td><td><code>instructions/culture.md</code></td></tr>
+<tr><td>How representatives behave</td><td><code>instructions/representative.md</code></td></tr>
+<tr><td>Who has a representative</td><td><code>humans</code> in <code>terraform.tfvars</code>. One Slack app serves them all.</td></tr>
+<tr><td>The team</td><td><code>local.engineering</code> in <code>main.tf</code>, for example <code>reviewer = { role = "reviewer", display_name = "Reviewer" }</code>. Then add a route under <code>message_routes</code>: seats can only message along declared routes.</td></tr>
+<tr><td>What agents may do</td><td><code>grants</code>: a connection is usable only through a grant.</td></tr>
+</table>
+<p><code>terraform plan</code> lists the seats each change affects. Seats keep their identity, workspace and memory across applies. The <a href="tutorial.html">tutorial</a> explains every part of the declaration.</p>
+
+<h2>Upgrade or remove</h2>
+<ul>
+<li><strong>Upgrade:</strong> in your copy, change every <code>?ref=v…</code>, <code>steadmesh_version</code> and the <code>darcys22/steadmesh</code> provider <code>version</code> to the new release. Apply <code>platform/</code>, then <code>organisation/</code>.</li>
+<li><strong>Remove:</strong> run <code>terraform destroy</code> in <code>organisation/</code>, then in <code>platform/</code>. Destroying the platform deletes its namespaces, and with them the database.</li>
+</ul>
 
 <h2>Next steps</h2>
 <ul>
 <li>Learn what each part of the declaration does in the <a href="tutorial.html">tutorial</a>.</li>
-<li>Use real Slack, Linear and Claude: <a href="real-services.html">Connect real services</a>.</li>
+<li>Read <a href="operations.html">Operating an organisation</a> for readiness, seat lifecycle and troubleshooting.</li>
+<li>Work on Steadmesh itself: <a href="from-source.html">Run from source</a>.</li>
 </ul>
-<div class="pager"><a href="index.html"><small>Previous</small>Overview</a><a href="tutorial.html" style="text-align:right"><small>Next</small>Tutorial: build an organisation</a></div>
+<div class="pager"><a href="index.html"><small>Previous</small>Overview</a><a href="from-source.html" style="text-align:right"><small>Next</small>Run from source</a></div>
 <p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
 </main>
 </div>

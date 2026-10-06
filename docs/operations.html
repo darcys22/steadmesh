@@ -18,6 +18,7 @@
     <ul>
       <li><a href="index.html">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
     </ul>
     <div class="nav-group">Guides</div>
@@ -57,7 +58,7 @@
 </table>
 <p>Every saved plan, rendered plan, log and output goes to <code>examples/out/</code> for review.</p>
 
-<h2>Checking readiness</h2>
+<h2 id="checking-readiness">Checking readiness</h2>
 <pre><code>bin/orgctl status --context kind-steadmesh --namespace steadmesh-example
 bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeout 10m</code></pre>
 <p><code>status</code> prints the current conditions, the seats and the representative endpoints. <code>verify</code> asks the controller for a completely fresh pass: it re-verifies connections and re-probes every seat. It exits non-zero unless the organisation is <code>OperationalReady</code>. A no-change <code>terraform apply</code> is not a health check, so run <code>verify</code> after every deploy.</p>

@@ -1,0 +1,122 @@
+# Publishes a release when a v<major>.<minor>.<patch> tag is pushed:
+#   - images:   ghcr.io/darcys22/steadmesh/<image>:<version> (linux/amd64, linux/arm64)
+#   - chart:    oci://ghcr.io/darcys22/steadmesh/charts/platform:<version>
+#   - provider: signed zips on darcys22/terraform-provider-steadmesh, which the
+#               Terraform Registry serves as darcys22/steadmesh
+#   - a GitHub release here, pointing at the quickstart.
+# One-time setup is described in the README ("Releasing").
+name: release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  REGISTRY: ghcr.io/darcys22/steadmesh
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: The quickstart pins this release
+        run: hack/set-version.sh --check "${{ steps.version.outputs.version }}"
+      - run: make lint test
+
+  images:
+    needs: check
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [controller, platform, console, seat-fake, seat-claudecode]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: build/${{ matrix.image }}.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ matrix.image }}:${{ needs.check.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.check.outputs.version }}
+
+  chart:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Package and push
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          helm package charts/platform --version "$VERSION" --app-version "$VERSION" --destination out
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+          helm push "out/platform-$VERSION.tgz" "oci://$REGISTRY/charts"
+
+  provider:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: gpg
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Publishes to darcys22/terraform-provider-steadmesh, so the default
+          # GITHUB_TOKEN (scoped to this repository) is not enough.
+          GITHUB_TOKEN: ${{ secrets.PROVIDER_RELEASE_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.gpg.outputs.fingerprint }}
+
+  release:
+    needs: [check, images, chart, provider]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes --notes "$(cat <<EOF
+          Install into your cluster without cloning:
+
+          \`\`\`sh
+          mkdir steadmesh && cd steadmesh
+          terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=$GITHUB_REF_NAME"
+          \`\`\`
+
+          Then follow the README's quickstart. Images: \`$REGISTRY/<image>:$VERSION\`. Chart: \`oci://$REGISTRY/charts/platform\` $VERSION. Provider: \`darcys22/steadmesh\` $VERSION.
+          EOF
+          )"

@@ -63,7 +63,7 @@ func (f *fakePlatform) Seats(context.Context, string) ([]runtimeapi.ConsoleSeatS
 	return []runtimeapi.ConsoleSeatStatus{
 		{SeatRuntime: runtimeapi.SeatRuntime{SeatID: leadID, SeatKey: "lead", State: "Executing", LeaseHolder: "pod-uid-1",
 			LeaseExpiresAt: now.Add(time.Minute), LeaseGeneration: 3, AdoptedRevision: "rev-2"}, LastProgressAt: &progress,
-			Current: &runtimeapi.ConsoleExecution{ID: runID, SeatKey: "lead", TriggerSummary: "please build the login page", StartedAt: now.Add(-time.Minute)},
+			Current:           &runtimeapi.ConsoleExecution{ID: runID, SeatKey: "lead", TriggerSummary: "please build the login page", StartedAt: now.Add(-time.Minute)},
 			UnknownOperations: 1},
 		{SeatRuntime: runtimeapi.SeatRuntime{SeatID: repID, SeatKey: "rep_a", State: "Stopped", PendingDeliveries: 0}},
 	}, nil

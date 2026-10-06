@@ -1,0 +1,10 @@
+# Copy to terraform.tfvars and fill in.
+
+slack_workspace_id = "T0123456789"
+
+humans = {
+  # Slack: click a profile > ⋮ > Copy member ID.
+  alice = { slack_user_id = "U0123456789", display_name = "Alice's representative" }
+}
+
+# linear_team_id = "..." # when the platform stage has linear_api_key
