@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build steadmesh images with a filtered context (no bin/, examples/, modules/).
 # Usage: build/build.sh <image>... [-- extra docker build args]
-#   images: controller platform fakes seat-fake seat-claudecode
+#   images: controller platform console fakes seat-fake seat-claudecode
 #   TAG (default dev) and REGISTRY (default steadmesh) set the image name.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"

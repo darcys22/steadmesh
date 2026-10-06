@@ -1,0 +1,71 @@
+{{define "title"}}{{or .D.Config.DisplayName .D.Config.Key}} · Seat{{end}}
+{{define "content"}}
+{{$now := .Now}}{{$d := .D}}{{$v := .Seat}}
+<div class="page-head">
+  <p class="crumb"><a href="/orgs/{{.H.Org.ID}}">Organisation</a> /</p>
+  <h1>{{or $d.Config.DisplayName $d.Config.Key}} <span class="chip {{tone $v.State}}">{{$v.State}}</span></h1>
+  <p class="meta">Seat <code title="Permanent seat id: it survives Pod replacement">{{$d.Config.SeatID}}</code> · <code>{{$d.Config.Key}}</code> · {{$d.Config.RoleRef}}{{if $d.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}{{if $d.Config.Teams}} · teams {{join $d.Config.Teams ", "}}{{end}}</p>
+</div>
+
+{{if $v.Attention}}<section class="callout bad-soft"><h2>Needs attention</h2><ul>{{range $v.Attention}}<li>{{.}}</li>{{end}}</ul></section>{{end}}
+
+<div class="cols">
+  <section class="card">
+    <h2>Now</h2>
+    <dl class="facts">
+      <dt>Runner</dt><dd>{{if $v.Alive}}<span class="dot ok"></span>lease held by <code>{{short $d.Status.LeaseHolder}}</code>{{else}}<span class="dot muted"></span>no runner{{end}}</dd>
+      {{with $v.Pod}}<dt>Pod</dt><dd><code>{{.Name}}</code> · {{.Status.Phase}}{{range .Status.ContainerStatuses}} · {{.RestartCount}} restarts{{end}}</dd>{{end}}
+      <dt>Lease generation</dt><dd>{{$d.Status.LeaseGeneration}} <span class="muted">(increases each time a new runner takes over)</span></dd>
+      <dt>Execution state</dt><dd>{{$d.Status.State}}{{if $d.Status.StateDetail}} · {{$d.Status.StateDetail}}{{end}}</dd>
+      <dt>Last activity</dt><dd>{{ago $now $d.Status.LastActivity}}</dd>
+      <dt>Last progress</dt><dd>{{ago $now $d.Status.LastProgressAt}}</dd>
+      <dt>Inbox</dt><dd>{{$d.Status.PendingDeliveries}} waiting{{if $d.Status.DeadDeliveries}}, <span class="bad">{{$d.Status.DeadDeliveries}} dead-lettered</span>{{end}}</dd>
+      {{with $d.Status.Current}}<dt>Current run</dt><dd><a href="/runs/{{.ID}}">{{or .TriggerSummary (short .ID)}}</a></dd>{{end}}
+    </dl>
+  </section>
+
+  <section class="card">
+    <h2>Persistent state</h2>
+    <dl class="facts">
+      <dt>Workspace</dt><dd>{{if $d.Config.PersistentWorkspace}}persistent{{with $v.CRD}} · <code>{{.Spec.Workspace.ClaimName}}</code>{{end}}{{else}}ephemeral{{end}}{{if $d.Config.SharedWorkspaces}} · shared {{join $d.Config.SharedWorkspaces ", "}}{{end}}</dd>
+      <dt>Checkpoint</dt><dd>{{with $d.Checkpoint}}<code>{{.HarnessAdapter}}</code> {{.Guarantee}} <code title="{{.CheckpointRef}}">{{short .CheckpointRef}}</code>{{else}}none{{end}}</dd>
+      <dt>Memory</dt><dd>{{range $d.Memory}}<div><code>{{.Key}}</code>{{if .Personal}} (personal){{end}} · {{.Records}} records{{with .LastUpdatedAt}} · updated {{ago $now .}}{{end}}</div>{{else}}none{{end}}</dd>
+      <dt>Config revision</dt><dd><code title="{{$d.Config.ConfigRevision}}">{{short $d.Config.ConfigRevision}}</code> · policy {{$d.Config.PolicyRevision}}</dd>
+      <dt>Harness</dt><dd>{{$d.Config.HarnessAdapter}}{{if $d.Config.Model}} · {{$d.Config.Model}}{{end}}</dd>
+      <dt>Seat since</dt><dd>{{$d.Config.CreatedAt.Format "2006-01-02"}}{{if $d.Config.AdoptedFrom}} · adopted from <code>{{short $d.Config.AdoptedFrom}}</code>{{end}}</dd>
+    </dl>
+  </section>
+</div>
+
+{{with $d.Handoff}}
+<section class="card">
+  <h2>Handoff note</h2>
+  <p class="muted">What the seat recorded for whoever runs it next.</p>
+  {{if .Objective}}<p><strong>Objective:</strong> {{.Objective}}</p>{{end}}
+  {{if .Unresolved}}<p><strong>Unresolved:</strong></p><ul>{{range .Unresolved}}<li>{{.}}</li>{{end}}</ul>{{end}}
+  {{if .Notes}}<p class="body">{{.Notes}}</p>{{end}}
+</section>
+{{end}}
+
+<section>
+  <h2>Runs</h2>
+  <p class="muted">Every run this seat has made, across all of its runners. A change in generation means the Pod was replaced; the seat and its history carried on.</p>
+  {{if $d.Executions}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Run</th><th>Seat</th><th>State</th><th>Triggered by</th><th>Gen</th><th>Config</th><th>Took</th><th>Started</th></tr></thead>
+    <tbody>{{range $d.Executions}}{{template "run-row" (dict "E" . "Now" $now)}}{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">No runs yet.</p>{{end}}
+</section>
+
+<section>
+  <h2>Grants</h2>
+  {{if $d.Config.Capabilities}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Resource</th><th>Operations</th><th>Granted by</th></tr></thead>
+    <tbody>{{range $d.Config.Capabilities}}<tr><td><code>{{.Resource}}</code></td><td>{{join .Operations ", "}}</td><td class="muted">{{join .Sources ", "}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">No grants.</p>{{end}}
+  {{if $d.Config.SendTo}}<p class="meta">May message: {{join $d.Config.SendTo ", "}}</p>{{end}}
+</section>
+{{end}}

@@ -1,0 +1,74 @@
+{{define "title"}}{{or .H.Org.DisplayName .H.Org.Key}} · Readiness{{end}}
+{{define "content"}}
+{{$now := .Now}}
+<div class="page-head">
+  <h1>Configuration and readiness</h1>
+  <p class="lede">What Terraform requested compared with what is actually running. Secret values are never shown: only where each reference points and whether the last check succeeded.</p>
+</div>
+
+<section>
+  <h2>Organisation conditions</h2>
+  {{with .H.CRD}}<p class="meta">AgentOrganization <code>{{.Namespace}}/{{.Name}}</code> · effective revision <code title="{{.Status.EffectiveRevision}}">{{short .Status.EffectiveRevision}}</code>{{with .Status.LastVerifiedTime}} · last verified {{ago $now .Time}}{{end}}</p>{{end}}
+  {{if .Conditions}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Condition</th><th>Status</th><th>Reason</th><th>Message</th><th>Since</th></tr></thead>
+    <tbody>{{range .Conditions}}<tr><td>{{.Type}}</td><td><span class="chip {{tone .Status}}">{{.Status}}</span></td><td>{{.Reason}}</td><td class="clip">{{.Message}}</td><td>{{ago $now .Since}}</td></tr>{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">The AgentOrganization for this organisation was not found in the cluster, or has no conditions yet.</p>{{end}}
+</section>
+
+<section>
+  <h2>Seats</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Seat</th><th>Requested config</th><th>Running config</th><th>Probe</th><th>Workspace</th><th>Tools</th><th>Failing conditions</th></tr></thead>
+    <tbody>
+    {{range .Rows}}
+    <tr>
+      <td><a href="/seats/{{.Seat.Config.SeatID}}">{{or .Seat.Config.DisplayName .Seat.Config.Key}}</a></td>
+      <td><code title="{{.Requested}}">{{short .Requested}}</code></td>
+      <td>{{if .Adopted}}<code title="{{.Adopted}}">{{short .Adopted}}</code> {{if eq .Adopted .Requested}}<span class="chip ok">current</span>{{else}}<span class="chip warn">older</span>{{end}}{{else}}<span class="muted">not started</span>{{end}}</td>
+      <td>{{if .Probe}}<span class="chip {{tone .Probe}}">{{.Probe}}</span>{{if .ProbeError}} <span class="bad">{{.ProbeError}}</span>{{end}}{{else}}<span class="muted">none</span>{{end}}</td>
+      <td>{{if .Claim}}<code>{{.Claim}}</code> <span class="chip {{tone .ClaimPhase}}">{{.ClaimPhase}}</span>{{else}}<span class="muted">none</span>{{end}}</td>
+      <td>{{.Tools}}</td>
+      <td>{{range .Failing}}<div><span class="chip {{tone .Status}}">{{.Type}}</span> {{.Reason}}</div>{{else}}<span class="muted">none</span>{{end}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <h2>Connections</h2>
+  {{if .H.Org.Connections}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Connection</th><th>Adapter</th><th>Secret reference</th><th>Last check</th><th>Detail</th><th>Checked</th></tr></thead>
+    <tbody>
+    {{range .H.Org.Connections}}
+    <tr>
+      <td><code>{{.Key}}</code>{{if .Required}} <span class="badge">required</span>{{end}}</td>
+      <td>{{.Adapter}}</td>
+      <td>{{if .SecretKind}}<code>{{.SecretKind}}</code> <code>{{.SecretPath}}</code>{{else}}<span class="muted">none</span>{{end}}</td>
+      {{with .Check}}
+      <td>{{if .OK}}<span class="chip ok">authenticated</span>{{else}}<span class="chip bad">failed</span>{{end}}</td>
+      <td class="clip">{{.Detail}}</td>
+      <td>{{ago $now .CheckedAt}}</td>
+      {{else}}
+      <td><span class="chip warn">not checked</span></td><td></td><td></td>
+      {{end}}
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="empty">No connections declared.</p>{{end}}
+</section>
+
+{{if .H.Org.Bindings}}
+<section>
+  <h2>Channel bindings</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Binding</th><th>Connection</th><th>Seat</th></tr></thead>
+    <tbody>{{range .H.Org.Bindings}}<tr><td><code>{{.Key}}</code></td><td><code>{{.Connection}}</code></td><td>{{.Seat}}</td></tr>{{end}}</tbody>
+  </table></div>
+</section>
+{{end}}
+{{end}}

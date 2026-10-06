@@ -1,0 +1,12 @@
+{{define "title"}}Conversation {{short .D.Conversation.ID}}{{end}}
+{{define "content"}}
+{{$now := .Now}}{{$c := .D.Conversation}}
+<div class="page-head">
+  <p class="crumb">{{with .H}}<a href="/orgs/{{.Org.ID}}/activity">Activity</a> /{{end}}</p>
+  <h1>Conversation <code>{{short $c.ID}}</code></h1>
+  <p class="meta">{{$c.Kind}}{{if $c.Binding}} · binding <code>{{$c.Binding}}</code>{{end}} · participants {{join $c.Participants ", "}} · {{$c.Messages}} messages · started {{ago $now $c.CreatedAt}}</p>
+</div>
+<div class="thread">
+  {{range .D.Messages}}{{template "message" (dict "M" . "Now" $now)}}{{else}}<p class="empty">No messages.</p>{{end}}
+</div>
+{{end}}

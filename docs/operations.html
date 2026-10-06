@@ -146,6 +146,20 @@ kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-name&gt;-0</
 <tr><td><code>steadmesh_http_requests_total</code>, <code>steadmesh_http_request_duration_seconds</code></td><td>API traffic</td></tr>
 </table>
 
+<h2>The console</h2>
+<p>The Steadmesh Console is an optional, read-only browser view of a running organisation. It is <strong>off by default</strong>. When it is off, nothing is deployed and the platform does not serve the console API. To turn it on, set <code>enable_console</code> in the platform stage and apply:</p>
+<pre><code>terraform -chdir=examples/platform apply -var enable_console=true
+orgctl console --context kind-steadmesh     # forwards http://127.0.0.1:8090</code></pre>
+<p>Without <code>orgctl</code>, run <code>kubectl --context kind-steadmesh -n steadmesh-system port-forward deploy/steadmesh-console 8090</code>. The console listens only on its Pod's loopback interface and has no login of its own, so it can be reached only by someone allowed to port-forward in the control-plane namespace.</p>
+<table>
+<tr><th>View</th><th>Shows</th></tr>
+<tr><td>Organisation</td><td>Teams and seats with their role and state (working, queued, waiting, starting, blocked, offline). It shows whether a runner holds each seat's lease separately from when the seat last made progress. Each seat page lists its permanent seat ID, every run across Pod replacements with the lease generation it ran under, its handoff note, its checkpoint and its memory metadata. Memory record contents are never shown.</td></tr>
+<tr><td>Work</td><td>What seats produced: connector operations such as Linear issues, with their receipts, plus artifacts and runs. Failed operations and operations with unknown outcomes appear first, as blockers.</td></tr>
+<tr><td>Activity</td><td>A live timeline of messages, runs, tool calls, errors and connector operations, next to a map of seats and their declared routes. A route lights up only when a message is actually sent on it. Selecting a message opens its conversation: delivery state per recipient, the run it triggered, that run's tool calls and the reply.</td></tr>
+<tr><td>Readiness</td><td>Organisation conditions; for each seat, the requested configuration revision against the one actually running, the probe result, the workspace claim and failing conditions. Connections show only where their secret reference points and whether the last check succeeded, never the secret value.</td></tr>
+</table>
+<p>The console's ServiceAccount can only read AgentOrganizations, AgentSeats, Pods and PersistentVolumeClaims. The platform accepts that one identity on <code>/console/v1</code>, and every route there is a GET. Tool inputs and connector results shown in run details have credential-like fields (token, secret, password, API key, authorization) replaced with <code>[redacted]</code>.</p>
+
 <h2>Troubleshooting</h2>
 <table>
 <tr><th>Symptom</th><th>Cause and fix</th></tr>

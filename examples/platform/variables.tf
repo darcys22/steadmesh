@@ -27,6 +27,12 @@ variable "vault_address" {
   default     = null
 }
 
+variable "enable_console" {
+  description = "Deploy the read-only Steadmesh Console and serve the platform's /console/v1 API to it. Off by default."
+  type        = bool
+  default     = false
+}
+
 variable "extra_values" {
   description = "Additional chart values, merged over the defaults above."
   type        = any

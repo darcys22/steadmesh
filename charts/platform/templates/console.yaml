@@ -1,0 +1,82 @@
+{{- if .Values.console.enabled }}
+# Steadmesh Console (optional, read-only). Rendered only with console.enabled.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: steadmesh-console
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: console
+---
+# Read-only: the console never changes the organisation.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: steadmesh-console
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["steadmesh.io"]
+    resources: ["agentorganizations", "agentseats"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: steadmesh-console
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: steadmesh-console
+subjects:
+  - kind: ServiceAccount
+    name: steadmesh-console
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: steadmesh-console
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: console
+spec:
+  replicas: {{ .Values.console.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: steadmesh-console
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: steadmesh-console
+        steadmesh.io/component: console
+    spec:
+      serviceAccountName: steadmesh-console
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: console
+          image: "{{ .Values.image.consoleRepository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # Loopback only: the console has no authentication of its own and
+            # is reached through kubectl port-forward.
+            - name: LISTEN_ADDR
+              value: "127.0.0.1:{{ .Values.console.port }}"
+            - name: PLATFORM_URL
+              value: {{ include "steadmesh.platformURL" . | quote }}
+          resources:
+            {{- toYaml .Values.console.resources | nindent 12 }}
+          securityContext:
+            {{- include "steadmesh.securityContext" . | nindent 12 }}
+{{- end }}

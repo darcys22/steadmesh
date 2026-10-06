@@ -1,0 +1,68 @@
+{{define "title"}}{{or .H.Org.DisplayName .H.Org.Key}} · Work{{end}}
+{{define "content"}}
+{{$now := .Now}}
+<div class="page-head">
+  <h1>Work</h1>
+  <p class="lede">What the seats actually produced: changes made through connections, stored artifacts and finished runs.</p>
+</div>
+<form class="filters" method="get">
+  <label>Seat
+    <select name="seat">
+      <option value="">all seats</option>
+      {{range .S.Seats}}<option value="{{.Config.Key}}"{{if eq $.Seat .Config.Key}} selected{{end}}>{{or .Config.DisplayName .Config.Key}}</option>{{end}}
+    </select>
+  </label>
+  <label>Connector status
+    <select name="status">
+      <option value="">any</option>
+      {{range (list "succeeded" "pending" "unknown" "failed")}}<option value="{{.}}"{{if eq $.Status .}} selected{{end}}>{{.}}</option>{{end}}
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
+{{if .Blockers}}
+<section class="callout bad-soft">
+  <h2>Needs attention</h2>
+  <p>These connector operations failed, or their outcome is unknown. A seat must reconcile an unknown operation before it reissues it.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Operation</th><th>Seat</th><th>Receipt / error</th><th>Run</th><th>Updated</th></tr></thead>
+    <tbody>{{range .Blockers}}{{template "operation-row" (dict "O" . "Now" $now)}}{{end}}</tbody>
+  </table></div>
+</section>
+{{end}}
+
+<section>
+  <h2>Changes through connections</h2>
+  {{if .Operations}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Operation</th><th>Seat</th><th>Receipt / error</th><th>Run</th><th>Updated</th></tr></thead>
+    <tbody>{{range .Operations}}{{template "operation-row" (dict "O" . "Now" $now)}}{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">No connector operations{{if or .Seat .Status}} match these filters{{end}}.</p>{{end}}
+</section>
+
+<section>
+  <h2>Artifacts</h2>
+  {{if .Artifacts}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Location</th><th>Owner</th><th>Store</th><th>Size</th><th>Digest</th><th>Created</th></tr></thead>
+    <tbody>
+    {{range .Artifacts}}
+    <tr><td><code>{{.Location}}</code></td><td>{{.OwnerSeat}}</td><td>{{.Store}}</td><td>{{.SizeBytes}} B</td><td><code title="{{.ContentDigest}}">{{short .ContentDigest}}</code></td><td>{{ago $now .CreatedAt}}</td></tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="empty">No artifacts stored.</p>{{end}}
+</section>
+
+<section>
+  <h2>Runs</h2>
+  {{if .Runs}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Run</th><th>Seat</th><th>State</th><th>Triggered by</th><th>Gen</th><th>Config</th><th>Took</th><th>Started</th></tr></thead>
+    <tbody>{{range .Runs}}{{template "run-row" (dict "E" . "Now" $now)}}{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">No runs yet.</p>{{end}}
+</section>
+{{end}}

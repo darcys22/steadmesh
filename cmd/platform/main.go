@@ -39,8 +39,8 @@ func env(key, def string) string {
 }
 
 type config struct {
-	databaseURL, listenAddr, controllerUser, secretsNamespace string
-	vaultAddr, vaultRole, vaultMount, vaultJWT                string
+	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace string
+	vaultAddr, vaultRole, vaultMount, vaultJWT                             string
 }
 
 func main() {
@@ -49,6 +49,8 @@ func main() {
 	flag.StringVar(&c.listenAddr, "listen-addr", env("LISTEN_ADDR", ":8080"), "address for the API, /healthz, /readyz and /metrics")
 	flag.StringVar(&c.controllerUser, "controller-username", env("CONTROLLER_USERNAME", "system:serviceaccount:steadmesh-system:steadmesh-controller"),
 		"the only identity accepted on /internal/v1")
+	flag.StringVar(&c.consoleUser, "console-username", env("CONSOLE_USERNAME", ""),
+		"the only identity accepted on the read-only /console/v1 API; empty disables the console API")
 	flag.StringVar(&c.secretsNamespace, "secrets-namespace", env("SECRETS_NAMESPACE", "steadmesh-system"), "namespace of k8s: secret references")
 	flag.StringVar(&c.vaultAddr, "vault-addr", env("VAULT_ADDR", ""), "Vault address; empty disables vault: secret references")
 	flag.StringVar(&c.vaultRole, "vault-role", env("VAULT_ROLE", "steadmesh-platform"), "Vault Kubernetes auth role")
@@ -96,8 +98,9 @@ func run(c config, log *slog.Logger) error {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	p := platform.New(ctx, platform.Options{
-		Store: st,
-		Auth:  auth.NewTokenReview(kube, st, c.controllerUser),
+		Store:   st,
+		Auth:    auth.NewTokenReview(kube, st, c.controllerUser, c.consoleUser),
+		Console: c.consoleUser != "",
 		Factories: connections.Factories{
 			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": slack.New},
 			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New},

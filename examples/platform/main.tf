@@ -30,6 +30,10 @@ locals {
       enabled = var.vault_address != null
       address = var.vault_address
     }
+    # Read-only Steadmesh Console; off unless enable_console is set.
+    console = {
+      enabled = var.enable_console
+    }
   }, var.extra_values)
 }
 

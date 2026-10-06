@@ -1,5 +1,6 @@
 // Package api serves the platform runtime API (pkg/runtimeapi): /v1/* for
-// seats, /internal/v1/* for the controller, health and metrics. Seat and
+// seats, /internal/v1/* for the controller, the optional read-only
+// /console/v1/* for the console, health and metrics. Seat and
 // controller callers use separate credentials and authentication paths
 // (§13.2); every error body is a runtimeapi.Error.
 package api
@@ -34,6 +35,9 @@ type Config struct {
 	Metrics     *metrics.Metrics
 	Gatherer    prometheus.Gatherer
 	Log         *slog.Logger
+	// Console registers the read-only console API (/console/v1). It is off
+	// unless the platform is started with a console identity.
+	Console bool
 	// PollInterval is how often a waiting inbox request re-checks the queue.
 	PollInterval time.Duration
 }
@@ -82,6 +86,10 @@ func New(cfg Config) http.Handler {
 	internal("POST "+runtimeapi.PathInternalSeats+"{id}/fence", s.fence)
 	internal("POST "+runtimeapi.PathInternalSeats+"{id}/probe", s.createProbe)
 	internal("GET "+runtimeapi.PathInternalSeats+"{id}/probe/{probe}", s.getProbe)
+
+	if cfg.Console {
+		s.registerConsole(mux)
+	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")

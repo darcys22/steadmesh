@@ -1,0 +1,21 @@
+{{define "content"}}
+<h1>Organisations</h1>
+{{if .Orgs}}
+<div class="table-wrap"><table>
+  <thead><tr><th>Organisation</th><th>Namespace</th><th>Seats</th><th>Revision</th><th>Ready</th></tr></thead>
+  <tbody>
+  {{range .Orgs}}
+  <tr>
+    <td><a href="/orgs/{{.Org.ID}}">{{or .Org.DisplayName .Org.Key}}</a> <code>{{.Org.Key}}</code></td>
+    <td><code>{{.Org.Namespace}}</code></td>
+    <td>{{len .Org.Seats}}</td>
+    <td><code title="{{.Org.Revision}}">{{short .Org.Revision}}</code></td>
+    <td><span class="chip {{tone .Ready}}">{{.Ready}}</span></td>
+  </tr>
+  {{end}}
+  </tbody>
+</table></div>
+{{else}}
+<p class="empty">No organisations yet. Apply the organisation stage, then reload.</p>
+{{end}}
+{{end}}

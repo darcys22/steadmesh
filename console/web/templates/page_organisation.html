@@ -1,0 +1,10 @@
+{{define "title"}}{{or .H.Org.DisplayName .H.Org.Key}} · Organisation{{end}}
+{{define "content"}}
+<div class="page-head">
+  <h1>Organisation</h1>
+  <p class="lede">Each seat keeps its identity, workspace and memory across Pod restarts. <em>Runner</em> shows whether something is alive; <em>Progress</em> shows when it last did real work.</p>
+</div>
+<div id="seat-grid" data-refresh="/orgs/{{.H.Org.ID}}/grid" data-interval="5000">
+{{template "seat-grid" .}}
+</div>
+{{end}}

@@ -1,7 +1,8 @@
-# Image tag and pull policy shared by the controller and platform images.
+# Image tag and pull policy shared by the controller, platform and console images.
 image:
   controllerRepository: steadmesh/controller
   platformRepository: steadmesh/platform
+  consoleRepository: steadmesh/console
   tag: dev
   pullPolicy: IfNotPresent
 
@@ -37,3 +38,17 @@ platform:
   resources:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "2", memory: 512Mi}
+
+# Steadmesh Console: a read-only browser view of seats, runs, handoffs,
+# outputs and readiness. Off by default; the platform stage turns it on with
+# enable_console. When off, nothing is deployed and the platform does not
+# serve its /console/v1 API. The console listens on the Pod's loopback only
+# and has no authentication of its own: reach it with
+#   kubectl -n <namespace> port-forward deploy/steadmesh-console 8090
+console:
+  enabled: false
+  replicas: 1
+  port: 8090
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}

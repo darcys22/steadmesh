@@ -51,6 +51,8 @@ func TestE2E(t *testing.T) {
 		"TF_VAR_linear_endpoint_ref=" + fakeSvc + ":8091",
 		"TF_VAR_seat_idle_timeout=1m",
 		"TF_VAR_harness=fake",
+		// The console is off by default; the e2e run turns it on to check it.
+		"TF_VAR_enable_console=true",
 	}
 
 	step(t, "apply foundation", func(t *testing.T) {
@@ -182,6 +184,8 @@ func TestE2E(t *testing.T) {
 			return b > a
 		})
 	})
+
+	consoleChecks(t)
 
 	// A17: seat identities have no Kubernetes management authority.
 	step(t, "A17 no management access from a seat", func(t *testing.T) {

@@ -1,0 +1,53 @@
+{{define "title"}}Run {{short .D.Execution.ID}}{{end}}
+{{define "content"}}
+{{$now := .Now}}{{$e := .D.Execution}}
+<div class="page-head">
+  <p class="crumb">{{with .H}}<a href="/orgs/{{.Org.ID}}/activity">Activity</a> / {{end}}<a href="/seats/{{$e.SeatID}}">{{$e.SeatKey}}</a> /</p>
+  <h1>Run <code>{{short $e.ID}}</code> <span class="chip {{tone $e.State}}">{{$e.State}}</span></h1>
+  <p class="meta">Seat <code>{{$e.SeatKey}}</code> · generation {{$e.LeaseGeneration}} · config <code title="{{$e.ConfigRevision}}">{{short $e.ConfigRevision}}</code> · {{$e.HarnessAdapter}} · started {{ago $now $e.StartedAt}} · took {{duration $e.StartedAt $e.FinishedAt $now}}</p>
+  {{if $e.Error}}<p class="callout bad-soft">{{$e.Error}}</p>{{end}}
+</div>
+
+{{with .D.Trigger}}
+<section>
+  <h2>Triggered by</h2>
+  {{template "message" (dict "M" . "Now" $now)}}
+  <p class="meta"><a href="/conversations/{{.ConversationID}}{{with $.H}}?org={{.Org.ID}}{{end}}">Open the conversation</a></p>
+</section>
+{{end}}
+
+<section>
+  <h2>Steps</h2>
+  {{if .Steps}}
+  <ol class="steps">
+    {{range .Steps}}
+    {{$s := .}}<li class="step kind-{{.Event.Kind}}">
+      <div class="step-head">
+        <span class="kind">{{activityLabel .Event.Kind}}</span>
+        <time datetime="{{stamp .Event.CreatedAt}}">{{.Event.CreatedAt.Local.Format "15:04:05.000"}}</time>
+        {{if .Event.CorrelationID}}<code class="muted">{{short .Event.CorrelationID}}</code>{{end}}
+        {{with .Result}}<span class="muted">→ result after {{duration $s.Event.CreatedAt nil .CreatedAt}}</span>{{end}}
+      </div>
+      {{with .Event.Data}}<details{{if ne $.D.Execution.State "completed"}} open{{end}}><summary>data</summary><pre>{{pretty .}}</pre></details>{{end}}
+      {{with .Result}}<details><summary>result</summary><pre>{{pretty .Data}}</pre></details>{{end}}
+    </li>
+    {{end}}
+  </ol>
+  {{else}}<p class="empty">The harness reported no events for this run.</p>{{end}}
+</section>
+
+<section>
+  <h2>Connector operations</h2>
+  {{if .D.Operations}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Status</th><th>Operation</th><th>Seat</th><th>Receipt / error</th><th>Run</th><th>Updated</th></tr></thead>
+    <tbody>{{range .D.Operations}}{{template "operation-row" (dict "O" . "Now" $now)}}{{end}}</tbody>
+  </table></div>
+  {{else}}<p class="empty">None.</p>{{end}}
+</section>
+
+<section>
+  <h2>Messages sent during this run</h2>
+  {{range .D.Sent}}{{template "message" (dict "M" . "Now" $now)}}{{else}}<p class="empty">None.</p>{{end}}
+</section>
+{{end}}

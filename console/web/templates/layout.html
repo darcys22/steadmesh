@@ -1,0 +1,34 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{block "title" .}}Steadmesh Console{{end}}</title>
+<link rel="stylesheet" href="/static/console.css">
+<script src="/static/console.js" defer></script>
+</head>
+<body>
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="/">Steadmesh Console</a>
+    {{with .H}}
+    <span class="org-name">{{or .Org.DisplayName .Org.Key}}</span>
+    <span class="chip {{tone .Ready}}" title="The organisation's OperationalReady condition">{{if eq .Ready "True"}}operational{{else if eq .Ready "False"}}not ready{{else}}readiness unknown{{end}}</span>
+    {{end}}
+    <span class="ro" title="The console never changes the organisation">read-only</span>
+  </div>
+  {{with .H}}
+  <nav class="tabs" aria-label="Views">
+    <a href="/orgs/{{.Org.ID}}"{{if eq .Tab "organisation"}} aria-current="page"{{end}}>Organisation</a>
+    <a href="/orgs/{{.Org.ID}}/work"{{if eq .Tab "work"}} aria-current="page"{{end}}>Work</a>
+    <a href="/orgs/{{.Org.ID}}/activity"{{if eq .Tab "activity"}} aria-current="page"{{end}}>Activity</a>
+    <a href="/orgs/{{.Org.ID}}/readiness"{{if eq .Tab "readiness"}} aria-current="page"{{end}}>Readiness</a>
+  </nav>
+  {{end}}
+</header>
+<main>
+{{template "content" .}}
+</main>
+</body>
+</html>
+{{end}}

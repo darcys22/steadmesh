@@ -7,11 +7,11 @@ KIND_CLUSTER ?= steadmesh
 KCTX := kind-$(KIND_CLUSTER)
 KUBECTL := kubectl --context $(KCTX)
 TAG ?= dev
-IMAGES := controller platform seat-fake seat-claudecode fakes
+IMAGES := controller platform console seat-fake seat-claudecode fakes
 ENVTEST_K8S ?= 1.37.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration e2e images kind-up kind-down kind-load provider orgctl live tools
+.PHONY: all generate build lint test test-integration e2e e2e-reset images kind-up kind-down kind-load provider orgctl live tools
 
 all: generate build test
 
@@ -60,9 +60,19 @@ kind-load: images
 kind-down:
 	kind delete cluster --name $(KIND_CLUSTER)
 
-# End-to-end on kind with the fake harness and fake Slack/Linear.
-e2e: kind-up kind-load provider orgctl
+# End-to-end on kind with the fake harness and fake Slack/Linear. Every run
+# starts from a fresh cluster: leftover platform records (the connector
+# ledger, messages) would not match the freshly started fakes. The example
+# Terraform state describes the deleted cluster, so it goes too. The cluster
+# is left running afterwards for inspection.
+e2e: images provider orgctl
+	$(MAKE) e2e-reset
+	$(MAKE) kind-up kind-load
 	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -timeout 40m ./tests/e2e/...
+
+e2e-reset:
+	kind delete cluster --name $(KIND_CLUSTER)
+	rm -f examples/*/terraform.tfstate examples/*/terraform.tfstate.backup
 
 # Live tests against real Slack, Linear and Anthropic. Requires credentials (see tests/live/README.md).
 live: kind-up kind-load provider orgctl

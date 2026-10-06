@@ -1,6 +1,7 @@
-// Command orgctl reports organisation status and runs a fresh readiness
-// verification (design §5.4). It is used by the deployment workflow after
-// every apply, including applies with no Terraform changes (A25).
+// Command orgctl reports organisation status, runs a fresh readiness
+// verification (design §5.4) and opens the optional Steadmesh Console. It is
+// used by the deployment workflow after every apply, including applies with
+// no Terraform changes (A25).
 package main
 
 import (
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -38,7 +40,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: orgctl status|verify [--context ctx] [--namespace ns] [--name org]")
+		return errors.New("usage: orgctl status|verify|console [--context ctx] [--namespace ns] [--name org]")
 	}
 	cmd := args[0]
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -47,6 +49,8 @@ func run(args []string) error {
 	ns := fs.String("namespace", "", "organisation namespace (default: all)")
 	name := fs.String("name", "", "organisation name (default: all in namespace)")
 	timeout := fs.Duration("timeout", 10*time.Minute, "verify timeout")
+	systemNS := fs.String("system-namespace", "steadmesh-system", "control-plane namespace (console)")
+	port := fs.Int("port", 8090, "local port for the console")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -58,6 +62,9 @@ func run(args []string) error {
 		return err
 	}
 	ctx := context.Background()
+	if cmd == "console" {
+		return openConsole(ctx, c, *kubeconfig, *kctx, *systemNS, *port)
+	}
 	orgs, err := listOrgs(ctx, c, *ns, *name)
 	if err != nil {
 		return err
@@ -101,6 +108,9 @@ func newClient(kubeconfig, kctx string) (client.Client, error) {
 	}
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := appsv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return client.New(cfg, client.Options{Scheme: scheme})

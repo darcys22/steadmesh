@@ -41,6 +41,9 @@ type Authenticator interface {
 	Seat(ctx context.Context, token string) (Seat, error)
 	// Controller verifies the controller's token.
 	Controller(ctx context.Context, token string) error
+	// Console verifies the console's token. It is forbidden when no console
+	// identity is configured.
+	Console(ctx context.Context, token string) error
 }
 
 // SeatResolver maps a verified ServiceAccount to its active seat id.
@@ -53,14 +56,16 @@ type TokenReview struct {
 	client     kubernetes.Interface
 	seats      SeatResolver
 	controller string
+	console    string
 	cache      reviewCache
 }
 
 // NewTokenReview returns an Authenticator using client for TokenReviews.
 // controllerUsername is the only identity accepted on the internal API, e.g.
-// system:serviceaccount:steadmesh-system:steadmesh-controller.
-func NewTokenReview(client kubernetes.Interface, seats SeatResolver, controllerUsername string) *TokenReview {
-	return &TokenReview{client: client, seats: seats, controller: controllerUsername, cache: reviewCache{ttl: 30 * time.Second}}
+// system:serviceaccount:steadmesh-system:steadmesh-controller. consoleUsername
+// is the only identity accepted on the console API; empty accepts none.
+func NewTokenReview(client kubernetes.Interface, seats SeatResolver, controllerUsername, consoleUsername string) *TokenReview {
+	return &TokenReview{client: client, seats: seats, controller: controllerUsername, console: consoleUsername, cache: reviewCache{ttl: 30 * time.Second}}
 }
 
 type reviewed struct {
@@ -128,6 +133,21 @@ func (a *TokenReview) Controller(ctx context.Context, token string) error {
 		return err
 	}
 	if r.username != a.controller {
+		return ErrForbidden
+	}
+	return nil
+}
+
+// Console implements Authenticator.
+func (a *TokenReview) Console(ctx context.Context, token string) error {
+	if a.console == "" {
+		return ErrForbidden
+	}
+	r, err := a.review(ctx, token, nil)
+	if err != nil {
+		return err
+	}
+	if r.username != a.console {
 		return ErrForbidden
 	}
 	return nil

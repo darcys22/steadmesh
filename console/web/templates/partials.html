@@ -1,0 +1,102 @@
+{{define "seat-grid"}}
+{{$now := .Now}}
+<div class="summary">
+  {{range $state := (list "working" "queued" "waiting" "starting" "blocked" "offline" "unknown")}}{{with index $.S.Counts $state}}<span class="chip {{tone $state}}">{{.}} {{$state}}</span>{{end}}{{end}}
+</div>
+{{range .Teams}}
+<section class="team">
+  <h2>{{.Name}}</h2>
+  <div class="grid">
+    {{range .Seats}}{{template "seat-card" (dict "V" . "Now" $now)}}{{end}}
+  </div>
+</section>
+{{else}}
+<p class="empty">This organisation has no active seats.</p>
+{{end}}
+{{end}}
+
+{{define "seat-card"}}
+{{$v := .V}}{{$now := .Now}}
+<article class="card seat state-{{$v.State}}">
+  <header>
+    <a class="seat-name" href="/seats/{{$v.Config.SeatID}}">{{or $v.Config.DisplayName $v.Config.Key}}</a>
+    <span class="chip {{tone $v.State}}">{{$v.State}}</span>
+  </header>
+  <p class="meta"><code>{{$v.Config.Key}}</code> · {{$v.Config.RoleRef}}{{if $v.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}</p>
+  <dl class="facts">
+    <dt>Runner</dt>
+    <dd>{{if $v.Alive}}<span class="dot ok"></span>lease held{{else}}<span class="dot muted"></span>no runner{{end}}{{with $v.Pod}} · <code title="Pod">{{.Name}}</code>{{end}}</dd>
+    <dt>Progress</dt>
+    <dd>{{if $v.Status.LastProgressAt}}{{ago $now $v.Status.LastProgressAt}}{{else}}none yet{{end}}</dd>
+    {{with $v.Status.Current}}
+    <dt>Doing</dt>
+    <dd><a href="/runs/{{.ID}}">{{or .TriggerSummary "a run"}}</a> <span class="muted">for {{duration .StartedAt .FinishedAt $now}}</span></dd>
+    {{end}}
+    {{if $v.Status.PendingDeliveries}}
+    <dt>Inbox</dt>
+    <dd>{{$v.Status.PendingDeliveries}} waiting</dd>
+    {{end}}
+  </dl>
+  {{if $v.Attention}}
+  <ul class="attention">{{range $v.Attention}}<li>{{.}}</li>{{end}}</ul>
+  {{end}}
+</article>
+{{end}}
+
+{{define "activity-item"}}
+{{$i := .I}}
+<li class="act kind-{{$i.Kind}} tone-{{tone $i.Status}}" data-seat="{{$i.SeatKey}}" data-peer="{{$i.PeerSeat}}">
+  <time datetime="{{stamp $i.At}}" title="{{stamp $i.At}}">{{$i.At.Local.Format "15:04:05"}}</time>
+  <span class="kind">{{activityLabel $i.Kind}}</span>
+  <span class="who">{{or $i.SeatKey $i.Peer}}{{if or $i.PeerSeat (and $i.SeatKey $i.Peer)}} → {{or $i.PeerSeat $i.Peer}}{{end}}</span>
+  <span class="sum">{{if and (eq $i.Kind "message") $i.ConversationID}}<a href="/conversations/{{$i.ConversationID}}?org={{.OrgID}}">{{$i.Summary}}</a>{{else}}{{$i.Summary}}{{end}}</span>
+  <span class="tail">
+    {{if and $i.Status (ne $i.Kind "message")}}<span class="chip {{tone $i.Status}}">{{$i.Status}}</span>{{end}}
+    {{if $i.ExecutionID}}<a class="runlink" href="/runs/{{$i.ExecutionID}}">run {{short $i.ExecutionID}}</a>{{end}}
+  </span>
+</li>
+{{end}}
+
+{{define "message"}}
+{{$m := .M}}{{$now := .Now}}
+<article class="card message origin-{{$m.Origin}}">
+  <header>
+    <span class="who"><strong>{{if $m.SenderSeat}}{{$m.SenderSeat}}{{else}}{{$m.Origin}}{{end}}</strong> → <strong>{{or $m.RecipientSeat $m.RecipientBinding}}</strong></span>
+    <time datetime="{{stamp $m.CreatedAt}}" title="{{stamp $m.CreatedAt}}">{{ago $now $m.CreatedAt}}</time>
+  </header>
+  <p class="body">{{$m.Body}}</p>
+  <footer class="meta">
+    <code title="message id">{{short $m.ID}}</code>
+    {{if $m.Route}} · route <code>{{$m.Route}}</code>{{end}}
+    {{if $m.CorrelationID}} · correlation <code>{{short $m.CorrelationID}}</code>{{end}}
+    {{range $m.Deliveries}} · delivered to {{.SeatKey}} <span class="chip {{tone .State}}">{{.State}}</span>{{if gt .Attempts 1}} ({{.Attempts}} attempts){{end}}{{if .ExecutionID}} <a href="/runs/{{.ExecutionID}}">run {{short .ExecutionID}}</a>{{end}}{{if .LastError}} <span class="bad">{{.LastError}}</span>{{end}}{{end}}
+    {{if $m.Outbox}} · external delivery <span class="chip {{tone $m.Outbox}}">{{$m.Outbox}}</span>{{end}}
+  </footer>
+</article>
+{{end}}
+
+{{define "operation-row"}}
+{{$o := .O}}{{$now := .Now}}
+<tr>
+  <td><span class="chip {{tone $o.Status}}">{{$o.Status}}</span></td>
+  <td><code>{{$o.Connection}}</code> {{$o.Operation.Operation}}{{if $o.Target}} <span class="muted">{{$o.Target}}</span>{{end}}</td>
+  <td>{{$o.SeatKey}}</td>
+  <td>{{if $o.ExternalReceipt}}<code>{{$o.ExternalReceipt}}</code>{{end}}{{if $o.Error}}<span class="bad">{{$o.Error}}</span>{{end}}</td>
+  <td>{{if $o.ExecutionID}}<a href="/runs/{{$o.ExecutionID}}">{{short $o.ExecutionID}}</a>{{end}}</td>
+  <td><time datetime="{{stamp $o.UpdatedAt}}" title="{{stamp $o.UpdatedAt}}">{{ago $now $o.UpdatedAt}}</time></td>
+</tr>
+{{end}}
+
+{{define "run-row"}}
+{{$e := .E}}{{$now := .Now}}
+<tr>
+  <td><a href="/runs/{{$e.ID}}"><code>{{short $e.ID}}</code></a></td>
+  <td>{{$e.SeatKey}}</td>
+  <td><span class="chip {{tone $e.State}}">{{$e.State}}</span></td>
+  <td class="clip">{{$e.TriggerSummary}}{{if $e.Error}}<div class="bad">{{$e.Error}}</div>{{end}}</td>
+  <td title="lease generation">{{$e.LeaseGeneration}}</td>
+  <td><code title="{{$e.ConfigRevision}}">{{short $e.ConfigRevision}}</code></td>
+  <td>{{duration $e.StartedAt $e.FinishedAt $now}}</td>
+  <td><time datetime="{{stamp $e.StartedAt}}" title="{{stamp $e.StartedAt}}">{{ago $now $e.StartedAt}}</time></td>
+</tr>
+{{end}}

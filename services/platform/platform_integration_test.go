@@ -32,7 +32,10 @@ import (
 
 func TestMain(m *testing.M) { pgtest.Main(m) }
 
-const controllerToken = "controller-token"
+const (
+	controllerToken = "controller-token"
+	consoleToken    = "console-token"
+)
 
 type env struct {
 	t       *testing.T
@@ -44,7 +47,11 @@ type env struct {
 	seats   map[string]string
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { return newEnvWithConsole(t, false) }
+
+// newEnvWithConsole starts a platform; with console it serves /console/v1 to
+// consoleToken.
+func newEnvWithConsole(t *testing.T, console bool) *env {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	st, err := store.Open(ctx, pgtest.URL(t))
@@ -53,8 +60,11 @@ func newEnv(t *testing.T) *env {
 	}
 	e := &env{t: t, auth: auth.NewFake(controllerToken), comm: fakeconn.NewComm(orgfixture.UserA, orgfixture.UserB),
 		tracker: &fakeconn.Tracker{}}
+	if console {
+		e.auth.SetConsole(consoleToken)
+	}
 	p := platform.New(ctx, platform.Options{
-		Store: st, Auth: e.auth, Secrets: fakeconn.Secrets{}, Registry: prometheus.NewRegistry(),
+		Store: st, Auth: e.auth, Console: console, Secrets: fakeconn.Secrets{}, Registry: prometheus.NewRegistry(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Interval: 50 * time.Millisecond, RetryBackoff: time.Millisecond,
 		Factories: connections.Factories{
 			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": e.comm.Factory()},

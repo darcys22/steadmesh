@@ -1,0 +1,43 @@
+{{define "title"}}{{or .H.Org.DisplayName .H.Org.Key}} · Activity{{end}}
+{{define "content"}}
+{{$now := .Now}}{{$org := .H.Org.ID}}
+<div class="page-head">
+  <h1>Activity</h1>
+  <p class="lede">Live handoffs, runs and tool calls. A connection on the map lights up only when a message actually travels along it.</p>
+</div>
+<div class="activity-layout">
+  <section class="map-panel">
+    <h2>Communication map</h2>
+    {{with .Map}}{{if .Nodes}}
+    <svg id="comm-map" viewBox="0 0 {{.Size}} {{.Size}}" role="img" aria-label="Seats and the routes between them">
+      <g class="edges">{{range .Edges}}<line id="{{.ID}}" x1="{{printf "%.1f" .X1}}" y1="{{printf "%.1f" .Y1}}" x2="{{printf "%.1f" .X2}}" y2="{{printf "%.1f" .Y2}}"/>{{end}}</g>
+      <g class="nodes">{{range .Nodes}}
+        <g id="node-{{.Key}}" class="node state-{{.State}}{{if .Representative}} rep{{end}}" transform="translate({{printf "%.1f" .X}} {{printf "%.1f" .Y}})">
+          <circle r="22"/>
+          <text y="40" text-anchor="middle">{{.Label}}</text>
+        </g>{{end}}
+      </g>
+    </svg>
+    <p class="legend"><span class="dot ok"></span>working <span class="dot warn"></span>waiting or queued <span class="dot bad"></span>blocked <span class="dot muted"></span>offline · ringed seats are representatives</p>
+    {{else}}<p class="empty">No seats to draw.</p>{{end}}{{end}}
+
+    <h2>Conversations</h2>
+    {{if .Conversations}}
+    <ul class="convs">
+      {{range .Conversations}}
+      <li><a href="/conversations/{{.ID}}?org={{$org}}">{{if .Binding}}{{.Binding}}{{else}}{{join .Participants ", "}}{{end}}</a>
+        <span class="muted">{{.Kind}} · {{.Messages}} messages · {{ago $now .LastAt}}</span></li>
+      {{end}}
+    </ul>
+    {{else}}<p class="empty">No conversations yet.</p>{{end}}
+  </section>
+
+  <section class="feed-panel">
+    <h2>Timeline <span class="live" id="live-status" aria-live="polite">connecting…</span></h2>
+    <ol id="feed" class="feed" data-stream="/orgs/{{$org}}/stream?after={{.Cursor}}">
+      {{range .Items}}{{template "activity-item" (dict "I" . "OrgID" $org "Now" $now)}}{{end}}
+    </ol>
+    {{if not .Items}}<p class="empty" id="feed-empty">Nothing has happened yet. Send the organisation a task and watch it arrive here.</p>{{end}}
+  </section>
+</div>
+{{end}}

@@ -38,6 +38,11 @@ spec:
               value: ":8080"
             - name: CONTROLLER_USERNAME
               value: "system:serviceaccount:{{ .Release.Namespace }}:steadmesh-controller"
+            {{- if .Values.console.enabled }}
+            # Serve the read-only /console/v1 API to the console only.
+            - name: CONSOLE_USERNAME
+              value: "system:serviceaccount:{{ .Release.Namespace }}:steadmesh-console"
+            {{- end }}
             - name: SECRETS_NAMESPACE
               valueFrom:
                 fieldRef:

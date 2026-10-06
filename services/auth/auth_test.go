@@ -14,7 +14,10 @@ import (
 	"github.com/darcys22/steadmesh/services/auth"
 )
 
-const controllerUser = "system:serviceaccount:steadmesh-system:steadmesh-controller"
+const (
+	controllerUser = "system:serviceaccount:steadmesh-system:steadmesh-controller"
+	consoleUser    = "system:serviceaccount:steadmesh-system:steadmesh-console"
+)
 
 type seats map[string]string
 
@@ -34,6 +37,10 @@ type token struct {
 }
 
 func newAuth(t *testing.T, tokens map[string]token, reviews *int) *auth.TokenReview {
+	return newAuthWithConsole(t, tokens, reviews, consoleUser)
+}
+
+func newAuthWithConsole(t *testing.T, tokens map[string]token, reviews *int, console string) *auth.TokenReview {
 	t.Helper()
 	cs := fake.NewClientset()
 	cs.PrependReactor("create", "tokenreviews", func(a k8stesting.Action) (bool, runtime.Object, error) {
@@ -52,7 +59,7 @@ func newAuth(t *testing.T, tokens map[string]token, reviews *int) *auth.TokenRev
 			User: authnv1.UserInfo{Username: tok.user, Extra: map[string]authnv1.ExtraValue{auth.PodUIDExtra: {tok.pod}}}}
 		return true, tr, nil
 	})
-	return auth.NewTokenReview(cs, seats{"acme/seat-lead-1234": "seat-id-lead"}, controllerUser)
+	return auth.NewTokenReview(cs, seats{"acme/seat-lead-1234": "seat-id-lead"}, controllerUser, console)
 }
 
 func TestSeatAuthentication(t *testing.T) {
@@ -98,5 +105,33 @@ func TestControllerAuthentication(t *testing.T) {
 	}
 	if err := a.Controller(ctx, "other"); !errors.Is(err, auth.ErrForbidden) {
 		t.Fatalf("non-allow-listed identity: %v", err)
+	}
+}
+
+func TestConsoleAuthentication(t *testing.T) {
+	ctx := context.Background()
+	var reviews int
+	tokens := map[string]token{
+		"seat":       {user: "system:serviceaccount:acme:seat-lead-1234", audiences: []string{"steadmesh-gateway"}},
+		"controller": {user: controllerUser, audiences: []string{"https://kubernetes.default.svc"}},
+		"console":    {user: consoleUser, audiences: []string{"https://kubernetes.default.svc"}},
+	}
+	a := newAuth(t, tokens, &reviews)
+	if err := a.Console(ctx, "console"); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.Console(ctx, "controller"); !errors.Is(err, auth.ErrForbidden) {
+		t.Fatalf("controller token accepted on console API: %v", err)
+	}
+	if err := a.Console(ctx, "seat"); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("seat token accepted on console API: %v", err)
+	}
+	if err := a.Controller(ctx, "console"); !errors.Is(err, auth.ErrForbidden) {
+		t.Fatalf("console token accepted on internal API: %v", err)
+	}
+
+	disabled := newAuthWithConsole(t, tokens, &reviews, "")
+	if err := disabled.Console(ctx, "console"); !errors.Is(err, auth.ErrForbidden) {
+		t.Fatalf("console accepted with no console identity configured: %v", err)
 	}
 }

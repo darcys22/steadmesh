@@ -37,6 +37,9 @@ type Options struct {
 	Interval time.Duration
 	// RetryBackoff is the first delay before retrying a retryable connector call.
 	RetryBackoff time.Duration
+	// Console serves the read-only console API; Auth must accept the console
+	// identity.
+	Console bool
 }
 
 // Platform is a running platform service.
@@ -67,7 +70,7 @@ func New(ctx context.Context, o Options) *Platform {
 	reg := tools.New(tools.Deps{Store: o.Store, Gateway: gw, Metrics: m, Log: o.Log})
 	return &Platform{
 		Handler: api.New(api.Config{Store: o.Store, Auth: o.Auth, Tools: reg, Connections: conns, Metrics: m,
-			Gatherer: o.Registry, Log: o.Log}),
+			Gatherer: o.Registry, Log: o.Log, Console: o.Console}),
 		Connections: conns,
 		opts:        o,
 		metrics:     m,
