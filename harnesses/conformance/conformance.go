@@ -65,7 +65,7 @@ type ToolServer struct {
 // Tools are the descriptors the stub lists.
 var Tools = []runtimeapi.ToolDescriptor{
 	{Name: "self", Description: "Return the seat identity.", InputSchema: json.RawMessage(`{"type":"object","properties":{}}`)},
-	{Name: "memory.write", Description: "Create a memory record.", InputSchema: json.RawMessage(`{"type":"object","properties":{"store":{"type":"string"},"title":{"type":"string"},"body":{"type":"string"}},"required":["store","title","body"]}`)},
+	{Name: "memory.write", Description: "Create a memory record.", InputSchema: json.RawMessage(`{"type":"object","properties":{"store":{"type":"string"},"path":{"type":"string"},"text":{"type":"string"}},"required":["store","path","text"]}`)},
 	{Name: "messages.reply", Description: "Reply to a message.", InputSchema: json.RawMessage(`{"type":"object","properties":{"message_id":{"type":"string"},"binding":{"type":"string"},"body":{"type":"string"}},"required":["body"]}`)},
 	{Name: "messages.send", Description: "Send a message to a seat.", InputSchema: json.RawMessage(`{"type":"object","properties":{"to":{"type":"string"},"body":{"type":"string"},"correlation_id":{"type":"string"}},"required":["to","body"]}`)},
 }

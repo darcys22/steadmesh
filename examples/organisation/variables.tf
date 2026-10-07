@@ -119,3 +119,15 @@ variable "ready_timeout" {
   type        = string
   default     = "20m"
 }
+
+variable "publish_work_to_tracker" {
+  description = "Publish engineering work items to the Linear connection for people to follow. Optional: coordination never depends on it."
+  type        = bool
+  default     = false
+}
+
+variable "enable_linear" {
+  description = "Declare the Linear connection. Without it the organisation coordinates purely through Steadmesh memory and messages."
+  type        = bool
+  default     = true
+}

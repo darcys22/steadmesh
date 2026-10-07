@@ -139,6 +139,13 @@ func (f *fakePlatform) Executions(context.Context, string, string) ([]runtimeapi
 	return []runtimeapi.ConsoleExecution{{ID: runID, SeatKey: "lead", State: "failed", Error: "harness exited", StartedAt: now.Add(-time.Minute)}}, nil
 }
 
+func (f *fakePlatform) Work(context.Context, string) ([]runtimeapi.ConsoleWorkItem, error) {
+	return []runtimeapi.ConsoleWorkItem{{ID: "engineering/W-3", Store: "engineering", Objective: "Ship the login page", Creator: "lead",
+		Owner: "lead", Status: "blocked", Blocker: "waiting for the OAuth client id", Evidence: []string{"PR #12"},
+		Plan:         []runtimeapi.ConsoleWorkStep{{Step: "wire the form", Status: "in_progress"}},
+		Publications: []runtimeapi.ConsoleWorkPublication{{Connection: "tracker", State: "blocked", LastError: "linear unreachable"}}}}, nil
+}
+
 func (f *fakePlatform) Activity(_ context.Context, _ string, after time.Time, limit int) ([]runtimeapi.ConsoleActivityItem, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -227,7 +234,8 @@ func TestPagesRender(t *testing.T) {
 		{"/orgs/" + orgID, []string{"Engineering Lead", "working", "lease held", "please build the login page", "1 operation with unknown outcome",
 			"running an older configuration revision", "Representatives", "not ready"}},
 		{"/orgs/" + orgID + "/grid", []string{"Engineering Lead", "Alice&#39;s rep"}},
-		{"/orgs/" + orgID + "/work", []string{"LIN-42", "Needs attention", "project.create", "workspace://design.md", "harness exited"}},
+		{"/orgs/" + orgID + "/work", []string{"LIN-42", "Needs attention", "project.create", "workspace://design.md", "harness exited",
+			"engineering/W-3", "waiting for the OAuth client id", "wire the form", "PR #12", "linear unreachable"}},
 		{"/orgs/" + orgID + "/work?status=succeeded", []string{"LIN-42"}},
 		{"/orgs/" + orgID + "/activity", []string{"comm-map", "edge-lead--rep_a", "node-lead", "please build the login page", "/stream?after="}},
 		{"/orgs/" + orgID + "/readiness", []string{"ConnectionsAuthenticated", "older", "ws-lead-1234", "Bound", "steadmesh/linear", "401 from Linear", "passed", "replacement_rejected", "secret version 4"}},

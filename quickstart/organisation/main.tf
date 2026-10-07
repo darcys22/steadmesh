@@ -167,13 +167,24 @@ resource "steadmesh_organization" "this" {
 
     seats = merge(local.team_seats, [for m in module.representative : m.seats]...)
 
-    grants = { for k, v in {
-      engineering_linear = {
-        subject    = "team:engineering"
-        resource   = "connection:linear"
-        operations = ["project.create", "task.write"]
-      }
-    } : k => v if local.linear }
+    grants = merge(
+      { for k, v in {
+        engineering_linear = {
+          subject    = "team:engineering"
+          resource   = "connection:linear"
+          operations = ["project.read", "project.create", "task.read", "task.write", "comment.read", "comment.write"]
+        }
+      } : k => v if local.linear },
+      # Representatives read the team's notes and work items to report progress.
+      { for h, m in module.representative : "engineering_read_${h}" => {
+        subject    = "seat:${m.seat_key}"
+        resource   = "memory:engineering"
+        operations = ["read", "search"]
+      } },
+    )
+
+    # Optional: mirror engineering work items to Linear for people to follow.
+    work_publication = local.linear && var.publish_work_to_linear ? { connection = "linear", stores = ["engineering"] } : null
 
     message_routes = merge(
       { for h, m in module.representative : "${h}_to_eng_lead" => {

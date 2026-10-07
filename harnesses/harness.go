@@ -173,6 +173,9 @@ type Delivery struct {
 	ExecutionID string
 	Attempt     int
 	Message     runtimeapi.Envelope
+	// Passive are queued messages (sent with wake=false) handed over with
+	// this turn. They are context, not separate requests to answer.
+	Passive []runtimeapi.Envelope
 }
 
 // Turn statuses: technical completion only.

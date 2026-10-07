@@ -275,3 +275,39 @@ func TestFindByOperationReadOnlyIsNil(t *testing.T) {
 		t.Fatalf("%+v %v", r, err)
 	}
 }
+
+func TestCommentReadReturnsHumanComments(t *testing.T) {
+	fake, a := setup(t, "")
+	ctx := context.Background()
+	res, err := a.Invoke(ctx, OpTaskWrite, json.RawMessage(`{"title":"Ship login","team_id":"team-eng"}`), "op-task")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var is struct {
+		ID string `json:"id"`
+	}
+	_ = json.Unmarshal(res.Data, &is)
+	if _, err := fake.AddComment(is.ID, "alice", "Please also support SSO"); err != nil {
+		t.Fatal(err)
+	}
+	if !a.ReadOnly(OpCommentRead) {
+		t.Fatal("comment.read must be read-only")
+	}
+	res, err = a.Invoke(ctx, OpCommentRead, json.RawMessage(`{"issue_id":"`+is.ID+`"}`), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out struct {
+		Comments []comment `json:"comments"`
+	}
+	if err := json.Unmarshal(res.Data, &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Comments) != 1 || out.Comments[0].Body != "Please also support SSO" || out.Comments[0].User == nil ||
+		out.Comments[0].User.Name != "alice" || out.Comments[0].CreatedAt == "" {
+		t.Fatalf("comments = %+v", out.Comments)
+	}
+	if _, err := a.Invoke(ctx, OpCommentRead, json.RawMessage(`{}`), ""); err == nil {
+		t.Fatal("issue_id should be required")
+	}
+}

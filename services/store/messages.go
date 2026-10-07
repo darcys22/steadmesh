@@ -90,6 +90,9 @@ type SeatMessage struct {
 	CorrelationID  string
 	Route          string
 	Body           string
+	// Passive queues the message without starting a turn: it is handed over
+	// with the recipient's next turn, whatever starts it.
+	Passive bool
 }
 
 // SendSeatMessage persists an internal message and its delivery in one
@@ -134,7 +137,7 @@ func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*
 			out.CorrelationID, in.Body, in.Route, f.Generation); err != nil {
 			return err
 		}
-		_, err := insertDelivery(ctx, tx, out.MessageID, in.RecipientID, true)
+		_, err := insertDelivery(ctx, tx, out.MessageID, in.RecipientID, true, in.Passive)
 		return err
 	})
 	if err != nil {
@@ -284,7 +287,7 @@ func (s *Store) IngestHuman(ctx context.Context, in HumanMessage) (*Ingested, er
 			return tx.QueryRow(ctx, `SELECT id FROM messages WHERE organization_id = $1 AND origin_connection = $2 AND external_event_id = $3`,
 				in.OrganizationID, in.Connection, in.EventID).Scan(&out.MessageID)
 		}
-		out.OverCap, err = insertDelivery(ctx, tx, out.MessageID, in.RepresentativeID, false)
+		out.OverCap, err = insertDelivery(ctx, tx, out.MessageID, in.RepresentativeID, false, false)
 		return err
 	})
 	if err != nil {
@@ -383,7 +386,7 @@ func systemMessage(ctx context.Context, tx pgx.Tx, orgID, seatID, origin, dedupe
 		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)`, msgID, orgID, convID, origin, seatID, dedupeKey, body); err != nil {
 		return "", false, err
 	}
-	if _, err := insertDelivery(ctx, tx, msgID, seatID, false); err != nil {
+	if _, err := insertDelivery(ctx, tx, msgID, seatID, false, false); err != nil {
 		return "", false, err
 	}
 	return msgID, true, nil

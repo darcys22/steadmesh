@@ -92,9 +92,10 @@ func (s *Store) ConsoleOrganization(ctx context.Context, orgID string) (*runtime
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	required := compile.RequiredConnections(&m, compile.DefaultCatalog())
 	for _, k := range sortedKeys(m.Spec.Connections) {
 		c := m.Spec.Connections[k]
-		cc := runtimeapi.ConsoleConnection{Key: k, Adapter: c.Adapter, Required: c.Required == nil || *c.Required}
+		cc := runtimeapi.ConsoleConnection{Key: k, Adapter: c.Adapter, Required: required[k]}
 		cc.SecretKind, cc.SecretPath, _ = strings.Cut(c.SecretRef, ":")
 		if chk, ok := checks[k]; ok {
 			cc.Check = &chk
@@ -545,4 +546,35 @@ func (s *Store) ConsoleOrganizationExecutions(ctx context.Context, orgID, state 
 		return nil, err
 	}
 	return pgx.CollectRows(rows, scanExecution)
+}
+
+// ConsoleWork lists the organisation's work items in shared (non-personal)
+// stores with their publication state. Only the work item schema fields are
+// returned: this is coordination state agents chose to share, unlike notes,
+// whose bodies the console never shows.
+func (s *Store) ConsoleWork(ctx context.Context, orgID string, limit int) ([]runtimeapi.ConsoleWorkItem, error) {
+	if _, err := uuid.Parse(orgID); err != nil {
+		return nil, ErrNotFound
+	}
+	rows, err := s.pool.Query(ctx, `SELECT r.id, ms.key, r.revision, r.data, r.updated_at,
+			COALESCE((SELECT json_agg(json_build_object('connection', p.connection, 'state', p.state,
+				'external_id', p.external_id, 'external_url', p.external_url, 'published_revision', p.published_revision,
+				'last_error', p.last_error)) FROM work_publications p WHERE p.record_id = r.id), '[]'::json)
+		FROM memory_records r JOIN memory_stores ms ON ms.id = r.store_id
+		WHERE r.organization_id = $1 AND r.kind = 'work' AND NOT r.archived AND ms.owner_seat_id IS NULL
+		ORDER BY r.updated_at DESC LIMIT $2`, orgID, limit)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (runtimeapi.ConsoleWorkItem, error) {
+		var w runtimeapi.ConsoleWorkItem
+		var data, pubs []byte
+		if err := row.Scan(&w.RecordID, &w.Store, &w.Revision, &data, &w.UpdatedAt, &pubs); err != nil {
+			return w, err
+		}
+		if err := json.Unmarshal(data, &w); err != nil {
+			return w, err
+		}
+		return w, json.Unmarshal(pubs, &w.Publications)
+	})
 }

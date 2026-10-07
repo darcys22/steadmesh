@@ -130,9 +130,22 @@ type Recovery struct {
 	// UnknownOperations are external operations whose outcome is unknown and
 	// must be reconciled by the agent before being reissued (§6.3).
 	UnknownOperations []Operation `json:"unknown_operations,omitempty"`
+	// Work lists the unfinished work items this seat owns, so it can pick
+	// them up again after a restart.
+	Work []WorkSummary `json:"work,omitempty"`
 	// Note explains the recovery state, e.g. "native session not convertible;
 	// resumed from portable handoff" (§6.4).
 	Note string `json:"note,omitempty"`
+}
+
+// WorkSummary is a work item in a seat's recovery context.
+type WorkSummary struct {
+	WorkID      string `json:"work_id"`
+	Objective   string `json:"objective"`
+	Status      string `json:"status"`
+	Revision    int    `json:"revision"`
+	CurrentStep string `json:"current_step,omitempty"`
+	LastNote    string `json:"last_note,omitempty"`
 }
 
 type Bootstrap struct {
@@ -197,6 +210,9 @@ type InboxDelivery struct {
 	ExecutionID string   `json:"execution_id"`
 	Attempt     int      `json:"attempt"`
 	Message     Envelope `json:"message"`
+	// Passive are messages sent with wake=false that were waiting for this
+	// seat's next turn. They are delivered with this turn and need no ack.
+	Passive []Envelope `json:"passive,omitempty"`
 }
 
 type InboxAckRequest struct {

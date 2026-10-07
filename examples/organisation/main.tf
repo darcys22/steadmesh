@@ -137,24 +137,32 @@ resource "steadmesh_organization" "this" {
         endpoint_ref = var.slack_endpoint_ref == "" ? null : var.slack_endpoint_ref
         secret_ref   = var.secret_refs.slack
       }
-      linear = {
-        adapter      = "linear"
-        endpoint_ref = var.linear_endpoint_ref == "" ? null : var.linear_endpoint_ref
-        secret_ref   = var.secret_refs.linear
-        config       = { team_id = var.linear_team_id }
-      }
-    }, local.model_connections)
+      }, { for k, v in {
+        linear = {
+          adapter      = "linear"
+          endpoint_ref = var.linear_endpoint_ref == "" ? null : var.linear_endpoint_ref
+          secret_ref   = var.secret_refs.linear
+          config       = { team_id = var.linear_team_id }
+        }
+    } : k => v if var.enable_linear }, local.model_connections)
 
     seats = merge(local.seats, local.team_seats)
 
     grants = merge(
-      {
+      { for k, v in {
         engineering_linear = {
           subject    = "team:engineering"
           resource   = "connection:linear"
-          operations = ["project.create", "task.write"]
+          operations = ["project.read", "project.create", "task.read", "task.write", "comment.read", "comment.write"]
         }
-      },
+      } : k => v if var.enable_linear },
+      # Representatives read the team's notes and work items, so they can
+      # report progress without asking.
+      { for h, seat in local.rep_seats : "engineering_read_${h}" => {
+        subject    = "seat:${seat}"
+        resource   = "memory:engineering"
+        operations = ["read", "search"]
+      } },
       { for k in local.all_seat_keys : "org_memory_${k}" => {
         subject    = "seat:${k}"
         resource   = "memory:organisation"
@@ -171,10 +179,15 @@ resource "steadmesh_organization" "this" {
       {
         eng_lead_engineer = { from = "seat:eng_lead", to = "seat:engineer", bidirectional = true }
         eng_lead_reviewer = { from = "seat:eng_lead", to = "seat:reviewer", bidirectional = true }
+        engineer_reviewer = { from = "seat:engineer", to = "seat:reviewer", bidirectional = true }
       },
     )
 
     channel_bindings = merge([for m in module.representative : m.channel_bindings]...)
+
+    # Optional: mirror engineering work items to the tracker for people to
+    # follow. Agents coordinate in memory and messages either way.
+    work_publication = var.enable_linear && var.publish_work_to_tracker ? { connection = "linear", stores = ["engineering"] } : null
   }
 
   timeouts {

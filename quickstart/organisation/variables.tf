@@ -59,3 +59,9 @@ variable "linear_endpoint_ref" {
   type        = string
   default     = null
 }
+
+variable "publish_work_to_linear" {
+  description = "When Linear is configured, publish engineering work items there for people to follow. Agents coordinate in Steadmesh memory and messages either way."
+  type        = bool
+  default     = false
+}

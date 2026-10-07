@@ -24,6 +24,7 @@ func (s *server) registerConsole(mux *http.ServeMux) {
 	console(orgs+"/{id}/conversations", s.consoleConversations)
 	console(orgs+"/{id}/operations", s.consoleOperations)
 	console(orgs+"/{id}/artifacts", s.consoleArtifacts)
+	console(orgs+"/{id}/work", s.consoleWork)
 	console(orgs+"/{id}/executions", s.consoleOrgExecutions)
 	console(orgs+"/{id}/activity", s.consoleActivity)
 	console(runtimeapi.PathConsoleSeats+"{id}", s.consoleSeat)
@@ -242,4 +243,16 @@ func (s *server) consoleOrgExecutions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, runtimeapi.ConsoleExecutionList{Executions: runs})
+}
+
+func (s *server) consoleWork(w http.ResponseWriter, r *http.Request) {
+	items, err := s.Store.ConsoleWork(r.Context(), r.PathValue("id"), limitParam(r, 100, 500))
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	if items == nil {
+		items = []runtimeapi.ConsoleWorkItem{}
+	}
+	writeJSON(w, http.StatusOK, runtimeapi.ConsoleWorkList{Work: items})
 }

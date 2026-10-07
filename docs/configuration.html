@@ -166,7 +166,7 @@
 <tr><td><code>account_id</code></td><td>The authorised account: the Slack team ID (checked against <code>auth.test</code>), or the Linear organisation ID or URL key.</td></tr>
 <tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints.</td></tr>
 <tr><td><code>config</code></td><td>Adapter options. For Linear, <code>team_id</code> is the default team.</td></tr>
-<tr><td><code>required</code></td><td>Default <code>true</code>: the organisation is not ready until this connection authenticates.</td></tr>
+<tr><td><code>required</code></td><td>Whether the organisation is not ready until this connection authenticates. By default it is decided by role: model connections a harness uses, and communication connections with channel bindings, are required. Others, such as a work tracker, are optional. A failing optional connection is reported in the <code>IntegrationsDegraded</code> condition and never blocks readiness or internal work.</td></tr>
 <tr><td><code>ownership</code></td><td><code>external</code> (default): never deleted by the platform. <code>managed</code> is rejected in this release.</td></tr>
 </table>
 <p>Operations a grant can name: Slack <code>channel.reply</code> (normally implicit through bindings); Linear <code>project.read</code>, <code>project.create</code>, <code>task.read</code>, <code>task.write</code>, <code>comment.write</code>; Anthropic <code>model.infer</code> (normally implicit through the harness).</p>
@@ -197,6 +197,15 @@
 <tr><td><code>seat</code></td><td>The representative. A seat can represent only one human.</td></tr>
 <tr><td><code>mode</code></td><td><code>direct_message</code> (the default and only mode).</td></tr>
 </table>
+
+<h3><code>work_publication</code> (optional)</h3>
+<p>Publishes the work items of shared memory stores to a tracker, so people can follow progress there. Agents coordinate in memory and messages either way. They can also use the tracker directly through <code>connections.invoke</code> whenever they are granted it, independently of publication.</p>
+<table>
+<tr><th>Field</th><th>Description</th></tr>
+<tr><td><code>connection</code></td><td>A tracker connection, for example Linear.</td></tr>
+<tr><td><code>stores</code></td><td>Shared memory stores whose work items are published. Personal stores are rejected, so private memory is never published.</td></tr>
+</table>
+<p>Each work item becomes one issue, titled <code>&lt;store&gt;/W-&lt;n&gt;: &lt;objective&gt;</code>, with its status, owner, plan, acceptance criteria and evidence in the description. Later changes update the same issue. Publication runs in the background and is retried while the tracker is unavailable. Its state is shown per item in the console's Work view, separately from the work itself. A crash between creating an issue and recording it is resolved by reading the issue back, never by creating a duplicate. This is outward only: edits made in the tracker do not change work items, although agents can read them with <code>task.read</code> and <code>comment.read</code>.</p>
 
 <h2>Limits</h2>
 <ul>

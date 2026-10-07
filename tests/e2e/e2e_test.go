@@ -51,6 +51,9 @@ func TestE2E(t *testing.T) {
 		"TF_VAR_linear_endpoint_ref=" + fakeSvc + ":8091",
 		"TF_VAR_seat_idle_timeout=1m",
 		"TF_VAR_harness=fake",
+		// The organisation starts without Linear: coordination must work from
+		// memory and messages alone. Linear is enabled later (coordination_test.go).
+		"TF_VAR_enable_linear=false",
 		// The console is off by default; the e2e run turns it on to check it.
 		"TF_VAR_enable_console=true",
 		// Rotation is tested against both secret stores: Slack credentials stay
@@ -105,7 +108,7 @@ func TestE2E(t *testing.T) {
 		if strings.Contains(msg, "hello from sean") {
 			t.Fatalf("alex's representative could read sean's conversation:\n%s", msg)
 		}
-		f.dm(t, userSean, "/tool memory.write {\"store\":\"rep_sean\",\"title\":\"preference\",\"body\":\"sean prefers short weekly summaries\"}\n/report", "")
+		f.dm(t, userSean, "/tool memory.write {\"store\":\"rep_sean\",\"path\":\"notes/preference.md\",\"text\":\"sean prefers short weekly summaries\"}\n/report", "")
 		f.waitPosted(t, "D0SEAN", "tool memory.write", 2*time.Minute)
 		f.dm(t, userAlex, "/tool memory.search {\"query\":\"weekly summaries\"}\n/report", "")
 		msg = f.waitPosted(t, "D0ALEX", "tool memory.search", 2*time.Minute)
@@ -113,6 +116,9 @@ func TestE2E(t *testing.T) {
 			t.Fatalf("private memory leaked to another representative (A12):\n%s", msg)
 		}
 	})
+
+	coordinationWithoutLinear(t, f)
+	enableLinear(t, f, env)
 
 	// A06 + A21: delegate through the declared route; the lead creates a
 	// tracker project and the correlated result returns to the human.
@@ -276,7 +282,13 @@ func TestE2E(t *testing.T) {
 
 // ---- fake service clients ------------------------------------------------
 
-type fakes struct{ slack, linear string }
+// fakes drives the fake Slack and Linear. mark is how many messages had
+// been posted when the last DM was sent: waitPosted only looks at later ones,
+// so an earlier reply with the same text never satisfies a new wait.
+type fakes struct {
+	slack, linear string
+	mark          int
+}
 
 func (f *fakes) post(t *testing.T, url string, body any) {
 	t.Helper()
@@ -314,6 +326,9 @@ func (f *fakes) dm(t *testing.T, user, text, eventID string) {
 	if eventID != "" {
 		body["event_id"] = eventID
 	}
+	var all []posted
+	f.get(t, f.slack+"/_test/posted", &all)
+	f.mark = len(all)
 	f.post(t, f.slack+"/_test/dm", body)
 }
 
@@ -349,10 +364,15 @@ func (f *fakes) waitPosted(t *testing.T, channel, substr string, timeout time.Du
 	t.Helper()
 	var found string
 	waitFor(t, fmt.Sprintf("reply on %s containing %q", channel, substr), timeout, func() bool {
-		msgs := f.posted(t, channel)
-		for i := len(msgs) - 1; i >= 0; i-- {
-			if strings.Contains(msgs[i].Text, substr) {
-				found = msgs[i].Text
+		var all []posted
+		f.get(t, f.slack+"/_test/posted", &all)
+		mark := f.mark
+		if mark > len(all) {
+			mark = 0 // the fake restarted and lost its log
+		}
+		for i := len(all) - 1; i >= mark; i-- {
+			if all[i].Channel == channel && strings.Contains(all[i].Text, substr) {
+				found = all[i].Text
 				return true
 			}
 		}

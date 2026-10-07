@@ -31,6 +31,8 @@ type Platform interface {
 	Conversation(ctx context.Context, id string) (*runtimeapi.ConsoleConversationDetail, error)
 	Operations(ctx context.Context, orgID, seat, status string) ([]runtimeapi.ConsoleOperation, error)
 	Artifacts(ctx context.Context, orgID string) ([]runtimeapi.ConsoleArtifact, error)
+	// Work lists work items in shared stores with their publication state.
+	Work(ctx context.Context, orgID string) ([]runtimeapi.ConsoleWorkItem, error)
 	// Executions lists the organisation's runs, newest first, optionally in one state.
 	Executions(ctx context.Context, orgID, state string) ([]runtimeapi.ConsoleExecution, error)
 	// Activity returns items after the given time, or the latest limit items
@@ -167,4 +169,9 @@ func (c *PlatformClient) Executions(ctx context.Context, orgID, state string) ([
 	}
 	var out runtimeapi.ConsoleExecutionList
 	return out.Executions, c.get(ctx, orgPath(orgID, "/executions"), q, &out)
+}
+
+func (c *PlatformClient) Work(ctx context.Context, orgID string) ([]runtimeapi.ConsoleWorkItem, error) {
+	var out runtimeapi.ConsoleWorkList
+	return out.Work, c.get(ctx, orgPath(orgID, "/work"), nil, &out)
 }

@@ -78,6 +78,7 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <tr><td><code>RoutesExecutable</code></td><td>Every seat passed a synthetic probe for its current revision: a tool call, a workspace write/read and, if it has a model connection, a model ping.</td><td><code>ProbePending</code>, <code>ProbeFailed</code></td></tr>
 </table>
 <p>A seat that is stopped but has passed its probe still counts as ready. The probe never creates business work and never sends messages to people.</p>
+<p><code>IntegrationsDegraded</code> is informational and is not part of <code>OperationalReady</code>. It is <code>True</code> while an optional connection, such as a work tracker, is failing. Agents keep working without it, and work publication catches up when it recovers. Which connections are optional is described under <a href="configuration.html">connections</a>.</p>
 
 <h2>Seat lifecycle</h2>
 <p>Seats have technical execution states, separate from any project's business status:</p>

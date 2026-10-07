@@ -192,6 +192,7 @@ Optional:
 - `shared_workspaces` (Attributes Map) Shared workspaces. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--shared_workspaces))
 - `team_templates` (Attributes Map) Reusable team templates. Resolved by the provider before the object is written. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--team_templates))
 - `teams` (Attributes Map) Concrete teams. Membership is declared on seats. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--teams))
+- `work_publication` (Attributes) Publish the work items of shared memory stores to a tracker so people can follow progress there. Optional: agents coordinate through memory and messages either way, and a failing tracker never blocks them. Personal stores are never published. (see [below for nested schema](#nestedatt--spec--work_publication))
 
 <a id="nestedatt--spec--channel_bindings"></a>
 ### Nested Schema for `spec.channel_bindings`
@@ -220,7 +221,7 @@ Optional:
 - `config` (Map of String) Adapter configuration, e.g. team_id for linear.
 - `endpoint_ref` (String) Base URL override (fakes, self-hosted).
 - `ownership` (String) external (default) or managed.
-- `required` (Boolean) Whether the connection must authenticate before the organisation is ready (default true).
+- `required` (Boolean) Whether the connection must authenticate before the organisation is ready. By default model connections a harness uses and communication connections with channel bindings are required; others, such as a work tracker, are optional: their failures are reported as IntegrationsDegraded but never block readiness or internal work.
 - `secret_ref` (String) vault:<path> or k8s:<secret-name>. Never a raw credential.
 
 
@@ -374,6 +375,15 @@ Optional:
 - `parameters` (Map of String) Parameters overriding template parameters.
 - `shared_memory` (Map of List of String) Memory store key to operations granted to members.
 - `template` (String) Team template to instantiate.
+
+
+<a id="nestedatt--spec--work_publication"></a>
+### Nested Schema for `spec.work_publication`
+
+Required:
+
+- `connection` (String) Tracker connection key, e.g. a Linear connection.
+- `stores` (List of String) Shared memory stores whose work items are published.
 
 
 

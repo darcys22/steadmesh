@@ -59,25 +59,41 @@
 </table>
 
 <h2>Memory</h2>
-<p>Memory stores are scopes the platform enforces. Inside a store, agents decide how to organise records. Search is authorised <em>before</em> it runs, so result counts, titles and snippets from stores a seat cannot read are never revealed.</p>
+<p>Memory stores are scopes the platform enforces. Inside a store, records are addressed like files: each has a path that is unique among the store's live records, for example <code>notes/plan.md</code> or <code>decisions/auth.md</code>. Agents decide how to organise them. Search and listing are authorised <em>before</em> they run, so counts, paths and snippets from stores a seat cannot read are never revealed.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>memory.stores</code></td><td>none</td><td>Stores available to this seat and the operations allowed on each.</td></tr>
-<tr><td><code>memory.search</code></td><td><code>query</code> (web-search syntax), <code>stores[]</code>, <code>tags[]</code>, <code>limit</code> (≤25), <code>cursor</code></td><td>Full-text search over authorised stores. An empty query lists recent records.</td></tr>
-<tr><td><code>memory.read</code></td><td><code>record_id</code>, <code>revision?</code>, <code>offset?</code></td><td>A record or a past revision. Long bodies are returned in chunks.</td></tr>
-<tr><td><code>memory.write</code></td><td><code>store</code>, <code>title</code>, <code>body</code>, <code>tags[]</code>, <code>source_refs[]</code></td><td>Creates a record. The author seat and generation are recorded.</td></tr>
-<tr><td><code>memory.revise</code></td><td><code>record_id</code>, <code>expected_revision</code>, plus the changed fields</td><td>Compare-and-swap. If someone else changed the record first, the result is a conflict with the current revision, and nothing is overwritten.</td></tr>
-<tr><td><code>memory.archive</code></td><td><code>record_id</code>, <code>expected_revision</code></td><td>Hides the record from normal retrieval and keeps its history.</td></tr>
-<tr><td><code>memory.publish</code></td><td><code>record_id</code>, <code>destination</code>, <code>title?</code>, <code>body?</code> (a summary)</td><td>An attributed copy into another store the seat can write. Provenance is recorded, and access to the original never changes.</td></tr>
-<tr><td><code>memory.history</code></td><td><code>record_id</code>, <code>limit</code>, <code>cursor</code></td><td>Revisions with their authors, newest first.</td></tr>
+<tr><td><code>memory.list</code></td><td><code>store?</code>, <code>prefix?</code>, <code>order_by</code> (name, created_at, updated_at), <code>order</code>, <code>max_results</code> (≤100), <code>cursor</code></td><td>Records under a path prefix: path, kind, size, revision and author, without contents.</td></tr>
+<tr><td><code>memory.read</code></td><td><code>store</code> + <code>path</code>, or <code>record_id</code>; <code>revision?</code>, <code>start_line?</code>, <code>stop_line?</code></td><td>A record or a past revision. Line numbers are 1-based and inclusive; negative ones count back from the last line. Long reads return <code>next_start_line</code>.</td></tr>
+<tr><td><code>memory.search</code></td><td><code>query</code> (full text, web-search syntax) <em>or</em> <code>queries[]</code> (literal substrings) with <code>match_mode</code> (<code>any</code>, <code>all_on_same_line</code>, <code>all_within_lines</code> + <code>line_count</code>), <code>case_sensitive</code>, <code>context_lines</code> (≤5); <code>stores[]</code>, <code>path_prefix</code>, <code>tags[]</code>, <code>max_results</code>, <code>cursor</code></td><td>Full-text results with snippets, or literal matches line by line with surrounding lines.</td></tr>
+<tr><td><code>memory.write</code></td><td><code>store</code>, <code>path</code>, <code>text</code>, <code>tags[]?</code>, <code>source_refs[]?</code>, <code>expected_revision?</code></td><td>Creates the note at the path, or replaces its text. With <code>expected_revision</code> it is a compare-and-swap (0 means it must not exist yet): if someone else changed it first the result is a conflict with the current revision, and nothing is overwritten. Replacing needs the <code>revise</code> permission.</td></tr>
+<tr><td><code>memory.append</code></td><td><code>store</code>, <code>path</code>, <code>text</code></td><td>Appends to a note, creating it if needed. Concurrent appends never overwrite each other, which suits logs and running notes.</td></tr>
+<tr><td><code>memory.archive</code></td><td>locator, <code>expected_revision</code></td><td>Hides a note from listing and search and keeps its history.</td></tr>
+<tr><td><code>memory.publish</code></td><td>locator, <code>destination</code>, <code>destination_path?</code>, <code>text?</code> (a summary)</td><td>An attributed copy into another store the seat can write. Provenance is recorded, and access to the original never changes.</td></tr>
+<tr><td><code>memory.history</code></td><td>locator, <code>max_results</code>, <code>cursor</code></td><td>Revisions with their authors and lease generations, newest first.</td></tr>
 </table>
+<p>Paths under <code>work/</code> hold work items (below). They can be read and searched like any record, but only the work tools change them, so ownership and status rules cannot be bypassed with <code>memory.write</code>.</p>
+
+<h2>Work items (optional)</h2>
+<p>Shared memory and messages are enough to coordinate. When explicit ownership helps, for example with several people on one piece of work or work that runs for days, a seat can record a work item in a shared store. It has an objective, acceptance criteria, an owner, a status, a plan, dependencies and evidence. Its id is <code>&lt;store&gt;/W-&lt;n&gt;</code>. Nothing requires a work item: no workflow is imposed and no status has to be passed through. Every change is revision-checked.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>work.create</code></td><td><code>store</code>, <code>objective</code>, <code>acceptance[]</code>, <code>depends_on[]</code>, <code>links[]</code>, <code>parent?</code>, <code>owner?</code></td><td>Creates the item as <code>ready</code>, optionally assigned. Personal stores are refused.</td></tr>
+<tr><td><code>work.get</code>, <code>work.list</code></td><td><code>work_id</code>; or <code>store?</code>, <code>owner?</code> (seat key or <code>me</code>), <code>status?</code></td><td>The item with its log and current revision, or summaries with the current step.</td></tr>
+<tr><td><code>work.claim</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>note?</code></td><td>Takes an unowned item. If someone else owns it, the result is a <code>conflict</code> naming the owner; nothing changes.</td></tr>
+<tr><td><code>work.update_plan</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>plan[]</code> of <code>{step, status}</code> (pending, in_progress, completed), <code>explanation?</code></td><td>Replaces the plan. At most one step is in progress. Only the owner, or the creator while the item is unowned, can change it.</td></tr>
+<tr><td><code>work.update</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>status?</code>, <code>note?</code>, <code>evidence[]?</code>, <code>blocker?</code></td><td>Anyone who can write the store may add notes and evidence. Only the owner, or the creator while unowned, changes status: <code>ready</code>, <code>in_progress</code>, <code>in_review</code>, <code>blocked</code> (needs a blocker), <code>done</code> (needs evidence) or <code>cancelled</code>. A finished item reopens as <code>ready</code>.</td></tr>
+<tr><td><code>work.release</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>note</code></td><td>The owner gives the item up for someone else to claim.</td></tr>
+</table>
+<p>A restarted seat finds its unfinished work items in the recovery section of its bootstrap context. The organisation can optionally publish work items to a tracker (<code>work_publication</code>, see <a href="configuration.html">Configuration</a>). The tracker is a view for people. Agents never depend on it.</p>
 
 <h2>Messages</h2>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>messages.recipients</code></td><td>none</td><td>Seats this seat may message, and whether they can reply.</td></tr>
-<tr><td><code>messages.send</code></td><td><code>to</code> (seat key), <code>body</code> (≤12 KiB), <code>conversation_id?</code>, <code>correlation_id?</code></td><td>Sends over a declared route. A sleeping recipient is woken. The recipient sees the sender identity the platform assigned, never anything taken from the text. Fails with <code>inbox_full</code> when the recipient has 1000 pending messages.</td></tr>
-<tr><td><code>messages.reply</code></td><td><code>message_id</code> <em>or</em> <code>binding</code>, <code>body</code></td><td>Replies to a received message. With <code>binding</code>, a representative sends an unprompted update to its own human.</td></tr>
+<tr><td><code>messages.send</code></td><td><code>to</code> (seat key), <code>body</code> (≤12 KiB), <code>conversation_id?</code>, <code>correlation_id?</code>, <code>wake?</code> (default true)</td><td>Sends over a declared route. By default the recipient gets a turn, and is woken if it was asleep. With <code>wake: false</code> the message is queued instead and handed over with the recipient's next turn, whatever starts it, for information that needs no action now. The recipient sees the sender identity the platform assigned, never anything taken from the text. Fails with <code>inbox_full</code> when the recipient has 1000 waiting messages.</td></tr>
+<tr><td><code>messages.reply</code></td><td><code>message_id</code> <em>or</em> <code>binding</code>, <code>body</code>, <code>wake?</code></td><td>Replies to a received message. With <code>binding</code>, a representative sends an unprompted update to its own human.</td></tr>
+<tr><td><code>messages.inbox</code></td><td><code>max_results?</code></td><td>Reads the messages queued with <code>wake: false</code> that have not been handed over yet.</td></tr>
 <tr><td><code>messages.history</code></td><td><code>conversation_id?</code>, <code>limit</code>, <code>cursor</code></td><td>Lists conversations, or reads one this seat takes part in. Human conversations are visible only to their representative.</td></tr>
 </table>
 
@@ -103,6 +119,7 @@
 <li><code>task.write</code>: <code>{title, description, team_id, project_id, state_id, assignee_id, priority}</code>. Passing an <code>id</code> turns a create into an update.</li>
 <li><code>task.read</code>: exactly one of <code>{id}</code>, <code>{query}</code> or <code>{project_id}</code>.</li>
 <li><code>comment.write</code>: <code>{issue_id, body}</code>.</li>
+<li><code>comment.read</code>: <code>{issue_id, first}</code>. The issue's comments with author and time, so agents can act on what people write in Linear.</li>
 </ul>
 
 <h3>Operation outcomes</h3>
@@ -123,11 +140,12 @@
 <tr><td><code>/report</code></td><td>Replies with all output collected so far.</td></tr>
 <tr><td><code>/file write &lt;path&gt; &lt;text&gt;</code>, <code>/file read &lt;path&gt;</code></td><td>Writes or reads a file in the seat's workspace.</td></tr>
 <tr><td><code>/delegate &lt;seat&gt; &lt;text…&gt;</code></td><td>Sends the rest of the message to another seat. When the reply comes back, it is forwarded to the original human.</td></tr>
-<tr><td><code>/task</code> (as the first line of a message from a seat)</td><td>Runs the remaining lines and replies to the sender with their output.</td></tr>
+<tr><td><code>/task</code> (as the first line of a message from a seat)</td><td>Runs the remaining lines and replies to the sender with their output. If the task delegates further with <code>/delegate</code>, the downstream result is forwarded back instead, so a chain such as representative, lead, engineer, reviewer reports the end result.</td></tr>
 <tr><td><code>/sleep &lt;duration&gt;</code></td><td>Waits (up to 10m); useful for testing interruption.</td></tr>
 <tr><td><code>/claim &lt;text&gt;</code></td><td>Records an agent claim that a task is done. The platform treats this as information only.</td></tr>
 <tr><td><code>/fail &lt;text&gt;</code></td><td>Fails the turn technically.</td></tr>
 </table>
+<p>Messages queued with <code>wake: false</code> that arrive with a turn appear in its output as <code>queued message from &lt;seat&gt;: …</code>.</p>
 <p>For example, to delegate a tracker task from a human message:</p>
 <pre><code>/delegate eng_lead /task
 /tool connections.invoke {"connection":"linear","operation":"project.create","params":{"name":"Onboarding"}}</code></pre>

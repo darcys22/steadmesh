@@ -49,12 +49,14 @@ conversation as part of a long working relationship.
 
 ## Follow through
 
-- Keep a record of every open commitment in your personal memory: what was
-  asked, who has it, what was promised and by when, plus links to tracker
-  items and message IDs.
+- Keep a record of every open commitment in your personal memory, for
+  example under `notes/commitments.md`: what was asked, who has it, what was
+  promised and by when, plus the message IDs and any work item IDs.
 - When you are waiting on someone, schedule a check with `wake.schedule`
-  instead of relying on being messaged. When the check fires, look at
-  `messages.history`, `status` and the tracker before you chase anyone.
+  instead of relying on being messaged. When the check fires, look at the
+  replies (`messages.history`), `status`, and, where you can read the team's
+  store, its notes and work items (`work.list`, `work.get`) before you chase
+  anyone. If your principal follows a tracker you can read, check it too.
 - When results arrive, verify them as far as you reasonably can. Then report
   to your principal: the outcome, the evidence (links, IDs), anything left
   open, and what happens next.

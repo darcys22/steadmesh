@@ -91,7 +91,8 @@ CREATE TABLE deliveries (
     id             bigserial PRIMARY KEY,
     message_id     uuid NOT NULL REFERENCES messages(id),
     seat_id        uuid NOT NULL REFERENCES seats(id),
-    -- pending, leased, done, dead
+    -- pending, leased, done, dead; passive: queued without starting a turn,
+    -- handed over with the seat's next turn (messages.send wake=false)
     state          text NOT NULL DEFAULT 'pending',
     attempts       int NOT NULL DEFAULT 0,
     next_attempt_at timestamptz NOT NULL DEFAULT now(),
@@ -130,6 +131,8 @@ CREATE TABLE memory_stores (
     -- personal store owner, if any
     owner_seat_id   uuid REFERENCES seats(id),
     policy_revision bigint NOT NULL DEFAULT 1,
+    -- last work item number allocated in this store (work ids <store>/W-<n>)
+    work_seq        bigint NOT NULL DEFAULT 0,
     retired_at      timestamptz,
     created_at      timestamptz NOT NULL DEFAULT now()
 );
@@ -149,20 +152,29 @@ CREATE TABLE memory_records (
     organization_id uuid NOT NULL REFERENCES organizations(id),
     store_id        uuid NOT NULL REFERENCES memory_stores(id),
     revision        int NOT NULL,
-    title           text NOT NULL,
+    -- path within the store, like a file path (notes/plan.md, work/W-3.md);
+    -- unique among the store's live records.
+    path            text NOT NULL,
+    -- note: free-form text any writer may change. work: a structured work
+    -- item whose data is changed only through the work tools, which enforce
+    -- ownership and status rules; its body is rendered from data.
+    kind            text NOT NULL DEFAULT 'note' CHECK (kind IN ('note', 'work')),
+    data            jsonb,
     body            text NOT NULL,
     tags            text[] NOT NULL DEFAULT '{}',
     author_seat_id  uuid NOT NULL REFERENCES seats(id),
     source_refs     text[] NOT NULL DEFAULT '{}',
     archived        boolean NOT NULL DEFAULT false,
     search          tsvector GENERATED ALWAYS AS (
-        setweight(to_tsvector('english', title), 'A') ||
+        setweight(to_tsvector('english', path), 'A') ||
         setweight(to_tsvector('english', memory_tags_text(tags)), 'B') ||
         setweight(to_tsvector('english', body), 'C')) STORED,
     created_at      timestamptz NOT NULL DEFAULT now(),
     updated_at      timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX memory_records_store ON memory_records (organization_id, store_id) WHERE NOT archived;
+CREATE UNIQUE INDEX memory_records_path ON memory_records (store_id, path) WHERE NOT archived;
+CREATE INDEX memory_records_work_owner ON memory_records (organization_id, (data->>'owner')) WHERE kind = 'work' AND NOT archived;
 CREATE INDEX memory_records_search ON memory_records USING gin (search);
 
 -- Append-only revision history (§8.3).
@@ -170,7 +182,8 @@ CREATE TABLE memory_revisions (
     record_id       uuid NOT NULL REFERENCES memory_records(id),
     revision        int NOT NULL,
     store_id        uuid NOT NULL REFERENCES memory_stores(id),
-    title           text NOT NULL,
+    path            text NOT NULL,
+    data            jsonb,
     body            text NOT NULL,
     tags            text[] NOT NULL DEFAULT '{}',
     author_seat_id  uuid NOT NULL REFERENCES seats(id),
@@ -306,7 +319,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 -- +goose StatementEnd
-CREATE TRIGGER deliveries_notify AFTER INSERT ON deliveries FOR EACH ROW EXECUTE FUNCTION notify_delivery();
+-- Passive deliveries must not wake anyone.
+CREATE TRIGGER deliveries_notify AFTER INSERT ON deliveries FOR EACH ROW WHEN (NEW.state <> 'passive')
+    EXECUTE FUNCTION notify_delivery();
 
 -- Read paths of the console API (/console/v1): run history, the activity
 -- feed and the work view.
@@ -318,10 +333,33 @@ CREATE INDEX messages_organization_created ON messages (organization_id, created
 CREATE INDEX connector_operations_updated ON connector_operations (organization_id, updated_at);
 CREATE INDEX connector_operations_execution ON connector_operations (execution_id) WHERE execution_id IS NOT NULL;
 
+-- Optional outward publication of work items to a tracker (work_publication).
+-- The row exists before the external object is created; its stable creation
+-- key lets a crash between creation and saving external_id converge by
+-- read-back instead of creating a duplicate.
+CREATE TABLE work_publications (
+    organization_id    uuid NOT NULL REFERENCES organizations(id),
+    record_id          uuid NOT NULL REFERENCES memory_records(id),
+    connection         text NOT NULL,
+    external_kind      text NOT NULL,
+    external_id        text NOT NULL DEFAULT '',
+    external_url       text NOT NULL DEFAULT '',
+    published_revision int NOT NULL DEFAULT 0,
+    -- pending, published, blocked (connection unavailable; retried), failed
+    state              text NOT NULL DEFAULT 'pending',
+    attempts           int NOT NULL DEFAULT 0,
+    next_attempt_at    timestamptz NOT NULL DEFAULT now(),
+    last_error         text NOT NULL DEFAULT '',
+    created_at         timestamptz NOT NULL DEFAULT now(),
+    updated_at         timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (organization_id, record_id, connection, external_kind)
+);
+CREATE INDEX work_publications_due ON work_publications (next_attempt_at) WHERE state <> 'published';
+
 -- +goose Down
 DROP TRIGGER deliveries_notify ON deliveries;
 DROP FUNCTION notify_delivery();
-DROP TABLE connection_checks, artifacts, wake_schedules, connector_operations, handoffs, sessions,
+DROP TABLE work_publications, connection_checks, artifacts, wake_schedules, connector_operations, handoffs, sessions,
     execution_events, executions, memory_revisions, memory_records, memory_stores, outbox,
     deliveries, messages, conversations, execution_leases, seats, organizations;
 DROP FUNCTION memory_tags_text(text[]);

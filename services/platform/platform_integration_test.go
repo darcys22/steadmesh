@@ -244,7 +244,7 @@ func TestFencingRejectsStaleGeneration(t *testing.T) {
 	e := newEnv(t)
 	e.sync(orgfixture.Spec())
 	lead := e.seat("lead")
-	args := map[string]any{"store": "lead", "title": "t", "body": "b"}
+	args := map[string]any{"store": "lead", "path": "notes/t.md", "text": "b"}
 	raw, _ := json.Marshal(args)
 	// Missing generation is stale.
 	code, b := e.request("POST", runtimeapi.PathToolCall+"memory.write", lead.token, nil, runtimeapi.ToolCallRequest{Arguments: raw})
@@ -400,9 +400,9 @@ func TestGrantRevocationIsImmediate(t *testing.T) {
 	e := newEnv(t)
 	e.sync(orgfixture.Spec())
 	eng := e.seat("engineer")
-	rec := eng.mustTool("memory.write", map[string]any{"store": "engineering", "title": "runbook", "body": "deploy steps"})
-	if !slices.Contains(toolNames(eng), "memory.revise") {
-		t.Fatal("memory.revise not offered")
+	rec := eng.mustTool("memory.write", map[string]any{"store": "engineering", "path": "notes/runbook.md", "text": "deploy steps"})
+	if !slices.Contains(toolNames(eng), "memory.append") {
+		t.Fatal("memory.append not offered")
 	}
 
 	sp := orgfixture.Spec()
@@ -415,7 +415,7 @@ func TestGrantRevocationIsImmediate(t *testing.T) {
 	if out, isErr := eng.tool("memory.read", map[string]any{"record_id": rec["record_id"]}); !isErr || out["error"] != "not_found" {
 		t.Fatalf("read after revocation: %v", out)
 	}
-	if out, isErr := eng.tool("memory.write", map[string]any{"store": "engineering", "title": "x", "body": "y"}); !isErr {
+	if out, isErr := eng.tool("memory.write", map[string]any{"store": "engineering", "path": "notes/x.md", "text": "y"}); !isErr {
 		t.Fatalf("write after revocation: %v", out)
 	}
 	if hits := eng.mustTool("memory.search", map[string]any{"query": "deploy"}); len(hits["results"].([]any)) != 0 {
@@ -430,10 +430,10 @@ func TestMemoryToolsConflictAndNoLeak(t *testing.T) {
 	e := newEnv(t)
 	e.sync(orgfixture.Spec())
 	lead, eng, repA := e.seat("lead"), e.seat("engineer"), e.seat("rep_a")
-	rec := lead.mustTool("memory.write", map[string]any{"store": "engineering", "title": "API design", "body": "v1", "tags": []string{"api"}})
+	rec := lead.mustTool("memory.write", map[string]any{"store": "engineering", "path": "notes/api-design.md", "text": "v1", "tags": []string{"api"}})
 	id := rec["record_id"]
-	lead.mustTool("memory.revise", map[string]any{"record_id": id, "expected_revision": 1, "body": "v2 lead"})
-	out, isErr := eng.tool("memory.revise", map[string]any{"record_id": id, "expected_revision": 1, "body": "v2 engineer"})
+	lead.mustTool("memory.write", map[string]any{"store": "engineering", "path": "notes/api-design.md", "text": "v2 lead", "expected_revision": 1})
+	out, isErr := eng.tool("memory.write", map[string]any{"store": "engineering", "path": "notes/api-design.md", "text": "v2 engineer", "expected_revision": 1})
 	if !isErr || out["error"] != "conflict" || out["details"].(map[string]any)["current_revision"].(float64) != 2 {
 		t.Fatalf("stale revise: %v", out)
 	}
@@ -443,7 +443,7 @@ func TestMemoryToolsConflictAndNoLeak(t *testing.T) {
 	}
 
 	// rep_a can search organisation and rep_a only; engineering content must not leak.
-	lead.mustTool("memory.write", map[string]any{"store": "organisation", "title": "Company holidays", "body": "API freeze in December"})
+	lead.mustTool("memory.write", map[string]any{"store": "organisation", "path": "notes/company-holidays.md", "text": "API freeze in December"})
 	hits := repA.mustTool("memory.search", map[string]any{"query": "API"})
 	results := hits["results"].([]any)
 	if len(results) != 1 || results[0].(map[string]any)["store"] != "organisation" {
@@ -456,11 +456,11 @@ func TestMemoryToolsConflictAndNoLeak(t *testing.T) {
 		t.Fatalf("read inaccessible record: %v", out)
 	}
 	// Publish copies with provenance into an authorised destination.
-	mine := repA.mustTool("memory.write", map[string]any{"store": "rep_a", "title": "Alice prefers short updates", "body": "weekly"})
+	mine := repA.mustTool("memory.write", map[string]any{"store": "rep_a", "path": "notes/alice-prefers-short-updates.md", "text": "weekly"})
 	if out, isErr := repA.tool("memory.publish", map[string]any{"record_id": mine["record_id"], "destination": "organisation"}); !isErr {
 		t.Fatalf("publish without write on destination: %v", out)
 	}
-	pub := lead.mustTool("memory.write", map[string]any{"store": "lead", "title": "Team norms", "body": "review within a day"})
+	pub := lead.mustTool("memory.write", map[string]any{"store": "lead", "path": "notes/team-norms.md", "text": "review within a day"})
 	cp := lead.mustTool("memory.publish", map[string]any{"record_id": pub["record_id"], "destination": "organisation"})
 	if refs := cp["source_refs"].([]any); len(refs) != 1 || !strings.HasPrefix(refs[0].(string), "memory:"+pub["record_id"].(string)) {
 		t.Fatalf("provenance = %v", cp)

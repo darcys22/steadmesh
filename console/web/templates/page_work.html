@@ -21,6 +21,29 @@
   <button type="submit">Filter</button>
 </form>
 
+<section>
+  <h2>Internal work</h2>
+  <p class="muted">Work items agents recorded in shared memory. Agents can also coordinate with plain notes and messages, so not all work appears here; see the Activity view for everything.</p>
+  {{if .Work}}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Work</th><th>Status</th><th>Owner</th><th>Current step</th><th>Evidence</th><th>Published</th><th>Updated</th></tr></thead>
+    <tbody>
+    {{range .Work}}
+    <tr>
+      <td><code>{{.ID}}</code> {{.Objective}}{{range .DependsOn}}<div class="muted">depends on {{.}}</div>{{end}}</td>
+      <td><span class="chip {{tone .Status}}">{{.Status}}</span>{{if .Blocker}}<div class="bad">{{.Blocker}}</div>{{end}}</td>
+      <td>{{or .Owner "unclaimed"}}</td>
+      <td>{{range .Plan}}{{if eq .Status "in_progress"}}{{.Step}}{{end}}{{end}}</td>
+      <td>{{range .Evidence}}<div class="clip">{{.}}</div>{{end}}</td>
+      <td>{{range .Publications}}<div><code>{{.Connection}}</code> <span class="chip {{tone .State}}">{{.State}}</span>{{if .ExternalURL}} <a href="{{.ExternalURL}}">{{or .ExternalID "open"}}</a>{{end}}{{if .LastError}}<div class="bad clip">{{.LastError}}</div>{{end}}</div>{{else}}<span class="muted">not published</span>{{end}}</td>
+      <td>{{ago $now .UpdatedAt}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+  </table></div>
+  {{else}}<p class="empty">No work items{{if .Seat}} for this seat{{end}}.</p>{{end}}
+</section>
+
 {{if .Blockers}}
 <section class="callout bad-soft">
   <h2>Needs attention</h2>

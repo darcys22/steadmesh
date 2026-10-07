@@ -89,8 +89,9 @@ spec:
                         or managed.
                       type: string
                     required:
-                      description: Required connections must authenticate before the
-                        organisation is ready.
+                      description: |-
+                        Required connections must authenticate before the organisation is ready.
+                        When unset it is decided by role (compile.RequiredConnections).
                       type: boolean
                     secret_ref:
                       description: SecretRef points at a secret in a supported manager
@@ -371,6 +372,25 @@ spec:
                     template:
                       type: string
                   type: object
+                type: object
+              work_publication:
+                description: |-
+                  WorkPublication optionally publishes work items to a tracker so people
+                  can follow progress there. Internal coordination never depends on it.
+                properties:
+                  connection:
+                    description: Connection is a tracker connection, e.g. a Linear
+                      connection.
+                    type: string
+                  stores:
+                    description: Stores are the shared memory stores whose work items
+                      are published.
+                    items:
+                      type: string
+                    type: array
+                required:
+                - connection
+                - stores
                 type: object
             required:
             - display_name

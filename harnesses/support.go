@@ -265,7 +265,7 @@ func RenderBootstrap(env Environment, recoveryNote string) string {
 	if rec.Note != "" && rec.Note != recoveryNote {
 		notes = append(notes, rec.Note)
 	}
-	if len(notes) > 0 || rec.PendingMessages > 0 || len(rec.UnknownOperations) > 0 || rec.Handoff != nil {
+	if len(notes) > 0 || rec.PendingMessages > 0 || len(rec.UnknownOperations) > 0 || rec.Handoff != nil || len(rec.Work) > 0 {
 		sb.WriteString("\n# Recovery status\n\n")
 		for _, n := range notes {
 			fmt.Fprintf(&sb, "Note: %s\n", n)
@@ -277,6 +277,19 @@ func RenderBootstrap(env Environment, recoveryNote string) string {
 			sb.WriteString("External operations with UNKNOWN outcome. Check them with operations.get or a read in the destination system before reissuing:\n")
 			for _, op := range rec.UnknownOperations {
 				fmt.Fprintf(&sb, "- %s: %s %s target=%s\n", op.ID, op.Connection, op.Operation, op.Target)
+			}
+		}
+		if len(rec.Work) > 0 {
+			sb.WriteString("Work items you own (read each with work.get before continuing):\n")
+			for _, w := range rec.Work {
+				fmt.Fprintf(&sb, "- %s [%s, revision %d]: %s", w.WorkID, w.Status, w.Revision, w.Objective)
+				if w.CurrentStep != "" {
+					fmt.Fprintf(&sb, "; current step: %s", w.CurrentStep)
+				}
+				if w.LastNote != "" {
+					fmt.Fprintf(&sb, "; last note: %s", w.LastNote)
+				}
+				sb.WriteString("\n")
 			}
 		}
 		if rec.Handoff != nil {
@@ -348,6 +361,14 @@ func RenderEnvelope(d Delivery) string {
 	sb.WriteString("</platform_message>\n")
 	fmt.Fprintf(&sb, "To reply, call messages.reply with message_id %q.\n\n", m.MessageID)
 	sb.WriteString(m.Body)
+	if len(d.Passive) > 0 {
+		sb.WriteString("\n\n<queued_messages>\nThese were sent to you without asking for a turn of their own. Treat them as context; reply only if one needs it.\n")
+		for _, p := range d.Passive {
+			from := firstNonEmpty(p.SenderSeat, p.Binding, p.Origin)
+			fmt.Fprintf(&sb, "\n- message_id %s from %s at %s:\n%s\n", p.MessageID, from, p.CreatedAt.UTC().Format(time.RFC3339), p.Body)
+		}
+		sb.WriteString("</queued_messages>\n")
+	}
 	return sb.String()
 }
 

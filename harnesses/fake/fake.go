@@ -243,8 +243,11 @@ type turn struct {
 	d       harnesses.Delivery
 	outputs []string
 	replied bool
-	claim   *harnesses.Claim
-	failErr error
+	// delegated is set when the turn handed its task on with /delegate; the
+	// downstream result is then forwarded instead of an immediate reply.
+	delegated bool
+	claim     *harnesses.Claim
+	failErr   error
 }
 
 func (a *Adapter) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.TurnResult, error) {
@@ -326,6 +329,12 @@ func (t *turn) run() {
 	body := strings.ReplaceAll(m.Body, "\r\n", "\n")
 	lines := strings.Split(body, "\n")
 
+	// Messages queued without a turn of their own (wake=false) arrive with
+	// this one; report them so tests can see they were handed over.
+	for _, p := range t.d.Passive {
+		t.out(fmt.Sprintf("queued message from %s: %s", firstNonEmpty(p.SenderSeat, p.Origin), harnesses.TruncateUTF8(p.Body, 500)))
+	}
+
 	// A delegated task from another seat.
 	if m.Origin == "seat" && strings.HasPrefix(strings.TrimSpace(body), "/task") {
 		first := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[0]), "/task"))
@@ -335,6 +344,11 @@ func (t *turn) run() {
 		}
 		t.exec(rest)
 		if t.ctx.Err() != nil {
+			return
+		}
+		if t.delegated {
+			// Passed on: the downstream seat's result is forwarded to the
+			// sender when it arrives, so multi-hop chains report the end result.
 			return
 		}
 		summary := strings.Join(t.outputs, "\n")
@@ -489,6 +503,7 @@ func (t *turn) delegate(seat, text string) {
 		return
 	}
 	t.out("delegated to " + seat + ": " + res)
+	t.delegated = true
 	human := m.MessageID
 	binding := m.Binding
 	// Delegating on behalf of a delegation keeps the original human.
@@ -678,4 +693,13 @@ func (a *Adapter) removeDelegation(key string, d Delegation) {
 		}
 	}
 	_ = a.saveState(s)
+}
+
+func firstNonEmpty(v ...string) string {
+	for _, s := range v {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
 }

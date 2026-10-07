@@ -148,8 +148,9 @@ func VerifyConditions(v *runtimeapi.VerifyResponse, required map[string]bool, ge
 	}
 	return []metav1.Condition{
 		conns,
-		checkCondition(v1alpha1.CondIngressReady, "ingress", "IngressUnavailable", v.Ingress, nil, gen),
+		checkCondition(v1alpha1.CondIngressReady, "ingress", "IngressUnavailable", v.Ingress, func(k string) bool { return required[k] }, gen),
 		checkCondition(v1alpha1.CondBindingsValid, "binding", "BindingInvalid", v.Bindings, nil, gen),
+		integrations(v, required, gen),
 	}
 }
 
@@ -260,4 +261,30 @@ func short(rev string) string {
 		return rev[:19]
 	}
 	return rev
+}
+
+// integrations reports failing optional connections. It is informational:
+// it is not in Order, so it never blocks OperationalReady, and agents keep
+// working while an optional integration such as a work tracker is down.
+func integrations(v *runtimeapi.VerifyResponse, required map[string]bool, gen int64) metav1.Condition {
+	bad := map[string]string{}
+	for k, r := range v.Connections {
+		if required[k] || r.OK {
+			continue
+		}
+		bad[k] = r.Detail
+		if bad[k] == "" {
+			bad[k] = "check failed"
+		}
+	}
+	for k, r := range v.Ingress {
+		if !required[k] && !r.OK {
+			bad[k] = "ingress: " + r.Detail
+		}
+	}
+	if len(bad) > 0 {
+		return Condition(v1alpha1.CondIntegrationsDegraded, true, "OptionalConnectionUnavailable",
+			"optional connection "+failures(bad)+"; agents keep working without it", gen)
+	}
+	return Condition(v1alpha1.CondIntegrationsDegraded, false, "Healthy", "optional connections are healthy", gen)
 }

@@ -268,3 +268,43 @@ type ConsoleActivityItem struct {
 type ConsoleActivity struct {
 	Items []ConsoleActivityItem `json:"items"`
 }
+
+// ConsoleWorkItem is a work item from a shared store: its schema fields and
+// publication state, never free-form note text.
+type ConsoleWorkItem struct {
+	RecordID     string                   `json:"record_id"`
+	Store        string                   `json:"store"`
+	Revision     int                      `json:"revision"`
+	ID           string                   `json:"id"`
+	Objective    string                   `json:"objective"`
+	Creator      string                   `json:"creator"`
+	Owner        string                   `json:"owner,omitempty"`
+	Status       string                   `json:"status"`
+	Blocker      string                   `json:"blocker,omitempty"`
+	Plan         []ConsoleWorkStep        `json:"plan,omitempty"`
+	DependsOn    []string                 `json:"depends_on,omitempty"`
+	Acceptance   []string                 `json:"acceptance,omitempty"`
+	Evidence     []string                 `json:"evidence,omitempty"`
+	Links        []string                 `json:"links,omitempty"`
+	UpdatedAt    time.Time                `json:"updated_at"`
+	Publications []ConsoleWorkPublication `json:"publications,omitempty"`
+}
+
+type ConsoleWorkStep struct {
+	Step   string `json:"step"`
+	Status string `json:"status"`
+}
+
+// ConsoleWorkPublication is a work item's state in an optional tracker.
+type ConsoleWorkPublication struct {
+	Connection        string `json:"connection"`
+	State             string `json:"state"`
+	ExternalID        string `json:"external_id,omitempty"`
+	ExternalURL       string `json:"external_url,omitempty"`
+	PublishedRevision int    `json:"published_revision"`
+	LastError         string `json:"last_error,omitempty"`
+}
+
+type ConsoleWorkList struct {
+	Work []ConsoleWorkItem `json:"work"`
+}

@@ -20,6 +20,7 @@ import (
 	"github.com/darcys22/steadmesh/services/ingress"
 	"github.com/darcys22/steadmesh/services/metrics"
 	"github.com/darcys22/steadmesh/services/outbox"
+	"github.com/darcys22/steadmesh/services/publisher"
 	"github.com/darcys22/steadmesh/services/scheduler"
 	"github.com/darcys22/steadmesh/services/store"
 	"github.com/darcys22/steadmesh/services/tools"
@@ -100,6 +101,8 @@ func (p *Platform) Start(ctx context.Context) error {
 	disp := &outbox.Dispatcher{Store: p.opts.Store, Comms: p.Connections, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
 	p.wg.Go(func() { loop.Run(ctx) })
 	p.wg.Go(func() { disp.Run(ctx) })
+	pub := &publisher.Publisher{Store: p.opts.Store, Trackers: p.Connections, Log: p.opts.Log, Interval: p.opts.Interval}
+	p.wg.Go(func() { pub.Run(ctx) })
 	return nil
 }
 

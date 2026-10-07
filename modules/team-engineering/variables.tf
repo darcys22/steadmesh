@@ -25,7 +25,7 @@ variable "shared_memory" {
   description = "Memory store key to operations granted to members (the stores must exist in spec.memory_stores)."
   type        = map(list(string))
   default = {
-    engineering = ["read", "search", "write", "revise", "archive", "history"]
+    engineering = ["read", "search", "write", "revise", "archive", "publish", "history"]
   }
 }
 

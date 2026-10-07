@@ -100,8 +100,8 @@ func TestRetireAndRecreateDoesNotInheritPrivateData(t *testing.T) {
 	res := syncOrg(t, s, orgfixture.Manifest(t))
 	org, old := res.OrganizationID, res.Seats["rep_a"].SeatID
 	f := lease(t, s, old)
-	rec, err := s.WriteRecord(ctx, f, NewRecord{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_a")[0], AuthorID: old,
-		Title: "alice prefers terse updates", Body: "private preference"})
+	rec, _, err := s.WriteFile(ctx, f, FileWrite{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_a")[0], AuthorID: old,
+		Path: "notes/alice-prefers-terse-updates.md", Text: "private preference"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestRetireAndRecreateDoesNotInheritPrivateData(t *testing.T) {
 	if _, err := s.Record(ctx, org, rec.ID, ids); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("new identity can read retired private record: %v", err)
 	}
-	hits, err := s.Search(ctx, org, ids, "", nil, 0, 10)
+	hits, err := s.Search(ctx, org, ids, "", "", nil, 0, 10)
 	if err != nil || len(hits) != 0 {
 		t.Fatalf("new identity sees retired records: %v %v", hits, err)
 	}
@@ -163,8 +163,8 @@ func TestAdoptionTransfersPersonalData(t *testing.T) {
 	s := open(t)
 	res := syncOrg(t, s, orgfixture.Manifest(t))
 	org, old := res.OrganizationID, res.Seats["lead"].SeatID
-	rec, err := s.WriteRecord(ctx, lease(t, s, old), NewRecord{OrganizationID: org, StoreID: storeIDs(t, s, org, "lead")[0],
-		AuthorID: old, Title: "plan", Body: "the plan"})
+	rec, _, err := s.WriteFile(ctx, lease(t, s, old), FileWrite{OrganizationID: org, StoreID: storeIDs(t, s, org, "lead")[0],
+		AuthorID: old, Path: "notes/plan.md", Text: "the plan"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestAdoptionTransfersPersonalData(t *testing.T) {
 	sp.Seats["lead"] = lead
 	res = syncOrg(t, s, orgfixture.Compile(t, sp))
 	got, err := s.Record(ctx, org, rec.ID, storeIDs(t, s, org, "lead"))
-	if err != nil || got.Body != "the plan" {
+	if err != nil || got.Text != "the plan" {
 		t.Fatalf("adopted seat cannot read its retained record: %v", err)
 	}
 	if res.Seats["lead"].SeatID == old {
@@ -215,8 +215,8 @@ func TestLeaseFencing(t *testing.T) {
 		t.Fatal(err)
 	}
 	stale := Fence{SeatID: seat, Generation: l1.Generation}
-	if _, err := s.WriteRecord(ctx, stale, NewRecord{OrganizationID: res.OrganizationID,
-		StoreID: storeIDs(t, s, res.OrganizationID, "engineer")[0], AuthorID: seat, Title: "x", Body: "y"}); !errors.Is(err, ErrFenced) {
+	if _, _, err := s.WriteFile(ctx, stale, FileWrite{OrganizationID: res.OrganizationID,
+		StoreID: storeIDs(t, s, res.OrganizationID, "engineer")[0], AuthorID: seat, Path: "notes/x.md", Text: "y"}); !errors.Is(err, ErrFenced) {
 		t.Fatalf("stale generation write: %v", err)
 	}
 	if _, err := s.RenewLease(ctx, seat, "pod-1", l1.Generation); !errors.Is(err, ErrFenced) {
@@ -236,15 +236,15 @@ func TestRevisionConflict(t *testing.T) {
 	lead, eng := res.Seats["lead"].SeatID, res.Seats["engineer"].SeatID
 	ids := storeIDs(t, s, org, "engineering")
 	fl, fe := lease(t, s, lead), lease(t, s, eng)
-	rec, err := s.WriteRecord(ctx, fl, NewRecord{OrganizationID: org, StoreID: ids[0], AuthorID: lead, Title: "design", Body: "v1"})
+	rec, _, err := s.WriteFile(ctx, fl, FileWrite{OrganizationID: org, StoreID: ids[0], AuthorID: lead, Path: "notes/design.md", Text: "v1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	v2, v3 := "v2 by lead", "v2 by engineer"
-	if _, err := s.ReviseRecord(ctx, fl, RecordChange{OrganizationID: org, RecordID: rec.ID, AuthorID: lead, ExpectedRevision: 1, Body: &v2}, ids); err != nil {
+	one := 1
+	if _, _, err := s.WriteFile(ctx, fl, FileWrite{OrganizationID: org, StoreID: ids[0], AuthorID: lead, Path: rec.Path, Text: "v2 by lead", ExpectedRevision: &one}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.ReviseRecord(ctx, fe, RecordChange{OrganizationID: org, RecordID: rec.ID, AuthorID: eng, ExpectedRevision: 1, Body: &v3}, ids)
+	_, _, err = s.WriteFile(ctx, fe, FileWrite{OrganizationID: org, StoreID: ids[0], AuthorID: eng, Path: rec.Path, Text: "v2 by engineer", ExpectedRevision: &one})
 	c, ok := IsConflict(err)
 	if !ok || c.Current != 2 || c.CurrentAuthor != "lead" {
 		t.Fatalf("expected conflict at revision 2 by lead, got %v", err)
@@ -261,22 +261,22 @@ func TestSearchOnlyTouchesAuthorisedStores(t *testing.T) {
 	res := syncOrg(t, s, orgfixture.Manifest(t))
 	org := res.OrganizationID
 	a, b := res.Seats["rep_a"].SeatID, res.Seats["rep_b"].SeatID
-	if _, err := s.WriteRecord(ctx, lease(t, s, b), NewRecord{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_b")[0],
-		AuthorID: b, Title: "acquisition codename falcon", Body: "falcon is confidential"}); err != nil {
+	if _, _, err := s.WriteFile(ctx, lease(t, s, b), FileWrite{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_b")[0],
+		AuthorID: b, Path: "notes/acquisition-codename-falcon.md", Text: "falcon is confidential"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.WriteRecord(ctx, lease(t, s, a), NewRecord{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_a")[0],
-		AuthorID: a, Title: "falcon notes", Body: "public falcon notes", Tags: []string{"birds"}}); err != nil {
+	if _, _, err := s.WriteFile(ctx, lease(t, s, a), FileWrite{OrganizationID: org, StoreID: storeIDs(t, s, org, "rep_a")[0],
+		AuthorID: a, Path: "notes/falcon-notes.md", Text: "public falcon notes", Tags: []string{"birds"}}); err != nil {
 		t.Fatal(err)
 	}
-	hits, err := s.Search(ctx, org, storeIDs(t, s, org, "rep_a", "organisation"), "falcon", nil, 0, 10)
+	hits, err := s.Search(ctx, org, storeIDs(t, s, org, "rep_a", "organisation"), "falcon", "", nil, 0, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(hits) != 1 || hits[0].Store != "rep_a" {
 		t.Fatalf("hits = %+v", hits)
 	}
-	if hits, _ := s.Search(ctx, org, storeIDs(t, s, org, "rep_a"), "falcon", []string{"birds"}, 0, 10); len(hits) != 1 {
+	if hits, _ := s.Search(ctx, org, storeIDs(t, s, org, "rep_a"), "falcon", "", []string{"birds"}, 0, 10); len(hits) != 1 {
 		t.Fatalf("tag filter hits = %+v", hits)
 	}
 }

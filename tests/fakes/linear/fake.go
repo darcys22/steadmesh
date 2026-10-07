@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Options configure the fake.
@@ -70,10 +71,12 @@ type Issue struct {
 
 // Comment is a stored comment.
 type Comment struct {
-	ID      string `json:"id"`
-	IssueID string `json:"issue_id"`
-	Body    string `json:"body"`
-	URL     string `json:"url"`
+	ID        string    `json:"id"`
+	IssueID   string    `json:"issue_id"`
+	Body      string    `json:"body"`
+	URL       string    `json:"url"`
+	Author    string    `json:"author,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // State is the full fake state.
@@ -119,6 +122,7 @@ func New(opts Options) *Server {
 	s.mux.HandleFunc("GET /_test/state", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, s.State()) })
 	s.mux.HandleFunc("POST /_test/fail", s.handleTestFail)
 	s.mux.HandleFunc("POST /_test/keys", s.handleTestKeys)
+	s.mux.HandleFunc("POST /_test/comment", s.handleTestComment)
 	s.mux.HandleFunc("POST /_test/reset", func(w http.ResponseWriter, _ *http.Request) {
 		s.Reset()
 		writeJSON(w, 200, map[string]bool{"ok": true})
@@ -421,18 +425,21 @@ func (s *Server) execute(field string, vars map[string]json.RawMessage) (any, *g
 			return nil, fail("INVALID_INPUT", "body is required")
 		}
 		s.seq++
-		c := &Comment{ID: fmt.Sprintf("comment-%04d", s.seq), IssueID: is.ID, Body: in.Body}
+		c := &Comment{ID: fmt.Sprintf("comment-%04d", s.seq), IssueID: is.ID, Body: in.Body, Author: "steadmesh", CreatedAt: time.Now().UTC()}
 		c.URL = is.URL + "#comment-" + c.ID
 		s.comments = append(s.comments, c)
 		return map[string]any{"success": true, "comment": s.commentJSON(c)}, nil
 	case "comments":
 		var filter struct {
-			Body map[string]string `json:"body"`
+			Body  map[string]string `json:"body"`
+			Issue struct {
+				ID map[string]string `json:"id"`
+			} `json:"issue"`
 		}
 		_ = json.Unmarshal(vars["filter"], &filter)
 		nodes := []any{}
 		for i := len(s.comments) - 1; i >= 0 && len(nodes) < first(vars); i-- {
-			if matchString(s.comments[i].Body, filter.Body) {
+			if matchString(s.comments[i].Body, filter.Body) && (filter.Issue.ID["eq"] == "" || filter.Issue.ID["eq"] == s.comments[i].IssueID) {
 				nodes = append(nodes, s.commentJSON(s.comments[i]))
 			}
 		}
@@ -533,7 +540,11 @@ func (s *Server) commentJSON(c *Comment) map[string]any {
 	if is := s.findIssue(c.IssueID); is != nil {
 		issue["identifier"] = is.Identifier
 	}
-	return map[string]any{"id": c.ID, "body": c.Body, "url": c.URL, "issue": issue}
+	out := map[string]any{"id": c.ID, "body": c.Body, "url": c.URL, "issue": issue, "createdAt": c.CreatedAt.Format(time.RFC3339)}
+	if c.Author != "" {
+		out["user"] = map[string]any{"id": "user-" + c.Author, "name": c.Author}
+	}
+	return out
 }
 
 func (s *Server) handleTestFail(w http.ResponseWriter, r *http.Request) {
@@ -613,4 +624,37 @@ func (s *Server) handleTestKeys(w http.ResponseWriter, r *http.Request) {
 	}
 	s.SetKeys(body.Valid)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// AddComment adds a comment as a human would in the Linear UI.
+func (s *Server) AddComment(issueID, author, body string) (Comment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	is := s.findIssue(issueID)
+	if is == nil {
+		return Comment{}, fmt.Errorf("issue %s not found", issueID)
+	}
+	s.seq++
+	c := &Comment{ID: fmt.Sprintf("comment-%04d", s.seq), IssueID: is.ID, Body: body, Author: author, CreatedAt: time.Now().UTC()}
+	c.URL = is.URL + "#comment-" + c.ID
+	s.comments = append(s.comments, c)
+	return *c, nil
+}
+
+func (s *Server) handleTestComment(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		IssueID string `json:"issue_id"`
+		Author  string `json:"author"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	c, err := s.AddComment(in.IssueID, in.Author, in.Body)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
 }

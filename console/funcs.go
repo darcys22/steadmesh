@@ -113,9 +113,9 @@ func pretty(raw json.RawMessage) string {
 // tone maps a state or status to a colour class.
 func tone(s string) string {
 	switch strings.ToLower(s) {
-	case "working", "running", "succeeded", "completed", "done", "passed", "true", "bound", "sent", "ok":
+	case "working", "running", "succeeded", "completed", "done", "passed", "true", "bound", "sent", "ok", "published", "in_progress":
 		return "ok"
-	case "waiting", "queued", "starting", "pending", "leased", "unknown", "interrupted", "missing":
+	case "waiting", "queued", "starting", "pending", "leased", "unknown", "interrupted", "missing", "ready", "in_review":
 		return "warn"
 	case "blocked", "failed", "dead", "error", "false":
 		return "bad"

@@ -156,3 +156,37 @@ func TestSeatConditions(t *testing.T) {
 		t.Fatalf("missing: %+v", c)
 	}
 }
+
+func TestOptionalIntegrationsNeverBlockReadiness(t *testing.T) {
+	v := &runtimeapi.VerifyResponse{
+		Connections: map[string]runtimeapi.CheckResult{"slack": {OK: true}, "linear": {OK: false, Detail: "401"}},
+		Ingress:     map[string]runtimeapi.CheckResult{"slack": {OK: true}},
+		Bindings:    map[string]runtimeapi.CheckResult{},
+	}
+	required := map[string]bool{"slack": true}
+	conds := VerifyConditions(v, required, 1)
+	byType := map[string]metav1.Condition{}
+	for _, c := range conds {
+		byType[c.Type] = c
+	}
+	if c := byType[v1alpha1.CondConnectionsAuthenticated]; c.Status != metav1.ConditionTrue {
+		t.Fatalf("an optional failure blocked connections: %+v", c)
+	}
+	deg := byType[v1alpha1.CondIntegrationsDegraded]
+	if deg.Status != metav1.ConditionTrue || !strings.Contains(deg.Message, "linear: 401") {
+		t.Fatalf("integrations: %+v", deg)
+	}
+	// Every Order condition true plus a degraded integration is still ready.
+	var all []metav1.Condition
+	for _, typ := range Order {
+		all = append(all, Condition(typ, true, "OK", "", 1))
+	}
+	all = append(all, deg)
+	if agg := Aggregate(all, 1); agg.Status != metav1.ConditionTrue {
+		t.Fatalf("aggregate blocked by an optional integration: %+v", agg)
+	}
+	v.Connections["linear"] = runtimeapi.CheckResult{OK: true}
+	if c := VerifyConditions(v, required, 1)[3]; c.Type != v1alpha1.CondIntegrationsDegraded || c.Status != metav1.ConditionFalse {
+		t.Fatalf("healthy integrations: %+v", c)
+	}
+}

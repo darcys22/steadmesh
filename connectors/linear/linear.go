@@ -27,6 +27,9 @@ const (
 	OpTaskRead      = "task.read"
 	OpTaskWrite     = "task.write"
 	OpCommentWrite  = "comment.write"
+	// OpCommentRead lists an issue's comments, so agents can read human
+	// input left in Linear.
+	OpCommentRead = "comment.read"
 )
 
 const maxResponseBytes = 4 << 20
@@ -77,7 +80,7 @@ func endpointURL(override string) (string, error) {
 
 // ReadOnly reports whether an operation has no side effects.
 func (a *Adapter) ReadOnly(operation string) bool {
-	return operation == OpProjectRead || operation == OpTaskRead
+	return operation == OpProjectRead || operation == OpTaskRead || operation == OpCommentRead
 }
 
 // Verify runs the viewer query and, when cfg.AccountID is set, checks that the
@@ -210,6 +213,8 @@ func (a *Adapter) Invoke(ctx context.Context, operation string, params json.RawM
 		return a.taskWrite(ctx, params, operationID)
 	case OpCommentWrite:
 		return a.commentWrite(ctx, params, operationID)
+	case OpCommentRead:
+		return a.commentRead(ctx, params)
 	}
 	return connectors.Result{}, fmt.Errorf("%w: unsupported operation %q", connectors.ErrPermanent, operation)
 }

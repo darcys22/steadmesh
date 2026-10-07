@@ -105,7 +105,7 @@ func TestScriptCommands(t *testing.T) {
 	r := newRig(t)
 	body := strings.Join([]string{
 		"some prose that is ignored",
-		`/tool memory.write {"store":"rep_alice","title":"t","body":"b"}`,
+		`/tool memory.write {"store":"rep_alice","path":"notes/t.md","text":"b"}`,
 		"/file write notes/n.txt hello world",
 		"/file read notes/n.txt",
 		"/file read ../../etc/passwd",
@@ -122,7 +122,7 @@ func TestScriptCommands(t *testing.T) {
 	if len(calls) != 2 || calls[0].Name != "memory.write" || calls[1].Name != "messages.reply" {
 		t.Fatalf("calls %+v", calls)
 	}
-	if a := args(t, calls[0]); a["store"] != "rep_alice" || a["title"] != "t" {
+	if a := args(t, calls[0]); a["store"] != "rep_alice" || a["path"] != "notes/t.md" {
 		t.Fatalf("memory.write args %v", a)
 	}
 	if a := args(t, calls[1]); a["message_id"] != "h2" || a["body"] != "done here" {
@@ -243,5 +243,27 @@ func TestSessionPersistsAcrossRestart(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(r.dirs.Home, SessionFileName)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestNestedTaskForwardsTheEndResult(t *testing.T) {
+	lead := newRig(t)
+	// A task that is passed on does not reply with an interim result...
+	tr := lead.deliver(t, runtimeapi.Envelope{MessageID: "rep-1", Origin: "seat", SenderSeat: "rep_alice", CorrelationID: "h1",
+		Body: "/task\n/delegate engineer /task\n/reply built"})
+	if tr.Status != harnesses.TurnCompleted {
+		t.Fatalf("%+v", tr)
+	}
+	calls := lead.ts.Calls()
+	if len(calls) != 1 || calls[0].Name != "messages.send" || args(t, calls[0])["to"] != "engineer" {
+		t.Fatalf("lead calls %+v", calls)
+	}
+	// ...the downstream result is forwarded to the original sender instead.
+	lead.deliver(t, runtimeapi.Envelope{MessageID: "eng-1", Origin: "seat", SenderSeat: "engineer", ParentID: "sent-1",
+		Body: "task result from engineer: built"})
+	calls = lead.ts.Calls()
+	fa := args(t, calls[len(calls)-1])
+	if calls[len(calls)-1].Name != "messages.reply" || fa["message_id"] != "rep-1" || !strings.Contains(fa["body"].(string), "built") {
+		t.Fatalf("forward %+v %v", calls[len(calls)-1], fa)
 	}
 }

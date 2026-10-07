@@ -52,6 +52,19 @@ type OrganizationSpec struct {
 	MessageRoutes map[string]MessageRoute `json:"message_routes,omitempty"`
 	// +optional
 	ChannelBindings map[string]ChannelBinding `json:"channel_bindings,omitempty"`
+	// WorkPublication optionally publishes work items to a tracker so people
+	// can follow progress there. Internal coordination never depends on it.
+	// +optional
+	WorkPublication *WorkPublication `json:"work_publication,omitempty"`
+}
+
+// WorkPublication publishes the work items of shared memory stores to a
+// tracker connection. Personal stores are never published.
+type WorkPublication struct {
+	// Connection is a tracker connection, e.g. a Linear connection.
+	Connection string `json:"connection"`
+	// Stores are the shared memory stores whose work items are published.
+	Stores []string `json:"stores"`
 }
 
 // TeamTemplate is a reusable team definition. Templates may extend one other
@@ -176,6 +189,7 @@ type Connection struct {
 	// +optional
 	Ownership string `json:"ownership,omitempty"`
 	// Required connections must authenticate before the organisation is ready.
+	// When unset it is decided by role (compile.RequiredConnections).
 	// +optional
 	Required *bool `json:"required,omitempty"`
 	// +optional

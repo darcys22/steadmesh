@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -136,7 +137,8 @@ func (s *Store) LeaseNext(ctx context.Context, f Fence) (*runtimeapi.InboxDelive
 			return err
 		}
 		out = &runtimeapi.InboxDelivery{DeliveryID: id, ExecutionID: execID, Attempt: attempts, Message: *env}
-		return nil
+		out.Passive, err = takePassive(ctx, tx, f.SeatID, execID, MaxPassivePerTurn)
+		return err
 	})
 	return out, err
 }
@@ -239,18 +241,69 @@ func (s *Store) PendingDeliveries(ctx context.Context, seatID string) (int, erro
 	return n, err
 }
 
-// insertDelivery queues msgID for seatID. With enforceCap, a full inbox is
+// insertDelivery queues msgID for seatID; a passive delivery waits for the
+// seat's next turn instead of starting one. With enforceCap, a full inbox is
 // rejected with ErrInboxFull; otherwise the delivery is always accepted and
 // full reports whether the cap was exceeded.
-func insertDelivery(ctx context.Context, tx pgx.Tx, msgID, seatID string, enforceCap bool) (full bool, err error) {
+func insertDelivery(ctx context.Context, tx pgx.Tx, msgID, seatID string, enforceCap, passive bool) (full bool, err error) {
 	var n int
-	if err := tx.QueryRow(ctx, `SELECT count(*) FROM deliveries WHERE seat_id = $1 AND state IN ('pending', 'leased')`, seatID).Scan(&n); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM deliveries WHERE seat_id = $1 AND state IN ('pending', 'leased', 'passive')`, seatID).Scan(&n); err != nil {
 		return false, err
 	}
 	full = n >= MaxPendingDeliveries
 	if full && enforceCap {
 		return true, ErrInboxFull
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO deliveries (message_id, seat_id) VALUES ($1, $2)`, msgID, seatID)
+	state := "pending"
+	if passive {
+		state = "passive"
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO deliveries (message_id, seat_id, state) VALUES ($1, $2, $3)`, msgID, seatID, state)
 	return full, err
+}
+
+// MaxPassivePerTurn bounds the passive messages handed over with one turn.
+const MaxPassivePerTurn = 20
+
+// takePassive hands over the seat's oldest passive messages: they are marked
+// done under executionID (empty when read with messages.inbox) and returned.
+func takePassive(ctx context.Context, tx pgx.Tx, seatID, executionID string, limit int) ([]runtimeapi.Envelope, error) {
+	rows, err := tx.Query(ctx, `UPDATE deliveries SET state = 'done', execution_id = NULLIF($2, '')::uuid, updated_at = now()
+		WHERE id IN (SELECT id FROM deliveries WHERE seat_id = $1 AND state = 'passive' ORDER BY id LIMIT $3 FOR UPDATE)
+		RETURNING message_id::text`, seatID, executionID, limit)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, err
+	}
+	var out []runtimeapi.Envelope
+	for _, id := range ids {
+		env, err := envelope(ctx, tx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *env)
+	}
+	slices.SortFunc(out, func(a, b runtimeapi.Envelope) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return out, nil
+}
+
+// TakePassive hands over the seat's queued passive messages outside a turn
+// start (messages.inbox).
+func (s *Store) TakePassive(ctx context.Context, f Fence, executionID string, limit int) ([]runtimeapi.Envelope, error) {
+	var out []runtimeapi.Envelope
+	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		if err := checkFence(ctx, tx, f); err != nil {
+			return err
+		}
+		if _, perr := uuid.Parse(executionID); perr != nil {
+			executionID = ""
+		}
+		var err error
+		out, err = takePassive(ctx, tx, f.SeatID, executionID, limit)
+		return err
+	})
+	return out, err
 }

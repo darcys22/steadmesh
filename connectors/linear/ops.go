@@ -26,6 +26,7 @@ const (
 	mIssueCreate   = `mutation IssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { ` + issueFields + ` } } }`
 	mIssueUpdate   = `mutation IssueUpdate($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { ` + issueFields + ` } } }`
 	mCommentCreate = `mutation CommentCreate($input: CommentCreateInput!) { commentCreate(input: $input) { success comment { ` + commentFields + ` } } }`
+	qIssueComments = `query IssueComments($first: Int!, $filter: CommentFilter) { comments(first: $first, filter: $filter) { nodes { id body url createdAt user { id name } issue { id identifier } } } }`
 	qComments      = `query Comments($first: Int!, $filter: CommentFilter) { comments(first: $first, filter: $filter) { nodes { ` + commentFields + ` } } }`
 )
 
@@ -122,6 +123,11 @@ type taskWriteParams struct {
 	StateID     *string `json:"state_id"`
 	AssigneeID  *string `json:"assignee_id"`
 	Priority    *int    `json:"priority"`
+}
+
+type commentReadParams struct {
+	IssueID string `json:"issue_id"`
+	First   int    `json:"first"`
 }
 
 type commentWriteParams struct {
@@ -251,9 +257,14 @@ type issue struct {
 }
 
 type comment struct {
-	ID    string `json:"id"`
-	Body  string `json:"body"`
-	URL   string `json:"url"`
+	ID        string `json:"id"`
+	Body      string `json:"body"`
+	URL       string `json:"url"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	User      *struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"user,omitempty"`
 	Issue struct {
 		ID         string `json:"id"`
 		Identifier string `json:"identifier"`
@@ -572,4 +583,29 @@ func nonNil[T any](s []T) []T {
 		return []T{}
 	}
 	return s
+}
+
+// commentRead lists an issue's comments, newest first.
+func (a *Adapter) commentRead(ctx context.Context, params json.RawMessage) (connectors.Result, error) {
+	var p commentReadParams
+	if err := decode(params, &p); err != nil {
+		return connectors.Result{}, err
+	}
+	if p.IssueID == "" {
+		return connectors.Result{}, invalid("issue_id is required")
+	}
+	first, err := pageSize(p.First)
+	if err != nil {
+		return connectors.Result{}, err
+	}
+	var out struct {
+		Comments struct {
+			Nodes []comment `json:"nodes"`
+		} `json:"comments"`
+	}
+	vars := map[string]any{"first": first, "filter": map[string]any{"issue": map[string]any{"id": map[string]any{"eq": p.IssueID}}}}
+	if err := a.do(ctx, true, qIssueComments, vars, &out); err != nil {
+		return connectors.Result{}, err
+	}
+	return result(p.IssueID, map[string]any{"comments": nonNil(out.Comments.Nodes)})
 }

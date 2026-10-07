@@ -149,6 +149,7 @@ func (c *compiler) run() *Manifest {
 	c.checkConnections(&out)
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
+	c.checkWorkPublication(&out)
 	if len(c.errs) > 0 {
 		return nil
 	}
@@ -391,13 +392,27 @@ func (c *compiler) applyDefaults(o *spec.OrganizationSpec) {
 		s.RequiredEnforcement = sortedUnique(append(s.RequiredEnforcement, "network_policy", "non_root", "resource_limits"))
 		o.SandboxProfiles[k] = s
 	}
+	// A connection is required by default only when the organisation cannot
+	// work without it (see RequiredConnections); trackers and other optional
+	// integrations never block readiness unless declared required.
+	usedModel := map[string]bool{}
+	for _, s := range o.Seats {
+		if h, ok := o.HarnessProfiles[s.HarnessProfile]; ok && h.ModelConnection != "" {
+			usedModel[h.ModelConnection] = true
+		}
+	}
+	bound := map[string]bool{}
+	for _, b := range o.ChannelBindings {
+		bound[b.Connection] = true
+	}
 	for k, conn := range o.Connections {
 		if conn.Ownership == "" {
 			conn.Ownership = "external"
 		}
 		if conn.Required == nil {
-			t := true
-			conn.Required = &t
+			kind := c.cat.Connectors[conn.Adapter].Kind
+			r := (kind == "model" && usedModel[k]) || (kind == "communication" && bound[k])
+			conn.Required = &r
 		}
 		o.Connections[k] = conn
 	}
@@ -920,4 +935,35 @@ func sortedUnique(vals []string) []string {
 
 func sameSet(a, b []string) bool {
 	return slices.Equal(sortedUnique(a), sortedUnique(b))
+}
+
+func (c *compiler) checkWorkPublication(o *spec.OrganizationSpec) {
+	p := o.WorkPublication
+	if p == nil {
+		return
+	}
+	conn, ok := o.Connections[p.Connection]
+	switch {
+	case !ok:
+		c.errf("work_publication.connection", "connection %q is not declared", p.Connection)
+	case c.cat.Connectors[conn.Adapter].Kind != "tracker":
+		c.errf("work_publication.connection", "connection %q is not a work tracker", p.Connection)
+	}
+	if len(p.Stores) == 0 {
+		c.errf("work_publication.stores", "name at least one shared memory store")
+	}
+	personal := map[string]string{}
+	for k, s := range o.Seats {
+		if s.PersonalMemory != "" {
+			personal[s.PersonalMemory] = k
+		}
+	}
+	for i, st := range p.Stores {
+		path := fmt.Sprintf("work_publication.stores[%d]", i)
+		if _, ok := o.MemoryStores[st]; !ok {
+			c.errf(path, "memory store %q is not declared", st)
+		} else if seat, ok := personal[st]; ok {
+			c.errf(path, "%q is the personal store of seat %s; personal memory is never published", st, seat)
+		}
+	}
 }

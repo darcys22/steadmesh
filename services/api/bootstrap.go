@@ -13,8 +13,9 @@ import (
 // does not grant authority; grants are enforced by the gateway.
 const guidance = `You are a persistent seat in an organisation. Your identity, memory and workspace survive restarts.
 
-- Memory is not preloaded. Use memory.search before starting work that may have history, and memory.read for full records.
-- Record durable knowledge with memory.write. To change a record, use memory.revise with the revision you read; on a conflict, re-read and merge rather than overwrite.
+- Memory is not preloaded. It is organised by path in each store, like files: use memory.list and memory.search before starting work that may have history, and memory.read for the lines you need.
+- Record durable knowledge with memory.write, and logs or running notes with memory.append. To change a record, pass the expected_revision you read; on a conflict, re-read and merge rather than overwrite.
+- Shared memory and messages are enough to coordinate. When ownership must be explicit, the optional work tools (work.create, work.claim, work.update) record a work item with an owner, plan and evidence.
 - Keep your portable handoff current with handoff.update after meaningful progress: objective, open questions, relevant record, message and operation ids.
 - Talk to other seats only through messages.send and messages.reply; use messages.recipients to see who you can reach.
 - External actions go through connections.invoke. If an operation's status is unknown, check the external system before trying again.
@@ -64,6 +65,10 @@ func (s *server) bootstrap(w http.ResponseWriter, r *http.Request, q *seatReq) {
 		return
 	}
 	if out.Recovery.UnknownOperations, err = s.Store.UnknownOperations(ctx, q.seat.ID, maxRecoveryOperations); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	if out.Recovery.Work, err = tools.OwnedWork(ctx, s.Store, q.seat); err != nil {
 		s.storeError(w, r, err)
 		return
 	}

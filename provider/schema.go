@@ -114,7 +114,7 @@ func specAttributes() map[string]schema.Attribute {
 			"endpoint_ref": optStr("Base URL override (fakes, self-hosted)."),
 			"secret_ref":   optStr("vault:<path> or k8s:<secret-name>. Never a raw credential."),
 			"ownership":    optStr("external (default) or managed."),
-			"required":     optBool("Whether the connection must authenticate before the organisation is ready (default true)."),
+			"required":     optBool("Whether the connection must authenticate before the organisation is ready. By default model connections a harness uses and communication connections with channel bindings are required; others, such as a work tracker, are optional: their failures are reported as IntegrationsDegraded but never block readiness or internal work."),
 			"config":       strMap("Adapter configuration, e.g. team_id for linear."),
 		}),
 		"seats": keyed("Seats: persistent agent identities.", map[string]schema.Attribute{
@@ -154,6 +154,14 @@ func specAttributes() map[string]schema.Attribute {
 			"seat":             reqStr("Representative seat key."),
 			"mode":             optStr("direct_message."),
 		}),
+		"work_publication": schema.SingleNestedAttribute{
+			Optional:    true,
+			Description: "Publish the work items of shared memory stores to a tracker so people can follow progress there. Optional: agents coordinate through memory and messages either way, and a failing tracker never blocks them. Personal stores are never published.",
+			Attributes: map[string]schema.Attribute{
+				"connection": reqStr("Tracker connection key, e.g. a Linear connection."),
+				"stores":     reqStrList("Shared memory stores whose work items are published."),
+			},
+		},
 	}
 }
 

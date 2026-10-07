@@ -80,7 +80,14 @@ func TestDescriptorsAreFilteredAndValid(t *testing.T) {
 	if !reviewer["self"] || !reviewer["memory.search"] || !reviewer["handoff.update"] {
 		t.Errorf("reviewer lacks basic tools: %v", reviewer)
 	}
-	if len(r.tools) != 21 {
-		t.Errorf("registry has %d tools, want the 21 of contracts.md", len(r.tools))
+	// Work tools need a shared store; the representative has only personal memory.
+	if !lead["work.create"] || !lead["work.claim"] || !lead["memory.append"] || !lead["messages.inbox"] {
+		t.Errorf("lead lacks work, append or inbox tools: %v", lead)
+	}
+	if rep := names("rep_b"); rep["work.create"] || rep["work.list"] {
+		t.Errorf("seat without a shared store offered work tools: %v", rep)
+	}
+	if len(r.tools) != 30 {
+		t.Errorf("registry has %d tools, want the 30 of docs/tools.html", len(r.tools))
 	}
 }

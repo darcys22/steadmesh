@@ -192,11 +192,9 @@ func (r *OrganizationReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	// 5. Connections, ingress and bindings.
-	required := map[string]bool{}
-	for k, c := range m.Spec.Connections {
-		required[k] = c.Required == nil || *c.Required
-	}
+	// 5. Connections, ingress and bindings. Only required connections
+	// (compile.RequiredConnections) can block readiness.
+	required := compile.RequiredConnections(m, compile.DefaultCatalog())
 	vresp, verr, verifiedNow := r.verifyOrg(ctx, &org, gen, nonce)
 	if verr != nil {
 		for _, t := range []string{v1alpha1.CondConnectionsAuthenticated, v1alpha1.CondIngressReady, v1alpha1.CondBindingsValid} {

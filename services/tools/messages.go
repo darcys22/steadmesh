@@ -22,16 +22,19 @@ func (r *Registry) messageTools() []*tool {
 	return []*tool{
 		{name: "messages.recipients", description: "List the seats this seat may message, and whether they can reply.",
 			schema: `{"type":"object","properties":{},"additionalProperties":false}`, allowed: canSend, handle: r.recipients},
-		{name: "messages.send", description: "Send a message to a seat over a declared route. Continue a conversation with conversation_id, and correlate related work with correlation_id.",
-			schema:   `{"type":"object","properties":{"to":{"type":"string","description":"recipient seat key"},"body":{"type":"string","maxLength":12288},"conversation_id":{"type":"string"},"correlation_id":{"type":"string"}},"required":["to","body"],"additionalProperties":false}`,
+		{name: "messages.send", description: "Send a message to a seat over a declared route. By default it starts a turn for the recipient. With wake false it is queued instead and handed over with the recipient's next turn, for FYIs that need no action now. Continue a conversation with conversation_id, and correlate related work with correlation_id.",
+			schema:   `{"type":"object","properties":{"to":{"type":"string","description":"recipient seat key"},"body":{"type":"string","maxLength":12288},"conversation_id":{"type":"string"},"correlation_id":{"type":"string"},"wake":{"type":"boolean","default":true}},"required":["to","body"],"additionalProperties":false}`,
 			mutating: true, allowed: canSend, handle: r.send},
-		{name: "messages.reply", description: "Reply to a message you received (message_id), or, as a representative, send an update to your bound human (binding).",
-			schema:   `{"type":"object","properties":{"message_id":{"type":"string"},"binding":{"type":"string"},"body":{"type":"string","maxLength":12288}},"required":["body"],"additionalProperties":false}`,
+		{name: "messages.reply", description: "Reply to a message you received (message_id), or, as a representative, send an update to your bound human (binding). wake false queues a reply to a seat without starting a turn for it.",
+			schema:   `{"type":"object","properties":{"message_id":{"type":"string"},"binding":{"type":"string"},"body":{"type":"string","maxLength":12288},"wake":{"type":"boolean","default":true}},"required":["body"],"additionalProperties":false}`,
 			mutating: true,
 			allowed: func(sm *compile.SeatManifest, _ *compile.Manifest) bool {
 				return len(sm.SendTo) > 0 || len(sm.ReceiveFrom) > 0 || len(sm.ChannelBindings) > 0
 			},
 			handle: r.reply},
+		{name: "messages.inbox", description: "Read the messages queued for you without a turn of their own (sent with wake false). They are also handed over automatically with your next turn.",
+			schema:   `{"type":"object","properties":{"max_results":{"type":"integer","minimum":1,"maximum":20}},"additionalProperties":false}`,
+			mutating: true, allowed: always, handle: r.inbox},
 		{name: "messages.history", description: "Read a conversation you take part in (conversation_id), or list your conversations. Human conversations are private to their representative.",
 			schema:  `{"type":"object","properties":{"conversation_id":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":50},"cursor":{"type":"string"}},"additionalProperties":false}`,
 			allowed: always, handle: r.history},
@@ -69,6 +72,7 @@ func (r *Registry) send(ctx context.Context, c *Call) (any, error) {
 		Body           string `json:"body"`
 		ConversationID string `json:"conversation_id"`
 		CorrelationID  string `json:"correlation_id"`
+		Wake           *bool  `json:"wake"`
 	}
 	if err := decode(c, &a); err != nil {
 		return nil, err
@@ -86,7 +90,7 @@ func (r *Registry) send(ctx context.Context, c *Call) (any, error) {
 		return nil, toolErr("unavailable", "seat %q is not active", a.To)
 	}
 	return r.deliver(ctx, c, to, store.SeatMessage{ConversationID: a.ConversationID, CorrelationID: a.CorrelationID,
-		Route: strings.Join(edge.Routes, ","), Body: a.Body})
+		Route: strings.Join(edge.Routes, ","), Body: a.Body, Passive: a.Wake != nil && !*a.Wake})
 }
 
 // deliver persists a seat-to-seat message and reports the recipient's
@@ -117,6 +121,7 @@ func (r *Registry) reply(ctx context.Context, c *Call) (any, error) {
 		MessageID string `json:"message_id"`
 		Binding   string `json:"binding"`
 		Body      string `json:"body"`
+		Wake      *bool  `json:"wake"`
 	}
 	if err := decode(c, &a); err != nil {
 		return nil, err
@@ -150,7 +155,7 @@ func (r *Registry) reply(ctx context.Context, c *Call) (any, error) {
 			return nil, toolErr("unavailable", "the sending seat is no longer active")
 		}
 		return r.deliver(ctx, c, to, store.SeatMessage{ConversationID: m.ConversationID, ParentID: m.ID,
-			CorrelationID: m.CorrelationID, Route: "reply", Body: a.Body})
+			CorrelationID: m.CorrelationID, Route: "reply", Body: a.Body, Passive: a.Wake != nil && !*a.Wake})
 	default:
 		return nil, toolErr("invalid", "%s messages cannot be replied to", m.Origin)
 	}
@@ -226,4 +231,27 @@ func (r *Registry) history(ctx context.Context, c *Call) (any, error) {
 	return fit(out, offset, more, func(v []historyMessage, next string) any {
 		return map[string]any{"conversation_id": a.ConversationID, "kind": kind, "messages": v, "next_cursor": next}
 	}), nil
+}
+
+func (r *Registry) inbox(ctx context.Context, c *Call) (any, error) {
+	var a struct {
+		MaxResults int `json:"max_results"`
+	}
+	if err := decode(c, &a); err != nil {
+		return nil, err
+	}
+	limit := a.MaxResults
+	if limit <= 0 || limit > store.MaxPassivePerTurn {
+		limit = store.MaxPassivePerTurn
+	}
+	msgs, err := r.d.Store.TakePassive(ctx, c.fence(), c.ExecutionID, limit)
+	if err != nil {
+		return nil, err
+	}
+	for i := range msgs {
+		if len(msgs[i].Body) > historyBody {
+			msgs[i].Body, _ = truncate(msgs[i].Body, historyBody)
+		}
+	}
+	return map[string]any{"messages": nonNilSlice(msgs)}, nil
 }

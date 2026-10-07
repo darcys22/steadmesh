@@ -42,7 +42,10 @@ const (
 	CondIngressReady             = "IngressReady"
 	CondBindingsValid            = "BindingsValid"
 	CondRoutesExecutable         = "RoutesExecutable"
-	CondOperationalReady         = "OperationalReady"
+	// CondIntegrationsDegraded is informational: True while an optional
+	// connection (one OperationalReady does not require) is failing.
+	CondIntegrationsDegraded = "IntegrationsDegraded"
+	CondOperationalReady     = "OperationalReady"
 )
 
 // ExecutionState is the technical execution state of a seat (§6.2).

@@ -266,8 +266,14 @@ func (s *server) work(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
+	work, err := s.Platform.Work(ctx, orgID)
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
 	if seat != "" {
 		runs = slices.DeleteFunc(runs, func(e runtimeapi.ConsoleExecution) bool { return e.SeatKey != seat })
+		work = slices.DeleteFunc(work, func(w runtimeapi.ConsoleWorkItem) bool { return w.Owner != seat && w.Creator != seat })
 		arts = slices.DeleteFunc(arts, func(a runtimeapi.ConsoleArtifact) bool { return a.OwnerSeat != seat })
 	}
 	var blockers []runtimeapi.ConsoleOperation
@@ -277,7 +283,7 @@ func (s *server) work(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.render(w, r, "work", map[string]any{"H": st.orgHeader, "S": st, "Operations": ops, "Blockers": blockers,
-		"Artifacts": arts, "Runs": runs, "Seat": seat, "Status": status, "Now": s.Now()})
+		"Artifacts": arts, "Runs": runs, "Work": work, "Seat": seat, "Status": status, "Now": s.Now()})
 }
 
 func (s *server) activity(w http.ResponseWriter, r *http.Request) {

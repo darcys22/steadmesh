@@ -58,7 +58,7 @@ func DefaultCatalog() Catalog {
 		},
 		Connectors: map[string]ConnectorInfo{
 			"slack":     {Kind: "communication", Operations: []string{"channel.reply"}},
-			"linear":    {Kind: "tracker", Operations: []string{"project.read", "project.create", "task.read", "task.write", "comment.write"}},
+			"linear":    {Kind: "tracker", Operations: []string{"project.read", "project.create", "task.read", "task.write", "comment.read", "comment.write"}},
 			"anthropic": {Kind: "model", Operations: []string{"model.infer"}},
 		},
 		IdlePolicies: map[string]string{
