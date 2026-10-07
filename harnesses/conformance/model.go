@@ -154,6 +154,9 @@ type ModelOptions struct {
 	Configure func(t *testing.T, env *harnesses.Environment)
 	// TurnTimeout bounds a turn (default 2m).
 	TurnTimeout time.Duration
+	// CheckToolCall, when set, inspects the model requests of the turn in
+	// which the model called a platform tool.
+	CheckToolCall func(t *testing.T, reqs []modelstub.Request)
 }
 
 // RunModel runs the conformance suite for a model-backed harness against a
@@ -257,6 +260,9 @@ func RunModel(t *testing.T, opts ModelOptions) {
 		reqs := r.chain.Stub.Requests()
 		if len(reqs) < 2 || reqs[len(reqs)-1].ToolResults != 1 {
 			t.Fatalf("model never received the tool result: %+v", reqs)
+		}
+		if opts.CheckToolCall != nil {
+			opts.CheckToolCall(t, reqs)
 		}
 	})
 

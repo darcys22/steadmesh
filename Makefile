@@ -12,7 +12,7 @@ ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e demo e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -100,7 +100,18 @@ kind-down:
 e2e: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
-	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -timeout 40m ./tests/e2e/...
+	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestE2E -timeout 40m ./tests/e2e/...
+
+# The completion demo (examples/mixed-harness) on a fresh cluster: Claude
+# Code, Codex and Pi seats collaborate, with and without work items, through
+# a Linear outage and a key rotation. DEMO_MODE=fakes (default) uses the
+# model and GitHub fakes; DEMO_MODE=live the real services. The run records
+# docs/demo/<mode>-results.json and renders docs/demo-results.html.
+DEMO_MODE ?= fakes
+demo: images provider orgctl
+	$(MAKE) e2e-reset
+	$(MAKE) kind-up kind-load
+	DEMO_MODE=$(DEMO_MODE) KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestDemo -v -timeout 60m ./tests/e2e/...
 
 # quickstart/ as a user runs it (terraform init -from-module, two stages), on a
 # fresh kind cluster, with local builds standing in for the published release.

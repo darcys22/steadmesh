@@ -46,7 +46,11 @@ type Request struct {
 	// ToolResults counts tool results since LastUser; ToolResult is the last.
 	ToolResults int
 	ToolResult  string
-	Time        time.Time
+	// ToolSearch means the client offers tool_search (Codex defers MCP tools
+	// behind it); Searches counts searches since LastUser.
+	ToolSearch bool `json:",omitempty"`
+	Searches   int  `json:",omitempty"`
+	Time       time.Time
 }
 
 // Stub is the scripted endpoint. Mount it at the API base root: it serves
@@ -119,6 +123,7 @@ type action struct {
 	text      string
 	tool      string // offered tool name to call
 	namespace string // Responses namespace of the tool, if any
+	search    string // tool_search query, when the tool is deferred
 	args      string
 	slow      bool
 }
@@ -143,6 +148,10 @@ func decide(r Request, tools []offered) action {
 		if t.name == want || strings.HasSuffix(t.name, "__"+want) {
 			return action{tool: t.name, namespace: t.namespace, args: args}
 		}
+	}
+	// A deferred tool is found with tool_search first, as a model would.
+	if r.ToolSearch && r.Searches <= r.ToolResults {
+		return action{search: strings.ReplaceAll(canonical, ".", " ") + " " + want}
 	}
 	names := make([]string, len(tools))
 	for i, t := range tools {
@@ -282,35 +291,60 @@ func parseResponses(body []byte) (Request, []offered) {
 	_ = json.Unmarshal(body, &in)
 	r := Request{API: OpenAIResponses, Model: in.Model, Stream: in.Stream}
 	var tools []offered
-	for _, raw := range in.Tools {
-		var t struct {
-			Type  string `json:"type"`
-			Name  string `json:"name"`
-			Tools []struct {
-				Name string `json:"name"`
-			} `json:"tools"`
-		}
-		_ = json.Unmarshal(raw, &t)
-		if t.Type == "namespace" {
-			for _, nt := range t.Tools {
-				tools = append(tools, offered{namespace: t.Name, name: nt.Name})
+	addTools := func(list []json.RawMessage) {
+		for _, raw := range list {
+			var t struct {
+				Type  string `json:"type"`
+				Name  string `json:"name"`
+				Tools []struct {
+					Name string `json:"name"`
+				} `json:"tools"`
 			}
-		} else if t.Name != "" {
-			tools = append(tools, offered{name: t.Name})
+			_ = json.Unmarshal(raw, &t)
+			switch {
+			case t.Type == "tool_search":
+				r.ToolSearch = true
+			case t.Type == "namespace":
+				for _, nt := range t.Tools {
+					tools = append(tools, offered{namespace: t.Name, name: nt.Name})
+				}
+			case t.Name != "":
+				tools = append(tools, offered{name: t.Name})
+			}
+		}
+	}
+	addTools(in.Tools)
+	var s string
+	if json.Unmarshal(in.Input, &s) == nil {
+		r.LastUser = s
+		for _, t := range tools {
+			r.Tools = append(r.Tools, t.full())
+		}
+		return r, tools
+	}
+	var items []map[string]any
+	_ = json.Unmarshal(in.Input, &items)
+	// Tools found by earlier searches are callable.
+	var raws []json.RawMessage
+	_ = json.Unmarshal(in.Input, &raws)
+	for _, raw := range raws {
+		var it struct {
+			Type  string            `json:"type"`
+			Tools []json.RawMessage `json:"tools"`
+		}
+		if json.Unmarshal(raw, &it) == nil && it.Type == "tool_search_output" {
+			addTools(it.Tools)
 		}
 	}
 	for _, t := range tools {
 		r.Tools = append(r.Tools, t.full())
 	}
-	var s string
-	if json.Unmarshal(in.Input, &s) == nil {
-		r.LastUser = s
-		return r, tools
-	}
-	var items []map[string]any
-	_ = json.Unmarshal(in.Input, &items)
 	for i := len(items) - 1; i >= 0; i-- {
 		it := items[i]
+		if it["type"] == "tool_search_output" {
+			r.Searches++
+			continue
+		}
 		if it["type"] == "function_call_output" {
 			if r.ToolResults == 0 {
 				r.ToolResult = textOf(it["output"])
@@ -443,6 +477,21 @@ func replyAnthropic(w http.ResponseWriter, r *http.Request, req Request, a actio
 func replyResponses(w http.ResponseWriter, r *http.Request, req Request, a action, n int) {
 	id := fmt.Sprintf("resp_stub_%d", n)
 	var item map[string]any
+	if a.search != "" {
+		item = map[string]any{"type": "tool_search_call", "id": fmt.Sprintf("ts_stub_%d", n), "call_id": fmt.Sprintf("search_stub_%d", n),
+			"execution": "client", "status": "completed", "arguments": map[string]any{"query": a.search, "limit": 20}}
+		done := map[string]any{"id": id, "object": "response", "status": "completed", "model": req.Model, "output": []any{item},
+			"usage": map[string]any{"input_tokens": 12, "output_tokens": 3, "total_tokens": 15}}
+		if !req.Stream {
+			writeJSON(w, done)
+			return
+		}
+		s := newSSE(w)
+		s.event("response.created", map[string]any{"type": "response.created", "response": map[string]any{"id": id, "object": "response", "status": "in_progress", "model": req.Model}})
+		s.event("response.output_item.done", map[string]any{"type": "response.output_item.done", "output_index": 0, "item": item})
+		s.event("response.completed", map[string]any{"type": "response.completed", "response": done})
+		return
+	}
 	if a.tool != "" {
 		item = map[string]any{"type": "function_call", "id": fmt.Sprintf("fc_stub_%d", n), "call_id": fmt.Sprintf("call_stub_%d", n),
 			"name": a.tool, "arguments": a.args, "status": "completed"}

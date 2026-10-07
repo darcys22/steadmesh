@@ -1,0 +1,182 @@
+{
+  "mode": "fakes",
+  "started_at": "2026-10-07T23:33:37.137195Z",
+  "finished_at": "2026-10-07T23:35:39.839626Z",
+  "versions": {
+    "claude-code": "2.1.289",
+    "codex": "0.160.1",
+    "pi": "1.0.4"
+  },
+  "config": {
+    "model_api_keys": {
+      "anthropic": "demo-anthropic-1",
+      "openai": "demo-openai",
+      "i14": "demo-i14"
+    },
+    "enable_egress": true,
+    "enable_console": true,
+    "harness": "fake",
+    "seat_harnesses": {
+      "eng_lead": {
+        "adapter": "claude-code",
+        "model": {
+          "connection": "anthropic",
+          "id": "claude-sonnet-5-5"
+        }
+      },
+      "engineer": {
+        "adapter": "codex",
+        "model": {
+          "connection": "openai",
+          "id": "gpt-5.5",
+          "settings": {
+            "reasoning_effort": "medium"
+          }
+        }
+      },
+      "reviewer": {
+        "adapter": "pi",
+        "model": {
+          "connection": "i14",
+          "id": "qwen3.8-27b"
+        }
+      }
+    },
+    "model_connections": {
+      "anthropic": {
+        "adapter": "anthropic",
+        "secret_ref": "k8s:anthropic-credentials",
+        "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1"
+      },
+      "openai": {
+        "adapter": "openai",
+        "secret_ref": "k8s:openai-credentials",
+        "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1"
+      },
+      "i14": {
+        "adapter": "model",
+        "secret_ref": "k8s:i14-credentials",
+        "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1",
+        "model": {
+          "apis": [
+            "openai_chat"
+          ],
+          "models": [
+            {
+              "id": "qwen3.8-27b"
+            }
+          ]
+        }
+      }
+    },
+    "extra_connections": {
+      "github": {
+        "adapter": "github",
+        "secret_ref": "k8s:github-credentials",
+        "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8093"
+      }
+    },
+    "access_profiles": {
+      "github_engineer": {
+        "github": {
+          "connection": "github",
+          "repos": [
+            "acme/sandbox"
+          ],
+          "permissions": {
+            "contents": "write",
+            "pull_requests": "write"
+          }
+        }
+      }
+    },
+    "seat_access": {
+      "engineer": [
+        "github_engineer"
+      ]
+    },
+    "enable_linear": false
+  },
+  "steps": [
+    {
+      "name": "bring up the platform and the mixed organisation",
+      "passed": true,
+      "seconds": 63,
+      "evidence": "each seat passed readiness with a probe turn through its own harness and model"
+    },
+    {
+      "name": "1. collaborate through messages and a shared note (no Linear, no work items)",
+      "passed": true,
+      "seconds": 6,
+      "evidence": "shared note notes/demo-login.md written by the lead, the engineer and the reviewer: # Login page / lead: plan agreed - engineer builds, reviewer reviews / engineer: building the form and session handling / reviewer: will review the form for accessibility and errors"
+    },
+    {
+      "name": "2. the same with work items; the engineer opens a pull request",
+      "passed": true,
+      "seconds": 6,
+      "evidence": "engineering/W-1 owned by the engineer, status done; pull request acme/sandbox#2 (fake GitHub, opened through the platform)"
+    },
+    {
+      "name": "3. publish work items to Linear; an outage never blocks the organisation",
+      "passed": true,
+      "seconds": 34,
+      "evidence": "W-1 published once; while Linear was down the organisation stayed ready (IntegrationsDegraded) and W-2 was created internally; after reconnecting W-2 was published, nothing twice"
+    },
+    {
+      "name": "4. rotate the Anthropic key mid-session",
+      "passed": true,
+      "seconds": 6,
+      "evidence": "the lead kept working with the rotated key: no Terraform run, no restart (Pod seat-eng-lead-ee1a1cb2-0 unchanged)"
+    },
+    {
+      "name": "record the models and endpoints each seat actually used",
+      "passed": true,
+      "seconds": 6,
+      "evidence": "3 seats; see the table"
+    }
+  ],
+  "seats": [
+    {
+      "key": "eng_lead",
+      "harness": "claude-code",
+      "requests": [
+        {
+          "connection": "anthropic",
+          "api": "anthropic_messages",
+          "model": "claude-sonnet-5-5",
+          "upstream_host": "steadmesh-fakes.steadmesh-system.svc:8092",
+          "count": 23,
+          "ok": 23
+        }
+      ]
+    },
+    {
+      "key": "engineer",
+      "harness": "codex",
+      "requests": [
+        {
+          "connection": "openai",
+          "api": "openai_responses",
+          "model": "gpt-5.5",
+          "upstream_host": "steadmesh-fakes.steadmesh-system.svc:8092",
+          "count": 23,
+          "ok": 23
+        }
+      ]
+    },
+    {
+      "key": "reviewer",
+      "harness": "pi",
+      "requests": [
+        {
+          "connection": "i14",
+          "api": "openai_chat",
+          "model": "qwen3.8-27b",
+          "upstream_host": "steadmesh-fakes.steadmesh-system.svc:8092",
+          "count": 14,
+          "ok": 14
+        }
+      ]
+    }
+  ]
+}

@@ -35,6 +35,7 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
       <li><a href="status.html">Acceptance status</a></li>
+      <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
@@ -126,6 +127,7 @@ harness_profiles = {
 <tr><td><code>make conformance</code></td><td>Fetches the pinned CLIs for your machine (<code>build/harness-bins.sh</code>, digest-checked, no install scripts) and runs each against a scripted model over every API it speaks, through the real forwarder: turn lifecycle, interruption, quiesce, native resume, handoff fallback, a tool call made by the model, the probe turn, the model and destination used, and token rotation during a running session.</td></tr>
 <tr><td><code>make conformance-images</code></td><td>The same suite inside each seat image, against its Linux binaries.</td></tr>
 <tr><td><code>make live-harnesses</code></td><td>Each harness on a real endpoint (Anthropic, OpenAI, the i14 endpoint) with a real tool call; see <code>tests/live/README.md</code>.</td></tr>
+<tr><td><code>make demo</code></td><td>The completion demo (<code>examples/mixed-harness</code>): Claude Code, Codex and Pi seats collaborate on kind, with fakes or the real services. Results: <a href="demo-results.html">Demo results</a>.</td></tr>
 <tr><td><code>make e2e</code></td><td>On kind: Codex and Pi seats join a running organisation, pass the probe turn, do delegated work with platform tools, record <code>model_request</code> events, and survive a model key rotation without a restart.</td></tr>
 </table>
 

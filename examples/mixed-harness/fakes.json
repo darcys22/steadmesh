@@ -1,0 +1,26 @@
+{
+  "model_api_keys": {"anthropic": "demo-anthropic-1", "openai": "demo-openai", "i14": "demo-i14"},
+  "enable_egress": true,
+  "enable_console": true,
+  "harness": "fake",
+  "seat_harnesses": {
+    "eng_lead": {"adapter": "claude-code", "model": {"connection": "anthropic", "id": "claude-sonnet-5-5"}},
+    "engineer": {"adapter": "codex", "model": {"connection": "openai", "id": "gpt-5.5", "settings": {"reasoning_effort": "medium"}}},
+    "reviewer": {"adapter": "pi", "model": {"connection": "i14", "id": "qwen3.8-27b"}}
+  },
+  "model_connections": {
+    "anthropic": {"adapter": "anthropic", "secret_ref": "k8s:anthropic-credentials", "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1"},
+    "openai": {"adapter": "openai", "secret_ref": "k8s:openai-credentials", "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1"},
+    "i14": {"adapter": "model", "secret_ref": "k8s:i14-credentials", "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1",
+            "model": {"apis": ["openai_chat"], "models": [{"id": "qwen3.8-27b"}]}}
+  },
+  "extra_connections": {
+    "github": {"adapter": "github", "secret_ref": "k8s:github-credentials", "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8093"}
+  },
+  "access_profiles": {
+    "github_engineer": {"github": {"connection": "github", "repos": ["acme/sandbox"],
+                                   "permissions": {"contents": "write", "pull_requests": "write"}}}
+  },
+  "seat_access": {"engineer": ["github_engineer"]},
+  "enable_linear": false
+}
