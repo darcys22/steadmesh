@@ -29,6 +29,10 @@ type Config struct {
 	TmpDir       string
 	ToolCommand  string
 	HealthAddr   string
+	// EgressURL is the egress gateway, set when the seat's access uses it.
+	EgressURL string
+	// BrowserExecutable is the Chromium binary for the browser plugin.
+	BrowserExecutable string
 
 	LeaseAcquireTimeout time.Duration
 	LeaseRetryInterval  time.Duration
@@ -65,21 +69,23 @@ func durEnv(k string, def time.Duration) (time.Duration, error) {
 // ConfigFromEnv reads the configuration.
 func ConfigFromEnv() (Config, error) {
 	c := Config{
-		PlatformURL:    os.Getenv(client.EnvPlatformURL),
-		TokenFile:      getenv(client.EnvTokenFile, client.DefaultTokenFile),
-		OrgID:          os.Getenv("STEADMESH_ORG_ID"),
-		SeatID:         os.Getenv("STEADMESH_SEAT_ID"),
-		SeatKey:        os.Getenv("STEADMESH_SEAT_KEY"),
-		ConfigRevision: os.Getenv("STEADMESH_CONFIG_REVISION"),
-		Harness:        getenv("STEADMESH_HARNESS", "fake"),
-		ManifestDir:    getenv("STEADMESH_MANIFEST_DIR", "/etc/steadmesh/manifest"),
-		PodUID:         os.Getenv("POD_UID"),
-		WorkspaceDir:   getenv("STEADMESH_WORKSPACE_DIR", "/seat/workspace"),
-		HomeDir:        getenv("STEADMESH_HOME_DIR", "/seat/home"),
-		RunnerDir:      client.RunnerDir(),
-		TmpDir:         getenv("TMPDIR", "/tmp"),
-		ToolCommand:    getenv("STEADMESH_TOOLS_BIN", "/usr/local/bin/steadmesh-tools"),
-		HealthAddr:     getenv("STEADMESH_HEALTH_ADDR", ":8081"),
+		PlatformURL:       os.Getenv(client.EnvPlatformURL),
+		TokenFile:         getenv(client.EnvTokenFile, client.DefaultTokenFile),
+		OrgID:             os.Getenv("STEADMESH_ORG_ID"),
+		SeatID:            os.Getenv("STEADMESH_SEAT_ID"),
+		SeatKey:           os.Getenv("STEADMESH_SEAT_KEY"),
+		ConfigRevision:    os.Getenv("STEADMESH_CONFIG_REVISION"),
+		Harness:           getenv("STEADMESH_HARNESS", "fake"),
+		ManifestDir:       getenv("STEADMESH_MANIFEST_DIR", "/etc/steadmesh/manifest"),
+		PodUID:            os.Getenv("POD_UID"),
+		WorkspaceDir:      getenv("STEADMESH_WORKSPACE_DIR", "/seat/workspace"),
+		HomeDir:           getenv("STEADMESH_HOME_DIR", "/seat/home"),
+		RunnerDir:         client.RunnerDir(),
+		TmpDir:            getenv("TMPDIR", "/tmp"),
+		ToolCommand:       getenv("STEADMESH_TOOLS_BIN", "/usr/local/bin/steadmesh-tools"),
+		HealthAddr:        getenv("STEADMESH_HEALTH_ADDR", ":8081"),
+		EgressURL:         os.Getenv("STEADMESH_EGRESS_URL"),
+		BrowserExecutable: browserExecutable(),
 	}
 	if c.PlatformURL == "" {
 		return c, fmt.Errorf("%s is required", client.EnvPlatformURL)

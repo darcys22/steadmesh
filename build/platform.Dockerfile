@@ -6,9 +6,10 @@ ENV CGO_ENABLED=0 GOFLAGS=-trimpath
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN go build -ldflags='-s -w' -o /out/platform ./cmd/platform
+RUN go build -ldflags='-s -w' -o /out/platform ./cmd/platform && \
+    go build -ldflags='-s -w' -o /out/egress ./cmd/egress
 
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
-COPY --from=build /out/platform /usr/local/bin/platform
+COPY --from=build /out/platform /out/egress /usr/local/bin/
 USER 1000:1000
 ENTRYPOINT ["/usr/local/bin/platform"]

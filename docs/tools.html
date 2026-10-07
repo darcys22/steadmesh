@@ -30,6 +30,7 @@
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -110,7 +111,7 @@
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>connections.list</code></td><td>none</td><td>Connections this seat may use, with the granted operations and targets.</td></tr>
-<tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation, such as <code>project.create</code> on Linear. Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation instead of repeating it.</td></tr>
+<tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation on a tracker or code host, such as <code>project.create</code> on Linear or <code>pull_request.create</code> on GitHub (<a href="sandbox.html#github">platform delivery</a>). Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation instead of repeating it.</td></tr>
 <tr><td><code>operations.get</code></td><td><code>id</code></td><td>One recorded operation: status, receipt and result.</td></tr>
 </table>
 <p>Linear parameters:</p>
@@ -150,7 +151,7 @@
 <p>For example, to delegate a tracker task from a human message:</p>
 <pre><code>/delegate eng_lead /task
 /tool connections.invoke {"connection":"linear","operation":"project.create","params":{"name":"Onboarding"}}</code></pre>
-<div class="pager"><a href="harnesses.html"><small>Previous</small>Harnesses and models</a><a href="architecture.html" style="text-align:right"><small>Next</small>Architecture</a></div>
+<div class="pager"><a href="sandbox.html"><small>Previous</small>Sandbox access</a><a href="architecture.html" style="text-align:right"><small>Next</small>Architecture</a></div>
 <p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
 </main>
 </div>

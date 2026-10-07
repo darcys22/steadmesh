@@ -21,6 +21,8 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/darcys22/steadmesh/connectors"
+	"github.com/darcys22/steadmesh/connectors/browsersession"
+	"github.com/darcys22/steadmesh/connectors/github"
 	"github.com/darcys22/steadmesh/connectors/linear"
 	"github.com/darcys22/steadmesh/connectors/model"
 	"github.com/darcys22/steadmesh/connectors/secretref"
@@ -139,7 +141,7 @@ func run(c config, log *slog.Logger) error {
 		Console: c.consoleUser != "",
 		Factories: connections.Factories{
 			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": slack.New},
-			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New},
+			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New, "github": github.New, "browser_session": browsersession.New},
 			Model:         map[string]func(connectors.Config) (connectors.Model, error){"anthropic": model.New, "openai": model.New, "model": model.New},
 		},
 		Secrets:            secretref.NewMulti(resolvers),

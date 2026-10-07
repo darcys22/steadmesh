@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/darcys22/steadmesh/harnesses"
+	"github.com/darcys22/steadmesh/pkg/access"
 	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
@@ -107,7 +108,9 @@ type SeatManifest struct {
 	ChannelBindings  []string              `json:"channel_bindings,omitempty"`
 	AdoptFrom        string                `json:"adopt_from,omitempty"`
 	IsRepresentative bool                  `json:"is_representative"`
-	ConfigRevision   string                `json:"config_revision"`
+	// Access is what the seat may do from its sandbox (access profiles).
+	Access         *access.SeatAccess `json:"access,omitempty"`
+	ConfigRevision string             `json:"config_revision"`
 }
 
 // Compile validates and resolves an organisation specification.
@@ -151,6 +154,7 @@ func (c *compiler) run() *Manifest {
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
 	c.checkWorkPublication(&out)
+	c.checkAccess(&out)
 	if len(c.errs) > 0 {
 		return nil
 	}
@@ -166,7 +170,7 @@ func (c *compiler) run() *Manifest {
 		return nil
 	}
 	for k, sm := range seats {
-		sm.ConfigRevision = digest(sm)
+		sm.ConfigRevision = Revision(sm)
 		seats[k] = sm
 	}
 	m := &Manifest{
@@ -264,7 +268,7 @@ func (c *compiler) resolveTemplates(o *spec.OrganizationSpec) map[string][]strin
 	for _, tk := range sortedKeys(o.Teams) {
 		team := o.Teams[tk]
 		path := "teams." + tk
-		resolved := spec.Team{Parameters: map[string]string{}, SharedMemory: map[string][]string{}}
+		resolved := spec.Team{Parameters: map[string]string{}, SharedMemory: map[string][]string{}, AccessProfiles: team.AccessProfiles}
 		roles := map[string]string{}
 		var layers []spec.TeamTemplate
 		if team.Template != "" {
@@ -800,6 +804,42 @@ func (c *compiler) checkOps(path string, ops, allowed []string) {
 	}
 }
 
+// Revision is a seat's config revision. Access that applies live (egress
+// hosts, repository grants) is left out, so changing it never restarts the
+// seat.
+func Revision(sm SeatManifest) string {
+	sm.ConfigRevision = ""
+	sm.Access = sm.Access.PodPart()
+	return digest(sm)
+}
+
+func (c *compiler) accessContext(o *spec.OrganizationSpec) access.Context {
+	return access.Context{Connections: o.Connections}
+}
+
+// checkAccess validates access profiles and the seats' and teams' references.
+func (c *compiler) checkAccess(o *spec.OrganizationSpec) {
+	ctx := c.accessContext(o)
+	for _, k := range sortedKeys(o.AccessProfiles) {
+		for _, e := range access.Check(ctx, "access_profiles."+k, o.AccessProfiles[k]) {
+			c.errf(e.Path, "%s", e.Message)
+		}
+	}
+	ref := func(path string, names []string) {
+		for i, n := range names {
+			if _, ok := o.AccessProfiles[n]; !ok {
+				c.errf(fmt.Sprintf("%s.access_profiles[%d]", path, i), "unknown access profile %q", n)
+			}
+		}
+	}
+	for _, k := range sortedKeys(o.Teams) {
+		ref("teams."+k, o.Teams[k].AccessProfiles)
+	}
+	for _, k := range sortedKeys(o.Seats) {
+		ref("seats."+k, o.Seats[k].AccessProfiles)
+	}
+}
+
 func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest {
 	s := o.Seats[k]
 	sm := SeatManifest{
@@ -844,6 +884,20 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 	}
 	if m := sm.Harness.Model; m != nil {
 		sm.addCapability("connection:"+m.Connection, []string{"model.infer"}, nil, "implicit:harness_model")
+	}
+	profiles := append([]string(nil), s.AccessProfiles...)
+	for _, t := range s.Teams {
+		profiles = append(profiles, o.Teams[t].AccessProfiles...)
+	}
+	sm.Access = access.Resolve(c.accessContext(o), o.AccessProfiles, profiles)
+	if sm.Access != nil {
+		for _, g := range sm.Access.GitHub {
+			// Repository operations through the gateway, limited to the
+			// granted repositories, whatever the delivery.
+			if ops := access.GitHubOperations(g.Permissions); len(ops) > 0 {
+				sm.addCapability("connection:"+g.Connection, ops, g.Repos, "implicit:"+g.Source)
+			}
+		}
 	}
 	for _, t := range s.Teams {
 		for _, store := range sortedKeys(o.Teams[t].SharedMemory) {

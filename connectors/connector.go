@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/darcys22/steadmesh/pkg/spec"
 )
@@ -68,6 +69,32 @@ type Config struct {
 	// connection; readiness checks them.
 	ModelUses []ModelUse
 	HTTP      *http.Client
+}
+
+// CredentialIssuer is implemented by connections that deliver a credential
+// into a sandbox (github, browser_session). The platform calls it only for a
+// seat whose access grants sandbox delivery on the connection.
+type CredentialIssuer interface {
+	IssueCredential(ctx context.Context, scope CredentialScope) (Credential, error)
+	// RevokeCredential invalidates an issued credential where the service
+	// supports it (Credential.Revocable).
+	RevokeCredential(ctx context.Context, token string) error
+}
+
+// CredentialScope narrows an issued credential.
+type CredentialScope struct {
+	Repos       []string
+	Permissions map[string]string
+}
+
+// Credential is a credential delivered to a sandbox.
+type Credential struct {
+	Username  string
+	Token     string
+	ExpiresAt time.Time
+	Revocable bool
+	// Data is a non-token credential, e.g. a browser storage state.
+	Data json.RawMessage
 }
 
 // ModelUse is a model requested over an API.

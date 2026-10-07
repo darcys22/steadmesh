@@ -29,6 +29,7 @@ func main() {
 		netprobeImage  = flag.String("netprobe-image", "steadmesh/seat-fake:dev", "image providing `seat-runner netprobe` for the NetworkPolicy enforcement probe")
 		netprobeDenied = flag.String("netprobe-denied-url", "https://kubernetes.default.svc:443/livez", "URL that must be unreachable from a seat when its NetworkPolicy is enforced")
 		dnsNamespace   = flag.String("dns-namespace", "kube-system", "namespace of the cluster DNS service seats may query")
+		egressURL      = flag.String("egress-url", "", "egress gateway URL (http://steadmesh-egress.<ns>.svc:3128); empty when the gateway is not enabled")
 		tokenFile      = flag.String("token-file", platform.DefaultTokenFile, "controller ServiceAccount token presented to the platform internal API")
 		metricsAddr    = flag.String("metrics-bind-address", ":8080", "metrics endpoint bind address (0 disables)")
 		probeAddr      = flag.String("health-probe-bind-address", ":8081", "health probe bind address")
@@ -83,6 +84,7 @@ func main() {
 			NetprobeImage:         *netprobeImage,
 			NetprobeDeniedURL:     *netprobeDenied,
 			DNSNamespace:          *dnsNamespace,
+			EgressURL:             *egressURL,
 		},
 	}); err != nil {
 		log.Error(err, "set up controllers")

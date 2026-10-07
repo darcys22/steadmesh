@@ -16,6 +16,7 @@ import (
 
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/compile"
+	"github.com/darcys22/steadmesh/pkg/egressforward"
 	"github.com/darcys22/steadmesh/pkg/modelforward"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi/client"
@@ -85,6 +86,11 @@ type Runner struct {
 	model *spec.ModelSelection
 	// mfwd is the local model forwarder, started when the seat has a model.
 	mfwd *modelforward.Forwarder
+	// efwd is the local egress proxy, started when the seat's access uses
+	// the egress gateway; sandboxEnv and mcpServers come from its access.
+	efwd       *egressforward.Forwarder
+	sandboxEnv []string
+	mcpServers []harnesses.MCPServer
 
 	// execution is the execution being worked on, for the model forwarder.
 	execution atomic.Value // string
@@ -170,10 +176,13 @@ func (r *Runner) Run(stop context.Context) error {
 	defer r.cancelWork(nil)
 	defer func() {
 		r.mu.Lock()
-		mf := r.mfwd
+		mf, ef := r.mfwd, r.efwd
 		r.mu.Unlock()
 		if mf != nil {
 			mf.Close()
+		}
+		if ef != nil {
+			ef.Close()
 		}
 	}()
 
@@ -368,6 +377,11 @@ func (r *Runner) start(stop context.Context) error {
 	manifest, instructions := r.loadManifest()
 	r.bootLoaded.Store(true)
 
+	if manifest != nil {
+		if err := r.setupAccess(manifest.Access, firstNonEmpty(boot.Self.DisplayName, manifest.DisplayName)); err != nil {
+			return err
+		}
+	}
 	a, err := r.newAdapter(r.cfg.Harness)
 	if err != nil {
 		return err
@@ -491,6 +505,8 @@ func (r *Runner) environment(boot runtimeapi.Bootstrap, m *compile.SeatManifest,
 	}
 	r.mu.Lock()
 	sel, mf := r.model, r.mfwd
+	env.SandboxEnv = append([]string(nil), r.sandboxEnv...)
+	env.MCPServers = append([]harnesses.MCPServer(nil), r.mcpServers...)
 	r.mu.Unlock()
 	if sel != nil && mf != nil {
 		env.Model = &harnesses.ModelEndpoint{Connection: sel.Connection, ID: sel.ID, API: sel.API, Settings: sel.Settings,

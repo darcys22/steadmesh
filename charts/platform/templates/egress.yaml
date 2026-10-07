@@ -1,0 +1,66 @@
+{{- if .Values.egress.enabled }}
+# Egress gateway (optional). Seats reach it through their seat runner; it
+# authorises every connection with the platform and holds no credentials,
+# so it runs without a Kubernetes token.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: steadmesh-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: egress
+spec:
+  replicas: {{ .Values.egress.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: steadmesh-egress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: steadmesh-egress
+        steadmesh.io/component: egress
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: egress
+          image: "{{ .Values.image.platformRepository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/usr/local/bin/egress"]
+          args:
+            - --listen=:{{ .Values.egress.port }}
+            - --platform-url={{ include "steadmesh.platformURL" . }}
+          ports:
+            - {name: proxy, containerPort: {{ .Values.egress.port }}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: proxy}
+          livenessProbe:
+            httpGet: {path: /healthz, port: proxy}
+          resources:
+            {{- toYaml .Values.egress.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: steadmesh-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: egress
+spec:
+  selector:
+    app.kubernetes.io/name: steadmesh-egress
+  ports:
+    - {name: proxy, port: {{ .Values.egress.port }}, targetPort: proxy}
+{{- end }}

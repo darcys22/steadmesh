@@ -182,6 +182,7 @@ A failed create leaves the resource tainted, so the next plan replaces it. After
 
 Optional:
 
+- `access_profiles` (Attributes Map) Sandbox access profiles: practical access from a seat's sandbox, one plugin per field. Seats and teams name them; a seat gets the union. Without any, a seat reaches only the platform. See docs/sandbox.html. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--access_profiles))
 - `channel_bindings` (Attributes Map) Bindings of verified human identities to representative seats. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--channel_bindings))
 - `connections` (Attributes Map) Connections to external services. Secrets are references only. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--connections))
 - `culture_refs` (List of String) Ordered organisation culture instruction references (configmap:<name>/<key>#sha256:<digest>).
@@ -196,6 +197,85 @@ Optional:
 - `team_templates` (Attributes Map) Reusable team templates. Resolved by the provider before the object is written. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--team_templates))
 - `teams` (Attributes Map) Concrete teams. Membership is declared on seats. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--teams))
 - `work_publication` (Attributes) Publish the work items of shared memory stores to a tracker so people can follow progress there. Optional: agents coordinate through memory and messages either way, and a failing tracker never blocks them. Personal stores are never published. (see [below for nested schema](#nestedatt--spec--work_publication))
+
+<a id="nestedatt--spec--access_profiles"></a>
+### Nested Schema for `spec.access_profiles`
+
+Optional:
+
+- `browser` (Attributes) A headless browser tool (needs a -browser seat image); its traffic goes through the egress gateway. (see [below for nested schema](#nestedatt--spec--access_profiles--browser))
+- `egress` (Attributes) Hosts the seat may reach through the egress gateway (enable_egress). Changes apply live; removed hosts close open connections within seconds. (see [below for nested schema](#nestedatt--spec--access_profiles--egress))
+- `github` (Attributes) Repository access through a github connection. (see [below for nested schema](#nestedatt--spec--access_profiles--github))
+- `network` (Attributes) Direct connections to IP ranges, enforced by NetworkPolicy. (see [below for nested schema](#nestedatt--spec--access_profiles--network))
+- `tools` (Attributes) Binaries the seat image must provide; the seat does not start without them. (see [below for nested schema](#nestedatt--spec--access_profiles--tools))
+
+<a id="nestedatt--spec--access_profiles--browser"></a>
+### Nested Schema for `spec.access_profiles.browser`
+
+Optional:
+
+- `session` (Attributes) A signed-in session to load. (see [below for nested schema](#nestedatt--spec--access_profiles--browser--session))
+
+<a id="nestedatt--spec--access_profiles--browser--session"></a>
+### Nested Schema for `spec.access_profiles.browser.session`
+
+Required:
+
+- `connection` (String) A browser_session connection.
+
+
+
+<a id="nestedatt--spec--access_profiles--egress"></a>
+### Nested Schema for `spec.access_profiles.egress`
+
+Required:
+
+- `hosts` (List of String) example.com, *.example.com (subdomains) or host:port. Without a port, 443 and 80.
+
+
+<a id="nestedatt--spec--access_profiles--github"></a>
+### Nested Schema for `spec.access_profiles.github`
+
+Required:
+
+- `connection` (String) A github connection.
+- `permissions` (Map of String) contents, pull_requests, issues or metadata => read or write.
+- `repos` (List of String) owner/name repositories.
+
+Optional:
+
+- `delivery` (String) platform (default): operations through the platform; the credential never enters the sandbox. sandbox: git and gh in the sandbox receive a credential (a scoped, hour-long token with a GitHub App).
+
+
+<a id="nestedatt--spec--access_profiles--network"></a>
+### Nested Schema for `spec.access_profiles.network`
+
+Required:
+
+- `rules` (Attributes List) Allowed ranges. (see [below for nested schema](#nestedatt--spec--access_profiles--network--rules))
+
+<a id="nestedatt--spec--access_profiles--network--rules"></a>
+### Nested Schema for `spec.access_profiles.network.rules`
+
+Required:
+
+- `cidr` (String) IP range, e.g. 10.0.5.0/24.
+
+Optional:
+
+- `ports` (List of Number) Ports; empty allows every port.
+- `protocol` (String) tcp (default), udp or sctp.
+
+
+
+<a id="nestedatt--spec--access_profiles--tools"></a>
+### Nested Schema for `spec.access_profiles.tools`
+
+Required:
+
+- `binaries` (List of String) Binary names, e.g. git, gh, curl.
+
+
 
 <a id="nestedatt--spec--channel_bindings"></a>
 ### Nested Schema for `spec.channel_bindings`
@@ -363,6 +443,7 @@ Required:
 
 Optional:
 
+- `access_profiles` (List of String) Access profiles granted to this seat, in addition to its teams'.
 - `adopt_from` (String) Explicitly adopt the retained data of a retired seat ID.
 - `display_name` (String) Display name.
 - `instruction_refs` (List of String) Additional seat-scoped instruction references.
@@ -411,6 +492,7 @@ Optional:
 
 Optional:
 
+- `access_profiles` (List of String) Access profiles granted to every member.
 - `instruction_refs` (List of String) Additional ordered team instruction references.
 - `parameters` (Map of String) Parameters overriding template parameters.
 - `shared_memory` (Map of List of String) Memory store key to operations granted to members.

@@ -71,7 +71,7 @@ type Request struct {
 
 // targetKeys are the parameters that name an operation's target, in order of
 // precedence. Grants with targets restrict calls to matching values.
-var targetKeys = []string{"target", "project_id", "team_id", "issue_id"}
+var targetKeys = []string{"target", "repo", "project_id", "team_id", "issue_id"}
 
 func target(params map[string]any) string {
 	for _, k := range targetKeys {

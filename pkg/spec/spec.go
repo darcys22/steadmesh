@@ -42,6 +42,11 @@ type OrganizationSpec struct {
 	ExecutionProfiles map[string]ExecutionProfile `json:"execution_profiles,omitempty"`
 	// +optional
 	SandboxProfiles map[string]SandboxProfile `json:"sandbox_profiles,omitempty"`
+	// AccessProfiles grant seats practical access from their sandbox: tools,
+	// network egress, credentials and a browser. Seats and teams name them;
+	// a seat gets the union of its own and its teams' profiles.
+	// +optional
+	AccessProfiles map[string]AccessProfile `json:"access_profiles,omitempty"`
 	// +optional
 	Connections map[string]Connection `json:"connections,omitempty"`
 	// +optional
@@ -86,6 +91,9 @@ type TeamTemplate struct {
 
 // Team is a concrete grouping of seats. Membership is declared on seats only.
 type Team struct {
+	// AccessProfiles are granted to every member.
+	// +optional
+	AccessProfiles []string `json:"access_profiles,omitempty"`
 	// +optional
 	Template string `json:"template,omitempty"`
 	// +optional
@@ -191,6 +199,77 @@ type SandboxProfile struct {
 	RequiredEnforcement []string `json:"required_enforcement,omitempty"`
 }
 
+// AccessProfile configures sandbox access plugins. Each field is one plugin;
+// unset plugins grant nothing. The default is deny-all except the platform.
+type AccessProfile struct {
+	// Tools requires binaries in the seat image.
+	// +optional
+	Tools *ToolsAccess `json:"tools,omitempty"`
+	// Egress allows HTTPS and HTTP to hosts through the egress gateway.
+	// +optional
+	Egress *EgressAccess `json:"egress,omitempty"`
+	// Network allows direct connections to IP ranges (NetworkPolicy).
+	// +optional
+	Network *NetworkAccess `json:"network,omitempty"`
+	// GitHub grants repository access through a github connection.
+	// +optional
+	GitHub *GitHubAccess `json:"github,omitempty"`
+	// Browser gives the seat a headless browser as a tool.
+	// +optional
+	Browser *BrowserAccess `json:"browser,omitempty"`
+}
+
+type ToolsAccess struct {
+	// Binaries that must be on the seat image's PATH, e.g. git, gh, curl.
+	Binaries []string `json:"binaries"`
+}
+
+type EgressAccess struct {
+	// Hosts the seat may reach: example.com, *.example.com (subdomains), or
+	// host:port. Without a port, 443 and 80 are allowed.
+	Hosts []string `json:"hosts"`
+}
+
+type NetworkAccess struct {
+	Rules []NetworkRule `json:"rules"`
+}
+
+// NetworkRule allows direct egress to an IP range.
+type NetworkRule struct {
+	CIDR string `json:"cidr"`
+	// Ports; empty allows every port.
+	// +optional
+	Ports []int64 `json:"ports,omitempty"`
+	// Protocol is tcp (default), udp or sctp.
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+}
+
+type GitHubAccess struct {
+	// Connection is a github connection.
+	Connection string `json:"connection"`
+	// Repos are owner/name repositories the seat may use.
+	Repos []string `json:"repos"`
+	// Permissions maps contents, pull_requests, issues or metadata to read or write.
+	Permissions map[string]string `json:"permissions"`
+	// Delivery is platform (default: operations through the platform; the
+	// credential never enters the sandbox) or sandbox (git and gh in the
+	// sandbox receive a credential; see docs/sandbox.html).
+	// +optional
+	Delivery string `json:"delivery,omitempty"`
+}
+
+type BrowserAccess struct {
+	// Session loads a signed-in browser session from a browser_session
+	// connection. Without it browsing is anonymous.
+	// +optional
+	Session *BrowserSession `json:"session,omitempty"`
+}
+
+type BrowserSession struct {
+	Connection string `json:"connection"`
+}
+
 type Connection struct {
 	// Adapter is slack, linear, anthropic, openai, model or fake-* in tests.
 	Adapter string `json:"adapter"`
@@ -262,6 +341,9 @@ type Seat struct {
 	DisplayName string `json:"display_name,omitempty"`
 	// +optional
 	InstructionRefs []string `json:"instruction_refs,omitempty"`
+	// AccessProfiles are granted to this seat, in addition to its teams'.
+	// +optional
+	AccessProfiles []string `json:"access_profiles,omitempty"`
 	// AdoptFrom explicitly adopts the retained data of a retired seat ID (§4.1).
 	// +optional
 	AdoptFrom string `json:"adopt_from,omitempty"`

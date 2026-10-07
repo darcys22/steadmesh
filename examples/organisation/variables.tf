@@ -60,6 +60,8 @@ variable "seat_harnesses" {
   description = "Per-seat harness and model, e.g. { engineer = { adapter = \"codex\", model = { connection = \"openai\", id = \"gpt-5.5\" } } }. Other seats use harness and model."
   type = map(object({
     adapter = string
+    # Image override, e.g. a -browser variant for the browser access plugin.
+    image = optional(string)
     model = optional(object({
       connection = string
       id         = string
@@ -165,4 +167,44 @@ variable "enable_linear" {
   description = "Declare the Linear connection. Without it the organisation coordinates purely through Steadmesh memory and messages."
   type        = bool
   default     = true
+}
+
+variable "access_profiles" {
+  description = "Sandbox access profiles (docs/sandbox.html), keyed by name. Grant them with seat_access."
+  type = map(object({
+    tools  = optional(object({ binaries = list(string) }))
+    egress = optional(object({ hosts = list(string) }))
+    network = optional(object({ rules = list(object({
+      cidr     = string
+      ports    = optional(list(number))
+      protocol = optional(string)
+    })) }))
+    github = optional(object({
+      connection  = string
+      repos       = list(string)
+      permissions = map(string)
+      delivery    = optional(string)
+    }))
+    browser = optional(object({
+      session = optional(object({ connection = string }))
+    }))
+  }))
+  default = {}
+}
+
+variable "seat_access" {
+  description = "Access profiles per seat key, e.g. { engineer = [\"github_engineer\"] }."
+  type        = map(list(string))
+  default     = {}
+}
+
+variable "extra_connections" {
+  description = "Further connections, e.g. github (secret keys token, or app_id, installation_id and private_key) or browser_session (storage_state)."
+  type = map(object({
+    adapter      = string
+    secret_ref   = string
+    endpoint_ref = optional(string)
+    account_id   = optional(string)
+  }))
+  default = {}
 }

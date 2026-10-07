@@ -22,6 +22,7 @@ import (
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/harnesses/conformance"
 	"github.com/darcys22/steadmesh/harnesses/fake"
+	"github.com/darcys22/steadmesh/pkg/access"
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/modelforward"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
@@ -641,4 +642,65 @@ func TestModelHarnessProbeAndForwarder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func writeAccessManifest(t *testing.T, dir string, a *access.SeatAccess) {
+	t.Helper()
+	b, _ := json.Marshal(compile.SeatManifest{Key: "alice", DisplayName: "Alice", Harness: spec.HarnessProfile{Adapter: "fake"}, Access: a})
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMissingBinaryBlocksStart(t *testing.T) {
+	p := newFakePlatform()
+	tr := newTestRunner(t, p, func(c *Config) {
+		writeAccessManifest(t, c.ManifestDir, &access.SeatAccess{Profiles: []string{"tools"}, Binaries: []string{"steadmesh-no-such-binary"}})
+	})
+	err := tr.wait(t, 10*time.Second)
+	if err == nil || !strings.Contains(err.Error(), "need steadmesh-no-such-binary") {
+		t.Fatalf("runner error %v", err)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	last := p.states[len(p.states)-1]
+	if last.State != "Stopped" || !strings.Contains(last.Detail, "access profiles [tools] need steadmesh-no-such-binary") {
+		t.Fatalf("reported state %+v", last)
+	}
+}
+
+func TestAccessEnvironment(t *testing.T) {
+	p := newFakePlatform()
+	var env harnesses.Environment
+	factory := func(string) (harnesses.Adapter, error) {
+		return &envCapture{Adapter: fake.New(), env: &env}, nil
+	}
+	newTestRunnerWith(t, p, func(c *Config) {
+		c.EgressURL = "http://egress.test:3128"
+		writeAccessManifest(t, c.ManifestDir, &access.SeatAccess{Profiles: []string{"gh"},
+			Egress: []access.EgressRule{{Host: "github.com", Ports: []int{443}}},
+			GitHub: []access.GitHubGrant{{Connection: "github", Delivery: access.DeliverySandbox, Host: "github.com"}}})
+	}, factory)
+	p.waitFor(t, "state:Warm", 10*time.Second)
+	got := strings.Join(env.SandboxEnv, "\n")
+	for _, want := range []string{"HTTPS_PROXY=http://127.0.0.1:", "NO_PROXY=127.0.0.1,localhost,::1,127.0.0.1",
+		"GIT_CONFIG_KEY_0=credential.helper", "GIT_CONFIG_VALUE_0=\n", "credential git", "GIT_CONFIG_VALUE_2=alice@seats.steadmesh.invalid", "GIT_CONFIG_VALUE_3=Alice", "GIT_CONFIG_COUNT=4"} {
+		if !strings.Contains(got+"\n", want) {
+			t.Errorf("sandbox env lacks %q:\n%s", want, got)
+		}
+	}
+}
+
+// envCapture records the environment it is prepared with.
+type envCapture struct {
+	*fake.Adapter
+	env *harnesses.Environment
+}
+
+func (e *envCapture) Prepare(ctx context.Context, env harnesses.Environment) error {
+	*e.env = env
+	return e.Adapter.Prepare(ctx, env)
 }

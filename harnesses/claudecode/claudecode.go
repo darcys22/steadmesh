@@ -263,9 +263,13 @@ func mcpConfig(env harnesses.Environment) map[string]any {
 			e[k] = v
 		}
 	}
-	return map[string]any{"mcpServers": map[string]any{
+	servers := map[string]any{
 		MCPServerName: map[string]any{"type": "stdio", "command": env.ToolCommand, "args": []string{"mcp"}, "env": e},
-	}}
+	}
+	for _, s := range env.MCPServers {
+		servers[s.Name] = map[string]any{"type": "stdio", "command": s.Command, "args": s.Args, "env": s.Env}
+	}
+	return map[string]any{"mcpServers": servers}
 }
 
 func settings(cfg config) map[string]any {
@@ -319,7 +323,7 @@ func (a *Adapter) baseEnv(env harnesses.Environment) []string {
 			out = append(out, kv)
 		}
 	}
-	return out
+	return append(out, env.SandboxEnv...)
 }
 
 func (a *Adapter) sessionPath() string { return filepath.Join(a.stateDir, "session.json") }

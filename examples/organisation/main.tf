@@ -70,6 +70,7 @@ locals {
       sandbox_profile   = "standard"
       personal_memory   = k
       workspace         = { persistent = true }
+      access_profiles   = lookup(var.seat_access, k, null)
     }
   }
   all_seat_keys = sort(concat(keys(local.seats), keys(local.team_seats)))
@@ -78,7 +79,7 @@ locals {
   default_model = var.harness == "fake" ? null : var.model
   harness_profiles = merge(
     { primary = { adapter = var.harness, image_digest = var.harness_images[var.harness], model = local.default_model } },
-    { for k, h in var.seat_harnesses : "seat_${k}" => { adapter = h.adapter, image_digest = var.harness_images[h.adapter], model = h.model } },
+    { for k, h in var.seat_harnesses : "seat_${k}" => { adapter = h.adapter, image_digest = coalesce(h.image, var.harness_images[h.adapter]), model = h.model } },
   )
   # Only the model connections some profile uses are declared.
   used_model_connections = toset(compact(concat(
@@ -128,6 +129,8 @@ resource "steadmesh_organization" "this" {
       standard = {}
     }
 
+    access_profiles = length(var.access_profiles) > 0 ? var.access_profiles : null
+
     connections = merge({
       slack = {
         adapter      = "slack"
@@ -142,9 +145,10 @@ resource "steadmesh_organization" "this" {
           secret_ref   = var.secret_refs.linear
           config       = { team_id = var.linear_team_id }
         }
-    } : k => v if var.enable_linear }, local.model_connections)
+    } : k => v if var.enable_linear }, local.model_connections, var.extra_connections)
 
-    seats = merge(local.seats, local.team_seats)
+    # Representatives' access comes from seat_access too.
+    seats = merge({ for k, s in local.seats : k => merge(s, { access_profiles = lookup(var.seat_access, k, null) }) }, local.team_seats)
 
     grants = merge(
       { for k, v in {

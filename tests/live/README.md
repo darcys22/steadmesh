@@ -54,3 +54,16 @@ following, then leaves the organisation running for inspection
 Model output is non-deterministic, so the behavioural checks are
 deliberately loose (§9.4). The test checks that the expected effects happened,
 not the exact wording.
+
+## GitHub
+
+`make live-github` runs the github connector and the sandbox credential flow
+against a real repository: the delivered credential lets git push a branch,
+`pull_request.create` (platform delivery) opens a pull request that is found
+again by its marker, and `gh` (when installed) sees it. The branch and pull
+request are closed and deleted afterwards. Use a dedicated test repository.
+
+| Variable | Meaning |
+| --- | --- |
+| `GITHUB_TEST_REPO` | `owner/name` of the test repository |
+| `GITHUB_TOKEN` | Fine-grained personal access token with contents and pull requests read/write on that repository only |

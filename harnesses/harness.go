@@ -127,6 +127,13 @@ type Environment struct {
 	// Model is the seat's model selection; nil when the profile has none.
 	Model *ModelEndpoint
 
+	// SandboxEnv is added to the environment of harness processes by access
+	// plugins: proxy settings for the egress gateway (HTTPS_PROXY, NO_PROXY).
+	SandboxEnv []string
+	// MCPServers are extra stdio MCP servers access plugins provide (the
+	// browser). Harnesses expose them next to the platform tools.
+	MCPServers []MCPServer
+
 	// HarnessConfig is the harness profile's free-form config.
 	HarnessConfig map[string]string
 	// ExtraEnv is passed to harness subprocesses (e.g. STEADMESH_* for tools).
@@ -152,6 +159,14 @@ type ModelEndpoint struct {
 	// APIKey is a placeholder for harnesses that insist on a key. The
 	// forwarder replaces whatever credential the harness sends.
 	APIKey string
+}
+
+// MCPServer is an extra stdio MCP server for a harness.
+type MCPServer struct {
+	Name    string
+	Command string
+	Args    []string
+	Env     map[string]string
 }
 
 // ProbePrompt is the readiness probe turn the seat runner gives a

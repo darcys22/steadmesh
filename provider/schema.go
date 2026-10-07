@@ -69,6 +69,7 @@ func specAttributes() map[string]schema.Attribute {
 			"instruction_refs": strList("Additional ordered team instruction references."),
 			"shared_memory":    opsMap("Memory store key to operations granted to members."),
 			"parameters":       strMap("Parameters overriding template parameters."),
+			"access_profiles":  strList("Access profiles granted to every member."),
 		}),
 		"memory_stores": keyed("Memory stores.", map[string]schema.Attribute{
 			"retention":     optStr("retain (default) or delete."),
@@ -116,6 +117,54 @@ func specAttributes() map[string]schema.Attribute {
 			"runtime_class":         optStr("Kubernetes RuntimeClass."),
 			"required_enforcement":  strList("Enforcement features that must be active."),
 		}),
+		"access_profiles": keyed("Sandbox access profiles: practical access from a seat's sandbox, one plugin per field. Seats and teams name them; a seat gets the union. Without any, a seat reaches only the platform. See docs/sandbox.html.", map[string]schema.Attribute{
+			"tools": schema.SingleNestedAttribute{
+				Optional:    true,
+				Description: "Binaries the seat image must provide; the seat does not start without them.",
+				Attributes:  map[string]schema.Attribute{"binaries": reqStrList("Binary names, e.g. git, gh, curl.")},
+			},
+			"egress": schema.SingleNestedAttribute{
+				Optional:    true,
+				Description: "Hosts the seat may reach through the egress gateway (enable_egress). Changes apply live; removed hosts close open connections within seconds.",
+				Attributes:  map[string]schema.Attribute{"hosts": reqStrList("example.com, *.example.com (subdomains) or host:port. Without a port, 443 and 80.")},
+			},
+			"network": schema.SingleNestedAttribute{
+				Optional:    true,
+				Description: "Direct connections to IP ranges, enforced by NetworkPolicy.",
+				Attributes: map[string]schema.Attribute{
+					"rules": schema.ListNestedAttribute{
+						Required:    true,
+						Description: "Allowed ranges.",
+						NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+							"cidr":     reqStr("IP range, e.g. 10.0.5.0/24."),
+							"ports":    schema.ListAttribute{Optional: true, ElementType: types.Int64Type, Description: "Ports; empty allows every port."},
+							"protocol": optStr("tcp (default), udp or sctp."),
+						}},
+					},
+				},
+			},
+			"github": schema.SingleNestedAttribute{
+				Optional:    true,
+				Description: "Repository access through a github connection.",
+				Attributes: map[string]schema.Attribute{
+					"connection":  reqStr("A github connection."),
+					"repos":       reqStrList("owner/name repositories."),
+					"permissions": schema.MapAttribute{Required: true, ElementType: types.StringType, Description: "contents, pull_requests, issues or metadata => read or write."},
+					"delivery":    optStr("platform (default): operations through the platform; the credential never enters the sandbox. sandbox: git and gh in the sandbox receive a credential (a scoped, hour-long token with a GitHub App)."),
+				},
+			},
+			"browser": schema.SingleNestedAttribute{
+				Optional:    true,
+				Description: "A headless browser tool (needs a -browser seat image); its traffic goes through the egress gateway.",
+				Attributes: map[string]schema.Attribute{
+					"session": schema.SingleNestedAttribute{
+						Optional:    true,
+						Description: "A signed-in session to load.",
+						Attributes:  map[string]schema.Attribute{"connection": reqStr("A browser_session connection.")},
+					},
+				},
+			},
+		}),
 		"connections": keyed("Connections to external services. Secrets are references only.", map[string]schema.Attribute{
 			"adapter":      reqStr("Connector adapter: slack, linear, anthropic, openai or model (any compatible model endpoint)."),
 			"account_id":   optStr("Authorised account or workspace identity."),
@@ -159,6 +208,7 @@ func specAttributes() map[string]schema.Attribute {
 			},
 			"display_name":     optStr("Display name."),
 			"instruction_refs": strList("Additional seat-scoped instruction references."),
+			"access_profiles":  strList("Access profiles granted to this seat, in addition to its teams'."),
 			"adopt_from":       optStr("Explicitly adopt the retained data of a retired seat ID."),
 		}),
 		"grants": keyed("Access grants.", map[string]schema.Attribute{

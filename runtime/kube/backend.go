@@ -120,6 +120,11 @@ func (b *Backend) Validate(ctx context.Context, s *seatruntime.Seat) error {
 	if strings.TrimSpace(m.Harness.ImageDigest) == "" {
 		return seatruntime.Errorf(seatruntime.Misconfigured, "harness_image", "harness profile %q has no image", m.HarnessProfile)
 	}
+	if m.Access.UsesGateway() && b.o.EgressURL == "" {
+		return seatruntime.Errorf(seatruntime.Misconfigured, "egress_gateway",
+			"access profiles %v need the egress gateway, which is not enabled (enable_egress in the platform stage); the seat stays blocked rather than run without the access it was granted",
+			m.Access.Profiles)
+	}
 	if _, err := resources(s); err != nil {
 		return err
 	}

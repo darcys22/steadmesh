@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -22,6 +23,7 @@ import (
 	"github.com/darcys22/steadmesh/controller/lifecycle"
 	"github.com/darcys22/steadmesh/controller/platform"
 	"github.com/darcys22/steadmesh/controller/readiness"
+	"github.com/darcys22/steadmesh/pkg/access"
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/names"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
@@ -178,6 +180,7 @@ func (r *SeatReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	r.fillStatus(&seat, st, rt, action, blocked, enf)
+	setSeatCond(&seat, accessCondition(sm.Access, rev, rt, blocked, seat.Generation))
 	switch {
 	case probeErr != nil:
 		seat.Status.LastError = "probe: " + probeErr.Error()
@@ -303,6 +306,24 @@ func probeDetail(resp *runtimeapi.ProbeResponse) string {
 	return d
 }
 
+// accessCondition reports whether the seat's access is in effect: the runner
+// runs the current revision (so its image, tools, NetworkPolicy and proxy
+// are those the access needs), or why not. Access that applies live
+// (egress hosts, repository grants) is enforced by the platform at once.
+func accessCondition(a *access.SeatAccess, rev string, rt *runtimeapi.SeatRuntime, blocked error, gen int64) metav1.Condition {
+	switch {
+	case a.Empty():
+		return readiness.Condition(readiness.SeatAccessApplied, true, "NoAccess", "no access beyond the platform", gen)
+	case blocked != nil:
+		return readiness.Condition(readiness.SeatAccessApplied, false, "Blocked", blocked.Error(), gen)
+	case rt != nil && rt.State == "Stopped" && strings.Contains(rt.StateDetail, "access profiles"):
+		return readiness.Condition(readiness.SeatAccessApplied, false, "AccessUnavailable", rt.StateDetail, gen)
+	case rt != nil && rt.AdoptedRevision == rev && (rt.State == "Warm" || rt.State == "Executing"):
+		return readiness.Condition(readiness.SeatAccessApplied, true, "Applied", "access profiles "+strings.Join(a.Profiles, ", ")+" are in effect", gen)
+	}
+	return readiness.Unknown(readiness.SeatAccessApplied, "Pending", "waiting for the seat to run revision "+shortRev(rev)+" with its access", gen)
+}
+
 func (r *SeatReconciler) fillStatus(seat *v1alpha1.AgentSeat, st *seatruntime.Status, rt *runtimeapi.SeatRuntime, a lifecycle.Action, blocked error, enf seatruntime.ProbeResult) {
 	gen := seat.Generation
 	seat.Status.ExecutionState = a.State
@@ -419,4 +440,12 @@ func (r *SeatReconciler) retire(ctx context.Context, seat, orig *v1alpha1.AgentS
 	seat.Status.BackendRef = ""
 	setSeatCond(seat, readiness.Condition(readiness.SeatReady, false, lifecycle.ReasonRetired, "seat retired; workspace retained", seat.Generation))
 	return ctrl.Result{}, r.writeStatus(ctx, orig, seat)
+}
+
+func shortRev(rev string) string {
+	rev = strings.TrimPrefix(rev, "sha256:")
+	if len(rev) > 12 {
+		return rev[:12]
+	}
+	return rev
 }

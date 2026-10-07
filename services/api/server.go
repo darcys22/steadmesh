@@ -21,6 +21,7 @@ import (
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
+	"github.com/darcys22/steadmesh/services/credentials"
 	"github.com/darcys22/steadmesh/services/metrics"
 	"github.com/darcys22/steadmesh/services/store"
 	"github.com/darcys22/steadmesh/services/tools"
@@ -32,6 +33,8 @@ type Config struct {
 	Auth        auth.Authenticator
 	Tools       *tools.Registry
 	Connections *connections.Manager
+	// Credentials delivers sandbox credentials (access profiles).
+	Credentials *credentials.Registry
 	Metrics     *metrics.Metrics
 	Gatherer    prometheus.Gatherer
 	Log         *slog.Logger
@@ -72,6 +75,8 @@ func New(cfg Config) http.Handler {
 	seat("POST "+runtimeapi.PathInboxAck+"{id}/ack", s.inboxAck)
 	seat("POST "+runtimeapi.PathExecEvents+"{id}/events", s.events)
 	seat("PUT "+runtimeapi.PathCheckpoint, s.checkpoint)
+	seat("GET "+runtimeapi.PathAccess, s.access)
+	seat("POST "+runtimeapi.PathCredentials+"{connection}", s.credential)
 	// Claude Code sends HEAD <base>/api/hello as a connectivity check at startup
 	// (docs/decisions.html#harness). It reveals nothing, so it is answered
 	// locally rather than forwarded upstream.

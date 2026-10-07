@@ -50,6 +50,18 @@ platform:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "2", memory: 512Mi}
 
+# Egress gateway: the proxy through which seats with egress access profiles
+# reach the hosts they are allowed (docs/sandbox.html). Off by default; the
+# platform stage turns it on with enable_egress. Without it, seats reach only
+# the platform, and access profiles that need it leave the seat Blocked.
+egress:
+  enabled: false
+  replicas: 1
+  port: 3128
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: "2", memory: 512Mi}
+
 # Steadmesh Console: a read-only browser view of seats, runs, handoffs,
 # outputs and readiness. Off by default; the platform stage turns it on with
 # enable_console. When off, nothing is deployed and the platform does not

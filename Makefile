@@ -7,12 +7,12 @@ KIND_CLUSTER ?= steadmesh
 KCTX := kind-$(KIND_CLUSTER)
 KUBECTL := kubectl --context $(KCTX)
 TAG ?= dev
-IMAGES := controller platform console seat-fake seat-claudecode seat-codex seat-pi fakes
+IMAGES := controller platform console seat-fake seat-claudecode seat-codex seat-pi seat-pi-browser fakes
 ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -80,7 +80,7 @@ orgctl:
 	$(GO) build -o $(BIN)/orgctl ./cmd/orgctl
 
 images:
-	for i in $(IMAGES); do docker build -f build/$$i.Dockerfile -t steadmesh/$$i:$(TAG) . || exit 1; done
+	build/build.sh $(IMAGES)
 
 kind-up:
 	kind get clusters | grep -qx $(KIND_CLUSTER) || kind create cluster --config hack/kind-config.yaml
@@ -119,6 +119,11 @@ live: kind-up kind-load provider orgctl
 
 # Each real harness CLI on its real model endpoint, without a cluster:
 # ANTHROPIC_API_KEY, OPENAI_API_KEY and/or I14_API_KEY (see tests/live/README.md).
+# The github connector and sandbox credential flow on a real repository:
+# GITHUB_TOKEN and GITHUB_TEST_REPO (see tests/live/README.md).
+live-github:
+	$(GO) test -count=1 -tags live -run LiveGitHub -v -timeout 10m ./tests/live/...
+
 live-harnesses:
 	build/harness-bins.sh
 	$(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...

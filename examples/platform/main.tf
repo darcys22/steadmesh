@@ -34,6 +34,10 @@ locals {
     console = {
       enabled = var.enable_console
     }
+    # Egress gateway for access profiles; off unless enable_egress is set.
+    egress = {
+      enabled = var.enable_egress
+    }
   }, var.extra_values)
 }
 

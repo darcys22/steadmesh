@@ -20,6 +20,11 @@ RUN npm install -g --omit=dev "@openai/codex@${CODEX_VERSION}" && \
     case "$v" in "codex-cli ${CODEX_VERSION}") ;; *) echo "expected codex-cli ${CODEX_VERSION}" >&2; exit 1;; esac && \
     rm -rf /tmp/* /root/.npm && \
     mkdir -p /seat/workspace /seat/home /seat/runner && chown -R 1000:1000 /seat
+# Tools for access profiles (docs/sandbox.html): git, gh and curl from
+# Debian; gh runs through a wrapper that fetches the seat's GitHub token.
+RUN apt-get update && apt-get install -y --no-install-recommends git gh curl ca-certificates && \
+    rm -rf /var/lib/apt/lists/* && git --version && gh --version | head -1 && curl --version | head -1
+COPY build/gh-wrapper.sh /usr/local/bin/gh
 COPY --from=build /out/seat-runner /out/steadmesh-tools /usr/local/bin/
 ENV HOME=/seat/home \
     TMPDIR=/tmp \

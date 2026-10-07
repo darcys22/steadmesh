@@ -382,3 +382,17 @@ func (c *Client) PutCheckpoint(ctx context.Context, cp runtimeapi.Checkpoint) er
 func (c *Client) ModelProxyURL(connection string) string {
 	return c.BaseURL() + runtimeapi.PathModelProxy + url.PathEscape(connection)
 }
+
+// Access returns the seat's current sandbox access.
+func (c *Client) Access(ctx context.Context) (runtimeapi.AccessResponse, error) {
+	var out runtimeapi.AccessResponse
+	_, err := c.Do(ctx, http.MethodGet, runtimeapi.PathAccess, nil, nil, &out)
+	return out, err
+}
+
+// Credential fetches a sandbox-delivered credential of a connection.
+func (c *Client) Credential(ctx context.Context, connection string) (runtimeapi.CredentialResponse, error) {
+	var out runtimeapi.CredentialResponse
+	_, err := c.Do(ctx, http.MethodPost, runtimeapi.PathCredentials+url.PathEscape(connection), nil, struct{}{}, &out)
+	return out, err
+}

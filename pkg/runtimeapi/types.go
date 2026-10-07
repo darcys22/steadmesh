@@ -13,6 +13,8 @@ package runtimeapi
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/darcys22/steadmesh/pkg/access"
 )
 
 const (
@@ -28,13 +30,15 @@ const (
 	PathState        = "/v1/state"
 	PathSelf         = "/v1/self"
 	PathBootstrap    = "/v1/bootstrap"
-	PathTools        = "/v1/tools"       // GET: list descriptors
-	PathToolCall     = "/v1/tools/"      // POST /v1/tools/{name}
-	PathInboxNext    = "/v1/inbox/next"  // GET ?wait=<seconds>
-	PathInboxAck     = "/v1/inbox/"      // POST /v1/inbox/{delivery_id}/ack
-	PathExecEvents   = "/v1/executions/" // POST /v1/executions/{id}/events
-	PathCheckpoint   = "/v1/checkpoint"  // PUT
-	PathModelProxy   = "/v1/model/"      // /v1/model/{connection}/... (Anthropic-compatible)
+	PathTools        = "/v1/tools"        // GET: list descriptors
+	PathToolCall     = "/v1/tools/"       // POST /v1/tools/{name}
+	PathInboxNext    = "/v1/inbox/next"   // GET ?wait=<seconds>
+	PathInboxAck     = "/v1/inbox/"       // POST /v1/inbox/{delivery_id}/ack
+	PathExecEvents   = "/v1/executions/"  // POST /v1/executions/{id}/events
+	PathCheckpoint   = "/v1/checkpoint"   // PUT
+	PathModelProxy   = "/v1/model/"       // /v1/model/{connection}/... (Anthropic-compatible)
+	PathAccess       = "/v1/access"       // GET: the seat's current sandbox access (egress gateway, runner)
+	PathCredentials  = "/v1/credentials/" // POST /v1/credentials/{connection}: a sandbox-delivered credential
 
 	// Controller-facing paths.
 	PathInternalSync  = "/internal/v1/organizations:sync" // POST
@@ -419,4 +423,47 @@ type ModelRequest struct {
 	// CredentialRefreshed is true when the request was retried after the
 	// connection's credential was refreshed.
 	CredentialRefreshed bool `json:"credential_refreshed,omitempty"`
+}
+
+// AccessResponse is a seat's current sandbox access. The egress gateway and
+// the seat runner poll it, so live changes apply without a restart.
+type AccessResponse struct {
+	SeatID  string              `json:"seat_id"`
+	SeatKey string              `json:"seat_key"`
+	Egress  []access.EgressRule `json:"egress"`
+	// Browser is true while the seat may use its browser.
+	Browser bool `json:"browser"`
+	// BrowserSession is the browser_session connection to load, if any.
+	BrowserSession string `json:"browser_session,omitempty"`
+	// GitHub lists the seat's github connections with sandbox delivery.
+	GitHub []GitHubSandbox `json:"github,omitempty"`
+}
+
+// GitHubSandbox is a github connection whose credential the sandbox may fetch.
+type GitHubSandbox struct {
+	Connection string `json:"connection"`
+	// Host is the git host the credential is for.
+	Host string `json:"host"`
+}
+
+// Sandbox access event kinds, recorded on the seat's execution.
+const (
+	EventEgressDenied     = "egress_denied"
+	EventEgressRevoked    = "egress_revoked"
+	EventCredentialIssued = "credential_issued"
+	EventCredentialDenied = "credential_denied"
+)
+
+// CredentialResponse is a credential delivered to the sandbox.
+type CredentialResponse struct {
+	Connection string `json:"connection"`
+	// Username for git (x-access-token for GitHub).
+	Username string `json:"username"`
+	Token    string `json:"token"`
+	// ExpiresAt is zero for credentials that do not expire (a PAT).
+	ExpiresAt time.Time `json:"expires_at,omitzero"`
+	// Revocable reports whether Steadmesh can invalidate the credential.
+	Revocable bool `json:"revocable"`
+	// Data carries non-token credentials, e.g. a browser storage state.
+	Data json.RawMessage `json:"data,omitempty"`
 }

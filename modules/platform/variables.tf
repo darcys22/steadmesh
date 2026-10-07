@@ -21,6 +21,12 @@ variable "enable_console" {
   default     = false
 }
 
+variable "enable_egress" {
+  description = "Deploy the egress gateway, through which seats reach the hosts their access profiles allow (docs/sandbox.html). Off by default: seats then reach only the platform."
+  type        = bool
+  default     = false
+}
+
 variable "image_registry" {
   description = "Registry and path prefix of the Steadmesh images."
   type        = string

@@ -23,6 +23,7 @@ spec:
             - --slack-addr=:8090
             - --linear-addr=:8091
             - --model-addr=:8092
+            - --github-addr=:8093
             - --slack-team=T0FAKE
             - --slack-users=U0SEAN=sean,U0ALEX=alex
             - --linear-teams=TEAM-FAKE=ENG
@@ -30,6 +31,7 @@ spec:
             - {name: slack, containerPort: 8090}
             - {name: linear, containerPort: 8091}
             - {name: model, containerPort: 8092}
+            - {name: github, containerPort: 8093}
           readinessProbe:
             httpGet: {path: /healthz, port: 8090}
 ---
@@ -44,3 +46,4 @@ spec:
     - {name: slack, port: 8090, targetPort: 8090}
     - {name: linear, port: 8091, targetPort: 8091}
     - {name: model, port: 8092, targetPort: 8092}
+    - {name: github, port: 8093, targetPort: 8093}

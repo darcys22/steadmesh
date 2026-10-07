@@ -39,6 +39,7 @@ func (s *server) sync(w http.ResponseWriter, r *http.Request) {
 	}
 	annotate(r.Context(), "organization_id", res.OrganizationID, "revision", m.Digest, "retired", res.Retired)
 	s.Connections.SyncManifest(r.Context(), res.OrganizationID, &m)
+	s.reconcileCredentials(r, res.OrganizationID, &m)
 	writeJSON(w, http.StatusOK, res)
 }
 

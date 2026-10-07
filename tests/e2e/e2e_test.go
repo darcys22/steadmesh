@@ -56,6 +56,8 @@ func TestE2E(t *testing.T) {
 		"TF_VAR_enable_linear=false",
 		// The console is off by default; the e2e run turns it on to check it.
 		"TF_VAR_enable_console=true",
+		// The egress gateway is off by default; sandboxAccess needs it.
+		"TF_VAR_enable_egress=true",
 		// Rotation is tested against both secret stores: Slack credentials stay
 		// in a Kubernetes Secret, the Linear key is served from Vault.
 		"TF_VAR_enable_vault=true",
@@ -282,7 +284,8 @@ func TestE2E(t *testing.T) {
 		}
 	})
 
-	mixedHarnesses(t, env)
+	mixed := mixedHarnesses(t, env)
+	sandboxAccess(t, mixed)
 }
 
 // ---- fake service clients ------------------------------------------------

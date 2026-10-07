@@ -34,7 +34,10 @@ const (
 	SeatStorageReady = "StorageReady"
 	SeatBackendValid = "BackendValid"
 	SeatHarnessReady = "HarnessReady"
-	SeatReady        = "Ready"
+	// SeatAccessApplied is true when the seat runs the revision its access
+	// profiles need (image tools, NetworkPolicy, proxy, browser).
+	SeatAccessApplied = "AccessApplied"
+	SeatReady         = "Ready"
 )
 
 // Probe states.
@@ -198,6 +201,9 @@ func SeatConditions(seats []SeatView, enforcement map[string]seatruntime.ProbeRe
 		}
 		if c := seatCond(s, SeatHarnessReady); c != nil && c.Status == metav1.ConditionFalse {
 			harness[s.Key] = condDetail(c, "")
+		}
+		if c := seatCond(s, SeatAccessApplied); c != nil && c.Status == metav1.ConditionFalse {
+			harness[s.Key] = "access: " + condDetail(c, "")
 		}
 		if c := seatCond(s, SeatBackendValid); c == nil || c.Status != metav1.ConditionTrue {
 			sandbox[s.Key] = condDetail(c, "sandbox not validated")

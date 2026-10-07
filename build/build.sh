@@ -2,6 +2,7 @@
 # Build steadmesh images with a filtered context (no bin/, examples/, modules/).
 # Usage: build/build.sh <image>... [-- extra docker build args]
 #   images: controller platform console fakes seat-fake seat-claudecode seat-codex seat-pi
+#           <seat image>-browser (after its base), e.g. seat-pi-browser
 #   TAG (default dev) and REGISTRY (default steadmesh) set the image name.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -19,6 +20,12 @@ done < "$root/build/dockerignore"
 tarflags=()
 if tar --version 2>/dev/null | grep -q bsdtar; then tarflags=(--no-xattrs --no-mac-metadata --no-acls); fi
 for img in "${images[@]}"; do
+  if [[ "$img" == *-browser ]]; then
+    # Browser variants layer on the built base image; no context is needed.
+    echo "==> $registry/$img:$tag"
+    docker build --build-arg "BASE=$registry/${img%-browser}:$tag" -t "$registry/$img:$tag" "$@" - < "$root/build/seat-browser.Dockerfile"
+    continue
+  fi
   df="build/$img.Dockerfile"
   [[ -f "$root/$df" ]] || { echo "no $df" >&2; exit 2; }
   echo "==> $registry/$img:$tag"

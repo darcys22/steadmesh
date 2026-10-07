@@ -30,6 +30,7 @@
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -111,6 +112,7 @@
 <tr><td><code>workspace</code></td><td>default <code>{ persistent = true }</code></td><td><code>persistent</code>, plus <code>shared</code>: shared workspace keys. Each shared workspace also needs an explicit <code>workspace:</code> grant.</td></tr>
 <tr><td><code>display_name</code></td><td>default: the key</td><td></td></tr>
 <tr><td><code>instruction_refs</code></td><td></td><td>Seat-scoped instructions, applied last.</td></tr>
+<tr><td><code>access_profiles</code></td><td></td><td>Access profiles granted to the seat, in addition to its teams' (<a href="sandbox.html">Sandbox access</a>).</td></tr>
 <tr><td><code>adopt_from</code></td><td></td><td>The ID of a retired seat whose retained data this seat explicitly adopts.</td></tr>
 </table>
 
@@ -156,6 +158,9 @@
 <tr><td><code>required_features</code></td><td></td><td>Backend features that must be present: warm_idle, application_stop_restore, network_policy, resource_limits, persistent_workspace, runtime_class, non_root, read_only_root, seccomp.</td></tr>
 </table>
 
+<h3><code>access_profiles</code></h3>
+<p>Practical access from a seat's sandbox, one plugin per field: <code>tools</code> (<code>binaries</code>), <code>egress</code> (<code>hosts</code>), <code>network</code> (<code>rules</code> of <code>cidr</code>, <code>ports</code>, <code>protocol</code>), <code>github</code> (<code>connection</code>, <code>repos</code>, <code>permissions</code>, <code>delivery</code>) and <code>browser</code> (<code>session.connection</code>). Seats and teams name profiles in <code>access_profiles</code>; a seat gets the union of its own and its teams' profiles. See <a href="sandbox.html">Sandbox access</a>.</p>
+
 <h3><code>sandbox_profiles</code></h3>
 <table>
 <tr><th>Field</th><th>Default</th><th>Description</th></tr>
@@ -168,8 +173,8 @@
 <h3><code>connections</code></h3>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
-<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker), or a model adapter: <code>anthropic</code>, <code>openai</code>, or <code>model</code> for any compatible endpoint</td></tr>
-<tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; model connections <code>api_key</code>.</td></tr>
+<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker), <code>github</code> (code host), <code>browser_session</code> (a signed-in browser session), or a model adapter: <code>anthropic</code>, <code>openai</code>, or <code>model</code> for any compatible endpoint</td></tr>
+<tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; model connections <code>api_key</code>; GitHub <code>app_id</code>, <code>installation_id</code>, <code>private_key</code> (an App) or <code>token</code> (a PAT); browser_session <code>storage_state</code>.</td></tr>
 <tr><td><code>account_id</code></td><td>The authorised account: the Slack team ID (checked against <code>auth.test</code>), or the Linear organisation ID or URL key.</td></tr>
 <tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints. For model connections it is the API base, usually ending in <code>/v1</code>: <code>https://api.openai.com/v1</code>, <code>https://api.anthropic.com/v1</code>. Required for the <code>model</code> adapter.</td></tr>
 <tr><td><code>model</code></td><td>Model connections only. <code>apis</code>: the APIs the endpoint serves (defaults: anthropic <code>anthropic_messages</code>; openai <code>openai_responses</code>, <code>openai_chat</code>; required for <code>model</code>). <code>auth</code>: <code>bearer</code> (default; <code>x-api-key</code> for anthropic) or <code>header:&lt;Name&gt;</code>. <code>models</code>: a list of <code>{id, apis}</code>; when set, profiles may only select these. <code>verify</code>: how readiness checks the claims: <code>request</code> (default; a minimal request for each declared model and API and each one a profile uses, trusted for 6 hours once it succeeds), <code>models</code> (list models) or <code>none</code>.</td></tr>

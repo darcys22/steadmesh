@@ -5,6 +5,8 @@
 //	steadmesh-tools mcp                 stdio MCP server (tool names use _ for .)
 //	steadmesh-tools call <name> [json]  invoke one tool; json may be "-" for stdin
 //	steadmesh-tools list                print tool descriptors as JSON
+//	steadmesh-tools credential ...      git credential helper; GitHub token for gh
+//	steadmesh-tools browser-mcp         the browser plugin's MCP server (Playwright MCP)
 //
 // Configuration comes from the seat environment: STEADMESH_PLATFORM_URL,
 // STEADMESH_TOKEN_FILE (re-read per request), and the lease generation and
@@ -39,7 +41,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: steadmesh-tools mcp | call <name> [json|-] | list")
+	fmt.Fprintln(w, "usage: steadmesh-tools mcp | call <name> [json|-] | list | credential git <op> | credential token [connection]")
 }
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -80,6 +82,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			raw = []byte(args[2])
 		}
 		return callTool(ctx, c, args[1], raw, stdout, stderr)
+	case "browser-mcp":
+		return browserMCP(ctx, c, stdin, stdout, stderr)
+	case "credential":
+		return credential(ctx, c, args[1:], stdin, stdout, stderr)
 	case "list":
 		tools, err := c.ListTools(ctx)
 		if err != nil {

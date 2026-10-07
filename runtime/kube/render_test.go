@@ -1,6 +1,8 @@
 package kube
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -11,6 +13,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/darcys22/steadmesh/api/v1alpha1"
+	"github.com/darcys22/steadmesh/pkg/access"
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/names"
 	"github.com/darcys22/steadmesh/pkg/spec"
@@ -286,5 +289,48 @@ func TestRuntimeClassProvides(t *testing.T) {
 	got := runtimeClassProvides(&nodev1.RuntimeClass{Handler: "custom", ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{AnnotationProvides: "microvm"}}})
 	if len(got) != 1 || got[0] != "microvm" {
 		t.Errorf("annotation: %v", got)
+	}
+}
+
+func TestAccessShapesNetworkPolicyAndEnv(t *testing.T) {
+	o := testOptions()
+	o.EgressURL = "http://steadmesh-egress.steadmesh-system.svc:3128"
+	plain := RenderNetworkPolicy(testSeat(), o)
+	if len(plain.Spec.Egress) != 2 {
+		t.Fatalf("a seat without access has %d egress rules, want platform and DNS only", len(plain.Spec.Egress))
+	}
+	s := testSeat()
+	s.Manifest.Access = &access.SeatAccess{Profiles: []string{"p"},
+		Egress:  []access.EgressRule{{Host: "github.com", Ports: []int{443}}},
+		Network: []access.NetworkRule{{CIDR: "10.0.5.0/24", Ports: []int64{5432}, Protocol: "tcp"}, {CIDR: "10.0.6.0/24", Protocol: "udp"}}}
+	np := RenderNetworkPolicy(s, o)
+	if len(np.Spec.Egress) != 5 {
+		t.Fatalf("egress rules %+v", np.Spec.Egress)
+	}
+	gw := np.Spec.Egress[2]
+	if gw.To[0].PodSelector.MatchLabels[v1alpha1.LabelComponent] != ComponentEgress || gw.Ports[0].Port.IntValue() != 3128 {
+		t.Fatalf("gateway rule %+v", gw)
+	}
+	if r := np.Spec.Egress[3]; r.To[0].IPBlock.CIDR != "10.0.5.0/24" || r.Ports[0].Port.IntValue() != 5432 || *r.Ports[0].Protocol != corev1.ProtocolTCP {
+		t.Fatalf("cidr rule %+v", r)
+	}
+	if r := np.Spec.Egress[4]; r.Ports[0].Port != nil || *r.Ports[0].Protocol != corev1.ProtocolUDP {
+		t.Fatalf("all-ports rule %+v", r)
+	}
+	sts, err := RenderStatefulSet(s, o, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{}
+	for _, e := range sts.Spec.Template.Spec.Containers[0].Env {
+		env[e.Name] = e.Value
+	}
+	if env["STEADMESH_EGRESS_URL"] != o.EgressURL {
+		t.Fatalf("egress URL %q", env["STEADMESH_EGRESS_URL"])
+	}
+	// Without the gateway, a seat that needs it is refused.
+	b := &Backend{o: testOptions()}
+	if err := b.Validate(context.Background(), s); err == nil || !strings.Contains(err.Error(), "enable_egress") {
+		t.Fatalf("validate without gateway: %v", err)
 	}
 }

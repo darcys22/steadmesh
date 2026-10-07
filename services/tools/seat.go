@@ -37,6 +37,11 @@ func (r *Registry) selfTools() []*tool {
 
 func adapterKind(adapter string) string { return compile.DefaultCatalog().Connectors[adapter].Kind }
 
+// invocable reports whether connections.invoke serves a connector kind:
+// work trackers and code hosts (GitHub), whose operations go through the
+// gateway and its ledger.
+func invocable(kind string) bool { return kind == "tracker" || kind == "code_host" }
+
 // Self describes the seat from its committed manifest.
 func Self(seat *store.Seat, org *store.Organization) runtimeapi.Self {
 	sm := &seat.Manifest
@@ -193,9 +198,9 @@ func (r *Registry) wakeCancel(ctx context.Context, c *Call) (any, error) {
 	return map[string]any{"cancelled": a.ID}, nil
 }
 
-func hasTracker(sm *compile.SeatManifest, org *compile.Manifest) bool {
+func hasInvocable(sm *compile.SeatManifest, org *compile.Manifest) bool {
 	for k := range policy.Connections(sm) {
-		if adapterKind(org.Spec.Connections[k].Adapter) == "tracker" {
+		if invocable(adapterKind(org.Spec.Connections[k].Adapter)) {
 			return true
 		}
 	}
@@ -208,12 +213,12 @@ func (r *Registry) connectionTools() []*tool {
 			schema:  `{"type":"object","properties":{},"additionalProperties":false}`,
 			allowed: func(sm *compile.SeatManifest, _ *compile.Manifest) bool { return len(policy.Connections(sm)) > 0 },
 			handle:  r.connectionsList},
-		{name: "connections.invoke", description: "Invoke a granted operation on a work-tracker connection. Each call is recorded in the operation ledger; reusing an idempotency_key returns the recorded operation instead of repeating it. An unknown status means the outcome could not be confirmed: check the tracker before retrying.",
+		{name: "connections.invoke", description: "Invoke a granted operation on a work-tracker or code-host (GitHub) connection. Each call is recorded in the operation ledger; reusing an idempotency_key returns the recorded operation instead of repeating it. An unknown status means the outcome could not be confirmed: check the tracker before retrying.",
 			schema:   `{"type":"object","properties":{"connection":{"type":"string"},"operation":{"type":"string"},"params":{"type":"object"},"idempotency_key":{"type":"string","maxLength":200}},"required":["connection","operation"],"additionalProperties":false}`,
-			mutating: true, allowed: hasTracker, handle: r.invoke},
+			mutating: true, allowed: hasInvocable, handle: r.invoke},
 		{name: "operations.get", description: "Get a recorded connector operation of this seat by id.",
 			schema:  `{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`,
-			allowed: hasTracker, handle: r.operation},
+			allowed: hasInvocable, handle: r.operation},
 	}
 }
 
@@ -231,7 +236,7 @@ func (r *Registry) connectionsList(_ context.Context, c *Call) (any, error) {
 	for k, cp := range conns {
 		adapter := c.Org.Manifest.Spec.Connections[k].Adapter
 		kind := adapterKind(adapter)
-		out = append(out, info{Key: k, Adapter: adapter, Kind: kind, Operations: cp.Operations, Targets: cp.Targets, Invocable: kind == "tracker"})
+		out = append(out, info{Key: k, Adapter: adapter, Kind: kind, Operations: cp.Operations, Targets: cp.Targets, Invocable: invocable(kind)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return map[string]any{"connections": out}, nil

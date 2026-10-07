@@ -82,5 +82,8 @@ resource "helm_release" "platform" {
     console = {
       enabled = var.enable_console
     }
+    egress = {
+      enabled = var.enable_egress
+    }
   }, var.extra_values))]
 }

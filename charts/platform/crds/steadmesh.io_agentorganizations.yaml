@@ -51,6 +51,116 @@ spec:
           spec:
             description: AgentOrganizationSpec is the resolved organisation declaration.
             properties:
+              access_profiles:
+                additionalProperties:
+                  description: |-
+                    AccessProfile configures sandbox access plugins. Each field is one plugin;
+                    unset plugins grant nothing. The default is deny-all except the platform.
+                  properties:
+                    browser:
+                      description: Browser gives the seat a headless browser as a
+                        tool.
+                      properties:
+                        session:
+                          description: |-
+                            Session loads a signed-in browser session from a browser_session
+                            connection. Without it browsing is anonymous.
+                          properties:
+                            connection:
+                              type: string
+                          required:
+                          - connection
+                          type: object
+                      type: object
+                    egress:
+                      description: Egress allows HTTPS and HTTP to hosts through the
+                        egress gateway.
+                      properties:
+                        hosts:
+                          description: |-
+                            Hosts the seat may reach: example.com, *.example.com (subdomains), or
+                            host:port. Without a port, 443 and 80 are allowed.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - hosts
+                      type: object
+                    github:
+                      description: GitHub grants repository access through a github
+                        connection.
+                      properties:
+                        connection:
+                          description: Connection is a github connection.
+                          type: string
+                        delivery:
+                          description: |-
+                            Delivery is platform (default: operations through the platform; the
+                            credential never enters the sandbox) or sandbox (git and gh in the
+                            sandbox receive a credential; see docs/sandbox.html).
+                          type: string
+                        permissions:
+                          additionalProperties:
+                            type: string
+                          description: Permissions maps contents, pull_requests, issues
+                            or metadata to read or write.
+                          type: object
+                        repos:
+                          description: Repos are owner/name repositories the seat
+                            may use.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - connection
+                      - permissions
+                      - repos
+                      type: object
+                    network:
+                      description: Network allows direct connections to IP ranges
+                        (NetworkPolicy).
+                      properties:
+                        rules:
+                          items:
+                            description: NetworkRule allows direct egress to an IP
+                              range.
+                            properties:
+                              cidr:
+                                type: string
+                              ports:
+                                description: Ports; empty allows every port.
+                                items:
+                                  format: int64
+                                  type: integer
+                                type: array
+                              protocol:
+                                description: Protocol is tcp (default), udp or sctp.
+                                type: string
+                            required:
+                            - cidr
+                            type: object
+                          type: array
+                      required:
+                      - rules
+                      type: object
+                    tools:
+                      description: Tools requires binaries in the seat image.
+                      properties:
+                        binaries:
+                          description: Binaries that must be on the seat image's PATH,
+                            e.g. git, gh, curl.
+                          items:
+                            type: string
+                          type: array
+                      required:
+                      - binaries
+                      type: object
+                  type: object
+                description: |-
+                  AccessProfiles grant seats practical access from their sandbox: tools,
+                  network egress, credentials and a browser. Seats and teams name them;
+                  a seat gets the union of its own and its teams' profiles.
+                type: object
               channel_bindings:
                 additionalProperties:
                   properties:
@@ -328,6 +438,12 @@ spec:
               seats:
                 additionalProperties:
                   properties:
+                    access_profiles:
+                      description: AccessProfiles are granted to this seat, in addition
+                        to its teams'.
+                      items:
+                        type: string
+                      type: array
                     adopt_from:
                       description: AdoptFrom explicitly adopts the retained data of
                         a retired seat ID (§4.1).
@@ -421,6 +537,11 @@ spec:
                   description: Team is a concrete grouping of seats. Membership is
                     declared on seats only.
                   properties:
+                    access_profiles:
+                      description: AccessProfiles are granted to every member.
+                      items:
+                        type: string
+                      type: array
                     instruction_refs:
                       items:
                         type: string

@@ -16,3 +16,4 @@
 /fakes
 /terraform-provider-steadmesh
 /dist/
+/egress

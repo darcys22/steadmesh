@@ -227,6 +227,16 @@ func ConfigTOML(env harnesses.Environment) string {
 	kv("tool_timeout_sec", 600)
 	kv("required", true)
 	kv("default_tools_approval_mode", "approve")
+	for _, s := range env.MCPServers {
+		b.WriteString("\n[mcp_servers." + s.Name + "]\n")
+		kv("command", s.Command)
+		kv("args", s.Args)
+		kv("env", s.Env)
+		kv("startup_timeout_sec", 60)
+		kv("tool_timeout_sec", 600)
+		kv("required", true)
+		kv("default_tools_approval_mode", "approve")
+	}
 	return b.String()
 }
 
@@ -298,7 +308,7 @@ func baseEnv(env harnesses.Environment, home string) []string {
 			out = append(out, kv)
 		}
 	}
-	return out
+	return append(out, env.SandboxEnv...)
 }
 
 // ---- process ----------------------------------------------------------------

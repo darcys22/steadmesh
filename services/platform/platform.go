@@ -16,6 +16,7 @@ import (
 	"github.com/darcys22/steadmesh/services/api"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
+	"github.com/darcys22/steadmesh/services/credentials"
 	"github.com/darcys22/steadmesh/services/gateway"
 	"github.com/darcys22/steadmesh/services/ingress"
 	"github.com/darcys22/steadmesh/services/metrics"
@@ -76,7 +77,8 @@ func New(ctx context.Context, o Options) *Platform {
 	reg := tools.New(tools.Deps{Store: o.Store, Gateway: gw, Metrics: m, Log: o.Log})
 	return &Platform{
 		Handler: api.New(api.Config{Store: o.Store, Auth: o.Auth, Tools: reg, Connections: conns, Metrics: m,
-			Gatherer: o.Registry, Log: o.Log, Console: o.Console}),
+			Credentials: &credentials.Registry{Connections: conns, Log: o.Log},
+			Gatherer:    o.Registry, Log: o.Log, Console: o.Console}),
 		Connections: conns,
 		opts:        o,
 		metrics:     m,

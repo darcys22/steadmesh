@@ -6,6 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/darcys22/steadmesh/pkg/spec"
 	"github.com/darcys22/steadmesh/services/internal/orgfixture"
 	"github.com/darcys22/steadmesh/services/metrics"
 	"github.com/darcys22/steadmesh/services/store"
@@ -89,5 +90,23 @@ func TestDescriptorsAreFilteredAndValid(t *testing.T) {
 	}
 	if len(r.tools) != 30 {
 		t.Errorf("registry has %d tools, want the 30 of docs/tools.html", len(r.tools))
+	}
+}
+
+func TestCodeHostConnectionsAreInvocable(t *testing.T) {
+	r := New(Deps{Metrics: metrics.NewUnregistered()})
+	s := orgfixture.Spec()
+	s.Connections["github"] = spec.Connection{Adapter: "github", SecretRef: "k8s:github"}
+	s.AccessProfiles = map[string]spec.AccessProfile{"gh": {GitHub: &spec.GitHubAccess{Connection: "github", Repos: []string{"acme/sandbox"}, Permissions: map[string]string{"pull_requests": "write"}}}}
+	rv := s.Seats["reviewer"]
+	rv.AccessProfiles = []string{"gh"}
+	s.Seats["reviewer"] = rv
+	m := orgfixture.Compile(t, s)
+	got := map[string]bool{}
+	for _, d := range r.List(&store.Seat{Key: "reviewer", Manifest: m.Seats["reviewer"]}, &store.Organization{Manifest: *m}) {
+		got[d.Name] = true
+	}
+	if !got["connections.invoke"] || !got["operations.get"] {
+		t.Fatalf("a seat granted GitHub operations is not offered connections.invoke: %v", got)
 	}
 }

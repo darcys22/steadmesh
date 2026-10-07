@@ -25,7 +25,8 @@ const modelSvc = "http://steadmesh-fakes." + systemNS + ".svc:8092/v1"
 // model and endpoint through the platform proxy, does delegated work with
 // platform tools, and keeps working after the model key is rotated in its
 // Secret, with no Terraform run or restart.
-func mixedHarnesses(t *testing.T, env []string) {
+// It returns the environment of the mixed organisation for later steps.
+func mixedHarnesses(t *testing.T, env []string) []string {
 	// The fakes were restarted by A25: reconnect.
 	f := &fakes{slack: portForward(t, "svc/steadmesh-fakes", 8090), linear: portForward(t, "svc/steadmesh-fakes", 8091)}
 	model := portForward(t, "svc/steadmesh-fakes", 8092)
@@ -131,6 +132,7 @@ func mixedHarnesses(t *testing.T, env []string) {
 		}
 		t.Logf("after rotation: %d requests rejected with the old key, %d served with the new key", rejected, accepted)
 	})
+	return mixed
 }
 
 // modelRequests returns the model_request events on a seat's runs, read

@@ -20,6 +20,13 @@ variable "enable_console" {
   default     = false
 }
 
+variable "enable_egress" {
+  description = "Deploy the egress gateway, through which seats reach the hosts their access profiles allow (docs/sandbox.html). Off by default: seats then reach only the platform."
+  type        = bool
+  default     = false
+}
+
+
 variable "existing_secret_refs" {
   description = <<-EOT
     Credentials you provision yourself, by reference (k8s:<secret name> in the

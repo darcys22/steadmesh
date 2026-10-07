@@ -33,6 +33,12 @@ variable "enable_console" {
   default     = false
 }
 
+variable "enable_egress" {
+  description = "Deploy the egress gateway, through which seats reach the hosts their access profiles allow (docs/sandbox.html). Off by default: seats then reach only the platform."
+  type        = bool
+  default     = false
+}
+
 variable "extra_values" {
   description = "Additional chart values, merged over the defaults above."
   type        = any

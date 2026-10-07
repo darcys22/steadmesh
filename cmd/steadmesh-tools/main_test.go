@@ -51,6 +51,13 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(409)
 			_, _ = w.Write([]byte(`{"code":"fenced","message":"generation 1 < 2"}`))
 		}
+	case r.Method == "GET" && r.URL.Path == runtimeapi.PathAccess:
+		_ = json.NewEncoder(w).Encode(runtimeapi.AccessResponse{SeatKey: "engineer",
+			GitHub: []runtimeapi.GitHubSandbox{{Connection: "github", Host: "github.com"}, {Connection: "ghe", Host: "git.example.com:8443"}}})
+	case r.Method == "POST" && strings.HasPrefix(r.URL.Path, runtimeapi.PathCredentials):
+		conn := strings.TrimPrefix(r.URL.Path, runtimeapi.PathCredentials)
+		f.calls = append(f.calls, "credential "+conn)
+		_ = json.NewEncoder(w).Encode(runtimeapi.CredentialResponse{Connection: conn, Username: "x-access-token", Token: "tok-" + conn})
 	default:
 		w.WriteHeader(404)
 	}
@@ -160,5 +167,32 @@ func TestMCPServerProxies(t *testing.T) {
 	res, err = cs.CallTool(ctx, &mcp.CallToolParams{Name: "self", Arguments: map[string]any{}})
 	if err != nil || !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "fenced") {
 		t.Fatalf("fenced not mapped: %v %+v", err, res)
+	}
+}
+
+func TestCredentialHelper(t *testing.T) {
+	f := setup(t)
+	var out, errb bytes.Buffer
+	code := run([]string{"credential", "git", "get"}, strings.NewReader("protocol=https\nhost=git.example.com:8443\n\n"), &out, &errb)
+	if code != exitOK || out.String() != "username=x-access-token\npassword=tok-ghe\n" {
+		t.Fatalf("git get: %d %q %s", code, out.String(), errb.String())
+	}
+	out.Reset()
+	if code := run([]string{"credential", "git", "get"}, strings.NewReader("protocol=https\nhost=gitlab.com\n"), &out, &errb); code != exitToolError || out.Len() != 0 {
+		t.Fatalf("unknown host: %d %q", code, out.String())
+	}
+	if code := run([]string{"credential", "git", "store"}, strings.NewReader("password=x\n"), &out, &errb); code != exitOK {
+		t.Fatalf("store: %d", code)
+	}
+	out.Reset()
+	if code := run([]string{"credential", "token", "github"}, nil, &out, &errb); code != exitOK || out.String() != "tok-github\n" {
+		t.Fatalf("token: %d %q", code, out.String())
+	}
+	// Two connections: a token needs a name.
+	if code := run([]string{"credential", "token"}, nil, &out, &errb); code != exitToolError {
+		t.Fatalf("ambiguous token: %d", code)
+	}
+	if strings.Join(f.calls, ",") != "credential ghe,credential github" {
+		t.Fatalf("calls %v", f.calls)
 	}
 }

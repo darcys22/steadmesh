@@ -40,6 +40,11 @@ var activityLabels = map[string]string{
 	// model_request records the model and endpoint a request actually used.
 	"model_request": "model request",
 	"probe_result":  "readiness probe",
+	// Sandbox access (docs/sandbox.html).
+	"egress_denied":     "egress denied",
+	"egress_revoked":    "connection closed: access revoked",
+	"credential_issued": "credential delivered",
+	"credential_denied": "credential refused",
 }
 
 func derefTime(t *time.Time) time.Time {

@@ -250,9 +250,13 @@ func MCPJSON(env harnesses.Environment) []byte {
 			e[k] = v
 		}
 	}
-	b, _ := json.MarshalIndent(map[string]any{"mcpServers": map[string]any{
+	servers := map[string]any{
 		MCPServerName: map[string]any{"type": "stdio", "command": env.ToolCommand, "args": []string{"mcp"}, "env": e, "exposure": "direct", "timeout": 600},
-	}}, "", "  ")
+	}
+	for _, s := range env.MCPServers {
+		servers[s.Name] = map[string]any{"type": "stdio", "command": s.Command, "args": s.Args, "env": s.Env, "exposure": "direct", "timeout": 600}
+	}
+	b, _ := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
 	return b
 }
 
@@ -281,7 +285,7 @@ func baseEnv(env harnesses.Environment, dir string) []string {
 			out = append(out, kv)
 		}
 	}
-	return out
+	return append(out, env.SandboxEnv...)
 }
 
 // ---- process ------------------------------------------------------------------

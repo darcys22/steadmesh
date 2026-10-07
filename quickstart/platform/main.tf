@@ -37,6 +37,7 @@ module "steadmesh" {
   steadmesh_version      = "0.1.1"
   organisation_namespace = var.organisation_namespace
   enable_console         = var.enable_console
+  enable_egress          = var.enable_egress
 }
 
 # Credentials, as Kubernetes Secrets in the control-plane namespace. Only the

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sandbox access · Steadmesh</title>
+<meta name="description" content="Give seats practical access from their sandbox through plugins: tools, hostname egress, IP ranges, GitHub credentials and a browser, with live revocation and a stated credential boundary.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Sandbox access</h1>
+<p>By default a seat's sandbox reaches only the platform: no internet, no cluster services, no credentials. <strong>Access profiles</strong> grant practical access: binaries, hosts, IP ranges, GitHub repositories and a browser. Each part of a profile is a <strong>plugin</strong> with its own enforcement, and a seat gets the union of the profiles named on the seat and on its teams.</p>
+<pre><code>access_profiles = {
+  github_engineer = {
+    tools  = { binaries = ["git", "gh"] }
+    egress = { hosts = ["pypi.org", "files.pythonhosted.org"] }
+    github = { connection = "github", repos = ["acme/sandbox"],
+               permissions = { contents = "write", pull_requests = "write" }, delivery = "sandbox" }
+  }
+  internal_db = { network = { rules = [{ cidr = "10.0.5.0/24", ports = [5432] }] } }
+  web         = { browser = { session = { connection = "github_web" } } }
+}
+seats = {
+  engineer = { …, access_profiles = ["github_engineer", "internal_db"] }
+}
+teams = {
+  engineering = { …, access_profiles = ["web"] }   # every member
+}</code></pre>
+
+<h2>Plugins</h2>
+<table>
+<tr><th>Plugin</th><th>What it grants</th><th>How it is enforced</th><th>Changes apply</th></tr>
+<tr><td><code>tools</code></td><td>Binaries the seat needs, e.g. <code>git</code>, <code>gh</code>, <code>curl</code>.</td><td>The seat runner checks they are on the image's PATH before the harness starts. A missing binary stops the seat with a reason; nothing is installed at run time.</td><td>New Pod</td></tr>
+<tr><td><code>egress</code></td><td>Hosts: <code>example.com</code>, <code>*.example.com</code> (subdomains only), or <code>host:port</code>. Without a port, 443 and 80.</td><td>The <a href="#egress-gateway">egress gateway</a> matches the CONNECT host and port, and requires the TLS server name to equal the host. Plain HTTP is matched on its host.</td><td>Live: within seconds, open connections included</td></tr>
+<tr><td><code>network</code></td><td>Direct connections to IP ranges, optionally limited to ports and a protocol (tcp, udp, sctp).</td><td>NetworkPolicy <code>ipBlock</code> rules, which every NetworkPolicy implementation enforces. Host names cannot be expressed this way; use <code>egress</code>.</td><td>New Pod</td></tr>
+<tr><td><code>github</code></td><td>Repositories and permissions (<code>contents</code>, <code>pull_requests</code>, <code>issues</code>, <code>metadata</code>: read or write) through a <code>github</code> connection.</td><td>See <a href="#github">GitHub</a>.</td><td>Repositories and permissions live; switching delivery needs a new Pod</td></tr>
+<tr><td><code>browser</code></td><td>A headless Chromium as tools (<code>browser_navigate</code>, <code>browser_click</code>, …), optionally signed in.</td><td>Its traffic goes through the egress gateway, so the seat's egress hosts decide what it can open. The browser closes when the grant goes.</td><td>New Pod</td></tr>
+</table>
+<p>Readiness never claims access that is not in effect. A seat's <code>AccessApplied</code> condition is true only when its Pod runs the configuration revision that contains its tools, image, NetworkPolicy and proxy settings. Until then it says what it is waiting for, and if the seat cannot start, for example because a binary is missing, it says why.</p>
+
+<h2 id="egress-gateway">The egress gateway</h2>
+<p>Hostname egress needs the gateway. It is off by default; enable it in the platform stage with <code>enable_egress = true</code>. A seat whose profiles need it stays blocked, with that reason, while it is off.</p>
+<ul>
+<li><strong>Path.</strong> Harness processes get <code>HTTPS_PROXY</code> and <code>HTTP_PROXY</code> pointing at a proxy in the seat runner. The runner forwards each connection to the gateway with the seat's projected token, read afresh for every connection. <code>git</code>, <code>gh</code>, <code>curl</code>, Python and Node tools honour these variables, and the browser is started with the proxy.</li>
+<li><strong>Identity.</strong> The gateway asks the platform for the seat's current access with that token. It holds no credentials and no Kubernetes permissions, and never trusts Pod IP addresses.</li>
+<li><strong>Network.</strong> The seat's NetworkPolicy allows the gateway only for seats that use it. Everything else stays denied, so a process that ignores the proxy settings reaches nothing.</li>
+<li><strong>Revocation.</strong> Removing a host or a profile applies within seconds without restarting the seat. The gateway re-checks open tunnels every few seconds and closes those no longer allowed, so revocation covers connections already open. A retired seat's token stops authenticating, so all its tunnels close.</li>
+<li><strong>Denials.</strong> A refused request gets <code>403</code> naming the host and the seat ("no access profile grants it"). It is recorded as an <code>egress_denied</code> event on the seat's run, visible in the console. Closed tunnels are recorded as <code>egress_revoked</code>.</li>
+</ul>
+
+<h2 id="github">GitHub</h2>
+<p>Declare a connection with adapter <code>github</code>. Its secret holds either a GitHub App (<code>app_id</code>, <code>installation_id</code>, <code>private_key</code>; recommended) or a fine-grained personal access token (<code>token</code>). <code>endpoint_ref</code> points at GitHub Enterprise's API, for example <code>https://ghe.example.com/api/v3</code>.</p>
+<h3>Platform delivery (default)</h3>
+<p>The seat calls repository operations with <code>connections.invoke</code>: <code>repo.read</code>, <code>pull_request.read</code>, <code>pull_request.create</code>, <code>issue.read</code> and <code>issue.comment</code>, as the permissions allow and only on the granted repositories. They go through the operation ledger like any connector operation, and the credential never enters the sandbox.</p>
+<h3>Sandbox delivery</h3>
+<p>With <code>delivery = "sandbox"</code>, <code>git</code> and <code>gh</code> in the sandbox work with GitHub directly. GitHub's hosts are allowed through the egress gateway, or the connection's own endpoint for GitHub Enterprise. The seat runner sets git's credential helper to <code>steadmesh-tools credential git</code>, and <code>gh</code> runs through a wrapper that fetches a token for each invocation. Every fetch is recorded as a <code>credential_issued</code> event, with the repositories and permissions but never the token.</p>
+<ul>
+<li>With a GitHub App, each credential is an installation token limited to the granted repositories and permissions, valid for one hour.</li>
+<li>With a personal access token, the token itself is delivered. It is only as narrow as you made it.</li>
+</ul>
+<div class="callout warn"><p><strong>The credential boundary.</strong> A credential delivered to the sandbox can be read by the agent and by any process in the seat's Pod. Until it expires or is revoked, it can be used against any destination the seat's egress allows. Steadmesh keeps credentials out of Terraform plans and state, CRDs, manifests, Pod specs, images, instruction text and logs, and records every delivery. Prefer platform delivery when the seat does not need <code>git</code> or <code>gh</code> itself.</p></div>
+<h3>Revocation</h3>
+<ul>
+<li><strong>Through Steadmesh, immediately:</strong> removing the grant stops new credentials (<code>credential_denied</code> events), platform operations on those repositories are refused, and the egress gateway closes open connections to GitHub hosts that are no longer allowed.</li>
+<li><strong>Credentials already delivered:</strong> GitHub App installation tokens are revoked at GitHub when a sync removes the seat's grant. Steadmesh cannot invalidate a personal access token: rotate or revoke it at GitHub. Rotation is picked up without Terraform (see <a href="operations.html#credential-rotation">Rotating credentials</a>).</li>
+</ul>
+
+<h2 id="browser">Browser</h2>
+<p>The browser plugin needs a seat image with Chromium and Playwright MCP: the <code>-browser</code> variants, such as <code>steadmesh/seat-pi-browser</code>, built with <code>build/build.sh seat-pi-browser</code>. The seat's harness gets a <code>browser</code> MCP server, <code>steadmesh-tools browser-mcp</code>, which runs Playwright MCP headless and isolated through the egress gateway.</p>
+<p><strong>Signed-in sessions.</strong> A personal access token cannot create a browser session. To browse as an account, declare a connection with adapter <code>browser_session</code> whose secret key <code>storage_state</code> holds a Playwright storage state (cookies and local storage) for a dedicated test account, and name it in <code>browser.session</code>. Produce the state with a manual login, for example <code>npx playwright codegen --save-storage=state.json https://github.com/login</code>. Then store <code>state.json</code> in the Secret or Vault entry. It is delivered to the sandbox, with the boundary stated above.</p>
+<p><strong>Revocation.</strong> When the grant goes, the browser is killed within a few seconds and a tool call in progress fails. The gateway also closes its connections. Cookies already delivered stay valid at the website until you log the account out or replace the session. Rotating the secret is picked up without Terraform; the browser loads the new state when it next starts.</p>
+
+<h2>Seat images</h2>
+<table>
+<tr><th>Image</th><th>Includes</th></tr>
+<tr><td><code>seat-claudecode</code>, <code>seat-codex</code>, <code>seat-pi</code></td><td>The harness; <code>git</code> 2.39, <code>gh</code> 2.23 (with the credential wrapper) and <code>curl</code> 7.88 from Debian bookworm</td></tr>
+<tr><td><code>seat-pi-browser</code> (any <code>&lt;seat image&gt;-browser</code>)</td><td>The above, plus Chromium and Playwright MCP 0.0.83</td></tr>
+<tr><td><code>seat-fake</code></td><td>The deterministic test harness only; no tools</td></tr>
+</table>
+
+<h2>Adding a sandbox plugin</h2>
+<ol>
+<li>Add the plugin's configuration to <code>spec.AccessProfile</code> and to the provider schema; run <code>make generate</code> and <code>make provider-docs</code>.</li>
+<li>Implement <code>access.Plugin</code> in <code>pkg/access</code>. <code>Check</code> validates the configuration with exact paths; <code>Apply</code> adds the plugin's contribution to the seat's <code>SeatAccess</code>. Decide which parts need a new Pod: they belong in <code>PodPart</code>, so they change the configuration revision. Live parts must be enforced where the platform or gateway reads them at request time.</li>
+<li>Enforce it where it acts: the Pod or NetworkPolicy (<code>runtime/kube</code>), the seat runner (<code>cmd/seat-runner/access.go</code>), the platform (<code>/v1/access</code>, <code>/v1/credentials</code>) or the gateway. If it cannot be enforced on a cluster, fail validation with a clear reason rather than claim it.</li>
+<li>Record denials and deliveries as events, document the revocation behaviour and credential boundary, and add unit and e2e tests.</li>
+</ol>
+<div class="pager"><a href="harnesses.html"><small>Previous</small>Harnesses and models</a><a href="tools.html" style="text-align:right"><small>Next</small>Agent tools</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

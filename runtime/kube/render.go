@@ -7,6 +7,8 @@ package kube
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -69,6 +71,24 @@ type Options struct {
 	DNSNamespace string
 	// FieldOwner is the server-side apply field manager.
 	FieldOwner string
+	// EgressURL is the egress gateway, empty when it is not enabled. Seats
+	// whose access needs it reach its Pods (component egress) only.
+	EgressURL string
+}
+
+// ComponentEgress labels the egress gateway Pods.
+const ComponentEgress = "egress"
+
+// egressPort is the gateway's port from EgressURL.
+func (o Options) egressPort() int32 {
+	u, err := url.Parse(o.EgressURL)
+	if err != nil {
+		return 3128
+	}
+	if p, err := strconv.Atoi(u.Port()); err == nil {
+		return int32(p)
+	}
+	return 3128
 }
 
 func (o Options) withDefaults() Options {
@@ -181,9 +201,40 @@ func RenderManifestConfigMap(s *seatruntime.Seat, files map[string]string) *core
 }
 
 // RenderNetworkPolicy renders the default-deny seat policy: no ingress; egress
-// only to platform Pods in the control-plane namespace on TCP 8080 and DNS.
+// only to platform Pods in the control-plane namespace on TCP 8080 and DNS,
+// plus what the seat's access allows: the egress gateway Pods when the seat
+// uses it, and the network plugin's CIDR rules.
 func RenderNetworkPolicy(s *seatruntime.Seat, o Options) *networkingv1.NetworkPolicy {
 	o = o.withDefaults()
+	np := renderBasePolicy(s, o)
+	a := s.Manifest.Access
+	tcp := corev1.ProtocolTCP
+	if a.UsesGateway() && o.EgressURL != "" {
+		np.Spec.Egress = append(np.Spec.Egress, networkingv1.NetworkPolicyEgressRule{
+			To: []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/metadata.name": o.ControlPlaneNamespace}},
+				PodSelector:       &metav1.LabelSelector{MatchLabels: map[string]string{v1alpha1.LabelComponent: ComponentEgress}},
+			}},
+			Ports: []networkingv1.NetworkPolicyPort{{Protocol: &tcp, Port: ptr.To(intstr.FromInt32(o.egressPort()))}},
+		})
+	}
+	if a != nil {
+		for _, r := range a.Network {
+			proto := corev1.Protocol(strings.ToUpper(r.Protocol))
+			rule := networkingv1.NetworkPolicyEgressRule{To: []networkingv1.NetworkPolicyPeer{{IPBlock: &networkingv1.IPBlock{CIDR: r.CIDR}}}}
+			if len(r.Ports) == 0 {
+				rule.Ports = []networkingv1.NetworkPolicyPort{{Protocol: &proto}}
+			}
+			for _, p := range r.Ports {
+				rule.Ports = append(rule.Ports, networkingv1.NetworkPolicyPort{Protocol: &proto, Port: ptr.To(intstr.FromInt32(int32(p)))})
+			}
+			np.Spec.Egress = append(np.Spec.Egress, rule)
+		}
+	}
+	return np
+}
+
+func renderBasePolicy(s *seatruntime.Seat, o Options) *networkingv1.NetworkPolicy {
 	tcp, udp := corev1.ProtocolTCP, corev1.ProtocolUDP
 	return &networkingv1.NetworkPolicy{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "networking.k8s.io/v1", Kind: "NetworkPolicy"},
@@ -278,9 +329,18 @@ func seatEnv(s *seatruntime.Seat, o Options) []corev1.EnvVar {
 		{Name: "STEADMESH_CONFIG_REVISION", Value: s.ConfigRevision},
 		{Name: "STEADMESH_HARNESS", Value: h.Adapter},
 		{Name: "STEADMESH_MANIFEST_DIR", Value: ManifestDir},
+		{Name: "STEADMESH_EGRESS_URL", Value: egressURL(s, o)},
 		{Name: "HOME", Value: SeatMount + "/home"},
 		{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}},
 	}
+}
+
+// egressURL is the gateway URL for a seat that uses it.
+func egressURL(s *seatruntime.Seat, o Options) string {
+	if s.Manifest.Access.UsesGateway() {
+		return o.EgressURL
+	}
+	return ""
 }
 
 func projectedToken() corev1.Volume {

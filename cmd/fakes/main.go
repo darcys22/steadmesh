@@ -9,15 +9,19 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
+	"html"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/darcys22/steadmesh/harnesses/conformance/modelstub"
+	fakegithub "github.com/darcys22/steadmesh/tests/fakes/github"
 	fakelinear "github.com/darcys22/steadmesh/tests/fakes/linear"
 	fakeslack "github.com/darcys22/steadmesh/tests/fakes/slack"
 )
@@ -37,6 +41,8 @@ func main() {
 		teams      = flag.String("linear-teams", "team-eng=ENG", "comma-separated id=key Linear teams")
 		modelAddr  = flag.String("model-addr", ":8092", "listen address for the fake model endpoint (/v1/...)")
 		modelKeys  = flag.String("model-api-keys", "", "comma-separated accepted model API keys (empty accepts any)")
+		githubAddr = flag.String("github-addr", ":8093", "listen address for the fake GitHub REST API and test pages")
+		githubRepo = flag.String("github-repos", "acme/sandbox,acme/other", "comma-separated owner/name repositories")
 	)
 	flag.Parse()
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -69,6 +75,7 @@ func main() {
 		{Addr: *slackAddr, Handler: withHealth(slackFake), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: *linearAddr, Handler: withHealth(linearFake), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: *modelAddr, Handler: withHealth(modelHandler(modelFake)), ReadHeaderTimeout: 10 * time.Second},
+		{Addr: *githubAddr, Handler: withHealth(githubHandler(fakegithub.New(strings.Split(*githubRepo, ",")))), ReadHeaderTimeout: 10 * time.Second},
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -144,5 +151,33 @@ func modelHandler(s *modelstub.Stub) http.Handler {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
 	mux.Handle("/", s)
+	return mux
+}
+
+// githubHandler serves the fake GitHub, plus a test page for the browser
+// plugin: GET /ui/whoami answers with the session cookie it received and
+// records it, so a test can tell whether the signed-in session was loaded.
+func githubHandler(g *fakegithub.Server) http.Handler {
+	var mu sync.Mutex
+	var visits []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ui/whoami", func(w http.ResponseWriter, r *http.Request) {
+		user := "anonymous"
+		if c, err := r.Cookie("session"); err == nil {
+			user = c.Value
+		}
+		mu.Lock()
+		visits = append(visits, user)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = fmt.Fprintf(w, "<html><head><title>whoami</title></head><body><h1>Signed in as %s</h1></body></html>", html.EscapeString(user))
+	})
+	mux.HandleFunc("GET /_test/visits", func(w http.ResponseWriter, _ *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(visits)
+	})
+	mux.Handle("/", g)
 	return mux
 }

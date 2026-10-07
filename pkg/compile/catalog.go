@@ -68,6 +68,9 @@ func DefaultCatalog() Catalog {
 			"linear":    {Kind: "tracker", Operations: []string{"project.read", "project.create", "task.read", "task.write", "comment.read", "comment.write"}},
 			"anthropic": {Kind: "model", Operations: []string{"model.infer"}, ModelAPIs: []string{harnesses.APIAnthropicMessages}, DefaultAuth: "x-api-key"},
 			"openai":    {Kind: "model", Operations: []string{"model.infer"}, ModelAPIs: []string{harnesses.APIOpenAIResponses, harnesses.APIOpenAIChat}, DefaultAuth: "bearer"},
+			"github":    {Kind: "code_host", Operations: []string{"repo.read", "pull_request.read", "pull_request.create", "issue.read", "issue.comment"}},
+			// A signed-in browser session (Playwright storage state) for the browser plugin.
+			"browser_session": {Kind: "credential"},
 			// Any compatible endpoint; it declares the APIs it serves.
 			"model": {Kind: "model", Operations: []string{"model.infer"}, DefaultAuth: "bearer"},
 		},
