@@ -32,6 +32,17 @@ jobs:
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - name: The quickstart pins this release
         run: hack/set-version.sh --check "${{ steps.version.outputs.version }}"
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: The provider docs are up to date
+        run: |
+          make provider-docs
+          if [ -n "$(git status --porcelain -- provider/docs)" ]; then
+            git status --short -- provider/docs
+            echo "provider/docs is stale; run make provider-docs and commit" >&2
+            exit 1
+          fi
       - run: make lint test
 
   images:
@@ -89,6 +100,28 @@ jobs:
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
+      # The Registry reads docs/ from the provider repository at the release
+      # tag, so commit this release's docs there and tag that commit before
+      # GoReleaser publishes the release for the tag.
+      - name: Publish the provider docs
+        env:
+          TOKEN: ${{ secrets.PROVIDER_RELEASE_TOKEN }}
+        run: |
+          repo=/tmp/terraform-provider-steadmesh
+          git clone --depth 1 "https://x-access-token:${TOKEN}@github.com/darcys22/terraform-provider-steadmesh.git" "$repo"
+          if git -C "$repo" ls-remote --exit-code --tags origin "refs/tags/$GITHUB_REF_NAME" >/dev/null; then
+            echo "$GITHUB_REF_NAME already exists in the provider repository; leaving it as is"
+            exit 0
+          fi
+          rm -rf "$repo/docs"
+          cp -R provider/docs "$repo/docs"
+          cd "$repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          git diff --cached --quiet || git commit -m "Provider docs for $GITHUB_REF_NAME"
+          git tag "$GITHUB_REF_NAME"
+          git push origin HEAD "refs/tags/$GITHUB_REF_NAME"
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"

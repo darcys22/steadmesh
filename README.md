@@ -169,7 +169,7 @@ which publishes:
 
 - **images:** `ghcr.io/darcys22/steadmesh/<image>:X.Y.Z`, for amd64 and arm64;
 - **chart:** `oci://ghcr.io/darcys22/steadmesh/charts/platform`, version `X.Y.Z`;
-- **provider:** signed builds on
+- **provider:** signed builds and their Registry documentation on
   [darcys22/terraform-provider-steadmesh](https://github.com/darcys22/terraform-provider-steadmesh),
   which the Terraform Registry serves as `darcys22/steadmesh`;
 - **a GitHub release** in this repository.
@@ -177,11 +177,16 @@ which publishes:
 To cut a release:
 
 ```sh
-hack/set-version.sh X.Y.Z    # point quickstart/ at the new tag
+hack/set-version.sh X.Y.Z    # point quickstart/ and the provider doc examples at the new tag
+make provider-docs           # re-render provider/docs
 git commit -am "Release vX.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
 ```
 
-The workflow refuses a tag that `quickstart/` doesn't pin.
+The workflow refuses a tag that `quickstart/` doesn't pin, and fails if
+`provider/docs` is out of date. The provider documentation is rendered by
+`make provider-docs` from the schema's descriptions, `provider/docs-templates`
+and `provider/docs-examples`, so a change to the provider schema needs a
+`make provider-docs` too.
 
 One-time setup:
 

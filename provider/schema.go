@@ -222,12 +222,12 @@ func organizationSchema(ctx context.Context) schema.Schema {
 			"resolved_seats": schema.MapAttribute{
 				Computed:    true,
 				ElementType: types.ObjectType{AttrTypes: resolvedSeatAttrTypes},
-				Description: "Compiled per-seat summary, so template changes show the affected seats in the plan.",
+				Description: "Compiled per-seat summary, so template changes show the affected seats in the plan. Keyed by seat key; each entry has role_ref, teams, harness_profile and config_revision (the seat's configuration revision).",
 			},
 			"conditions": schema.ListAttribute{
 				Computed:    true,
 				ElementType: types.ObjectType{AttrTypes: conditionAttrTypes},
-				Description: "Observed status conditions, sorted by type.",
+				Description: "Observed status conditions, sorted by type. Each has type (e.g. OperationalReady, ConnectionsAuthenticated), status (True, False or Unknown), reason and message.",
 			},
 			"effective_revision": schema.StringAttribute{
 				Computed:    true,
@@ -237,11 +237,12 @@ func organizationSchema(ctx context.Context) schema.Schema {
 				Computed:    true,
 				Description: "Stable, non-secret connection details reported by the controller.",
 				Attributes: map[string]schema.Attribute{
-					"organization_id": schema.StringAttribute{Computed: true},
-					"namespace":       schema.StringAttribute{Computed: true},
-					"status_endpoint": schema.StringAttribute{Computed: true},
+					"organization_id": schema.StringAttribute{Computed: true, Description: "Immutable organisation ID assigned by the platform."},
+					"namespace":       schema.StringAttribute{Computed: true, Description: "Namespace the organisation's seats run in."},
+					"status_endpoint": schema.StringAttribute{Computed: true, Description: "Platform URL of the organisation's runtime status. It is on the internal API, which accepts only the controller's identity."},
 					"representatives": schema.MapAttribute{
 						Computed:    true,
+						Description: "Representative seats by human, keyed by channel binding. Each has seat, seat_id, connection, adapter, external_user_id and mode, so you can tell people which identity reaches their representative.",
 						ElementType: types.ObjectType{AttrTypes: representativeAttrTypes},
 					},
 				},

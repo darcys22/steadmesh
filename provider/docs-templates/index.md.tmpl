@@ -1,0 +1,27 @@
+---
+page_title: "Provider: Steadmesh"
+description: |-
+  Declare an organisation of persistent AI agents (people's representatives, teams, roles, memory, connections and routes) on a Kubernetes cluster running the Steadmesh platform.
+---
+
+# Steadmesh Provider
+
+[Steadmesh](https://github.com/darcys22/steadmesh) turns an organisation declared in Terraform into persistent agents on Kubernetes. People message their personal representative over Slack. Representatives delegate to other seats, such as an engineering lead or an engineer, over routes you declare, and agents act on external services, such as Linear, only through grants you declare.
+
+The provider has one resource, [`steadmesh_organization`](https://registry.terraform.io/providers/darcys22/steadmesh/latest/docs/resources/organization), which writes the organisation to the cluster and, by default, waits until it is ready to work.
+
+## Before you start
+
+The cluster must already run the Steadmesh platform: its CRDs, controller and platform service. The provider checks that the CRDs exist when it is configured, so install the platform in a separate Terraform root and apply it first. The [quickstart](https://github.com/darcys22/steadmesh/tree/main/quickstart) does this in two stages:
+
+```sh
+terraform init -from-module=github.com/darcys22/steadmesh//quickstart?ref=v0.1.0
+```
+
+## Example Usage
+
+{{ tffile "../../provider/docs-examples/provider/provider.tf" }}
+
+The provider talks to the Kubernetes API with your kubeconfig. `kube_context` is required, so a plan never runs against whichever cluster happens to be current. Credentials for Slack, Anthropic and Linear are never passed to the provider. Connections refer to Kubernetes Secrets or Vault paths that the platform reads at runtime, so secret values never appear in plans or state.
+
+{{ .SchemaMarkdown | trimspace }}

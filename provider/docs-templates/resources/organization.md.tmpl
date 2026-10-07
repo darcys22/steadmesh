@@ -1,0 +1,36 @@
+---
+page_title: "steadmesh_organization Resource - Steadmesh"
+subcategory: ""
+description: |-
+  {{ .Description | plainmarkdown | trimspace | prefixlines "  " }}
+---
+
+# {{ .Name }} (Resource)
+
+{{ .Description | trimspace }}
+
+The provider validates and compiles the declaration during `plan`, as soon as its values are known: team templates are merged, `role:<name>` references are resolved through each seat's team templates, and grants and routes are checked against the seats and connections they name. Mistakes therefore fail the plan, not the apply. `resolved_seats` shows each seat's effective role and configuration revision, so a change to a shared template or instruction file shows which seats it affects.
+
+## Example Usage
+
+{{ tffile "../../provider/docs-examples/resources/steadmesh_organization/resource.tf" }}
+
+Instruction text (culture, team and role guidance) lives in ConfigMaps referenced as `configmap:<name>/<key>#sha256:<digest>`. The [`instruction-bundle`](https://github.com/darcys22/steadmesh/tree/main/modules/instruction-bundle) module publishes a Markdown file and returns that reference. The [`representative`](https://github.com/darcys22/steadmesh/tree/main/modules/representative), [`team-base`](https://github.com/darcys22/steadmesh/tree/main/modules/team-base) and [`team-engineering`](https://github.com/darcys22/steadmesh/tree/main/modules/team-engineering) modules produce ready-made entries for `spec`.
+
+## Readiness
+
+With `wait_for_ready = true` (the default), create and update return only once the controller reports `OperationalReady=True` for the new generation. That means seats are provisioned, connections authenticated, channel ingress running and routes executable. If readiness is not reached within the timeout, the apply fails and lists the conditions that are not ready; the same conditions are in the `conditions` attribute.
+
+A failed create leaves the resource tainted, so the next plan replaces it. After fixing the reported condition, untaint it rather than recreating the organisation: `terraform untaint steadmesh_organization.<name>`.
+
+## Data retention
+
+`data_retention` controls what happens when the resource is destroyed. With `retain` (the default), the agents are stopped and their access revoked, but workspace volumes and platform records (conversations, memory) are kept; a seat declared later with `adopt_from` can take over a retired seat's data. With `delete`, the volumes and records are deleted too. External resources such as Slack workspaces and Linear projects are never deleted.
+
+{{ .SchemaMarkdown | trimspace }}
+
+## Import
+
+{{ codefile "shell" "../../provider/docs-examples/resources/steadmesh_organization/import.sh" }}
+
+An organisation already owned by another declaration owner, for example a Helm release, cannot be imported.

@@ -9,15 +9,17 @@ KUBECTL := kubectl --context $(KCTX)
 TAG ?= dev
 IMAGES := controller platform console seat-fake seat-claudecode fakes
 ENVTEST_K8S ?= 1.37.0
+TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider orgctl live tools
+.PHONY: all generate build lint test test-integration e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
 tools:
 	GOBIN=$(BIN) $(GO) install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.20.1
 	GOBIN=$(BIN) $(GO) install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+	GOBIN=$(BIN) $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION)
 
 generate:
 	$(BIN)/controller-gen object paths=./pkg/spec/... paths=./api/...
@@ -43,6 +45,17 @@ test-integration:
 
 provider:
 	$(GO) build -o $(BIN)/terraform-provider-steadmesh ./cmd/terraform-provider-steadmesh
+
+# Terraform Registry documentation for the provider: provider/docs is rendered
+# from the schema descriptions, provider/docs-templates and
+# provider/docs-examples. The release publishes it to the provider repository.
+provider-docs: $(BIN)/tfplugindocs
+	$(BIN)/tfplugindocs generate --provider-dir cmd/terraform-provider-steadmesh --provider-name steadmesh \
+		--rendered-provider-name Steadmesh --rendered-website-dir ../../provider/docs \
+		--examples-dir ../../provider/docs-examples --website-source-dir ../../provider/docs-templates
+
+$(BIN)/tfplugindocs:
+	GOBIN=$(BIN) $(GO) install github.com/hashicorp/terraform-plugin-docs/cmd/tfplugindocs@$(TFPLUGINDOCS_VERSION)
 
 orgctl:
 	$(GO) build -o $(BIN)/orgctl ./cmd/orgctl
