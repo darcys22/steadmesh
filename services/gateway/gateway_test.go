@@ -171,3 +171,45 @@ func TestGrantEnforced(t *testing.T) {
 		t.Fatal("denied call reached the tracker")
 	}
 }
+
+// rotatingTrackers serves one tracker until RefreshNow swaps in the next.
+type rotatingTrackers struct {
+	cur, next connectors.Tracker
+	refreshes int
+}
+
+func (r *rotatingTrackers) Tracker(string, string) (connectors.Tracker, error) { return r.cur, nil }
+
+func (r *rotatingTrackers) RefreshNow(context.Context, string, string) bool {
+	r.refreshes++
+	if r.next == nil {
+		return false
+	}
+	r.cur, r.next = r.next, nil
+	return true
+}
+
+func TestUnauthorizedRetriesOnceWithRefreshedCredential(t *testing.T) {
+	revoked := &fakeconn.Tracker{Script: []error{fmt.Errorf("401: %w", connectors.ErrUnauthorized)}}
+	rotated := &fakeconn.Tracker{}
+	rt := &rotatingTrackers{cur: revoked, next: rotated}
+	g, seat := setup(t, revoked, "lead")
+	g.Trackers = rt
+	op, err := invoke(g, seat, "project.create", `{"name":"Apollo","team_id":"T1"}`)
+	if err != nil || op.Status != store.OpSucceeded || rt.refreshes != 1 {
+		t.Fatalf("op = %+v, %v, refreshes %d", op, err, rt.refreshes)
+	}
+	// The retry is the same operation: one id, applied once.
+	if len(revoked.Calls()) != 1 || len(rotated.Calls()) != 1 || revoked.Calls()[0] != rotated.Calls()[0] || rotated.Applied() != 1 {
+		t.Fatalf("calls revoked=%v rotated=%v", revoked.Calls(), rotated.Calls())
+	}
+
+	// Without a new credential the failure stands, and there is one refresh.
+	still := &fakeconn.Tracker{Script: []error{fmt.Errorf("401: %w", connectors.ErrUnauthorized)}}
+	rt = &rotatingTrackers{cur: still}
+	g.Trackers = rt
+	op, err = invoke(g, seat, "project.create", `{"name":"Gemini","team_id":"T1"}`)
+	if err != nil || op.Status != store.OpFailed || rt.refreshes != 1 || len(still.Calls()) != 1 {
+		t.Fatalf("op = %+v, %v, refreshes %d calls %d", op, err, rt.refreshes, len(still.Calls()))
+	}
+}

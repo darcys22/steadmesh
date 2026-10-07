@@ -40,6 +40,10 @@ type Options struct {
 	// Console serves the read-only console API; Auth must accept the console
 	// identity.
 	Console bool
+	// Credential refresh policy; zero values take the connections defaults.
+	CredentialRefresh  time.Duration
+	CredentialGrace    time.Duration
+	CredentialMaxStale time.Duration
 }
 
 // Platform is a running platform service.
@@ -65,7 +69,8 @@ func New(ctx context.Context, o Options) *Platform {
 	sinks := func(orgID string) connectors.IngressSink {
 		return &ingress.Sink{OrganizationID: orgID, Store: o.Store, Metrics: m, Log: o.Log}
 	}
-	conns := connections.New(ctx, o.Factories, o.Secrets, sinks, o.Log)
+	conns := connections.New(ctx, connections.Options{Factories: o.Factories, Secrets: o.Secrets, Sinks: sinks, Log: o.Log,
+		RefreshInterval: o.CredentialRefresh, Grace: o.CredentialGrace, MaxStale: o.CredentialMaxStale})
 	gw := &gateway.Gateway{Ledger: o.Store, Trackers: conns, Metrics: m, Log: o.Log, Attempts: 3, Backoff: o.RetryBackoff}
 	reg := tools.New(tools.Deps{Store: o.Store, Gateway: gw, Metrics: m, Log: o.Log})
 	return &Platform{

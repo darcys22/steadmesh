@@ -100,6 +100,9 @@ type Server struct {
 	issues   []*Issue
 	comments []*Comment
 	fails    map[string][]*failRule
+	// validKeys, when non-nil, replaces Options.APIKey: only listed keys are
+	// accepted (set with POST /_test/keys).
+	validKeys map[string]bool
 }
 
 // New creates the fake.
@@ -115,6 +118,7 @@ func New(opts Options) *Server {
 	s.mux.HandleFunc("POST /{$}", s.handleGraphQL)
 	s.mux.HandleFunc("GET /_test/state", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 200, s.State()) })
 	s.mux.HandleFunc("POST /_test/fail", s.handleTestFail)
+	s.mux.HandleFunc("POST /_test/keys", s.handleTestKeys)
 	s.mux.HandleFunc("POST /_test/reset", func(w http.ResponseWriter, _ *http.Request) {
 		s.Reset()
 		writeJSON(w, 200, map[string]bool{"ok": true})
@@ -205,7 +209,7 @@ func fail(code, format string, args ...any) *gqlFailure {
 
 func (s *Server) handleGraphQL(w http.ResponseWriter, r *http.Request) {
 	auth := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if auth == "" || (s.opts.APIKey != "" && auth != s.opts.APIKey) {
+	if !s.keyOK(auth) {
 		writeJSON(w, http.StatusUnauthorized, map[string]any{"errors": []gqlError{{
 			Message: "Authentication required", Extensions: map[string]string{"code": "AUTHENTICATION_ERROR"},
 		}}})
@@ -569,4 +573,44 @@ func hijackClose(w http.ResponseWriter) {
 		panic(http.ErrAbortHandler)
 	}
 	_ = conn.Close()
+}
+
+func (s *Server) keyOK(key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	switch {
+	case key == "":
+		return false
+	case s.validKeys != nil:
+		return s.validKeys[key]
+	case s.opts.APIKey != "":
+		return key == s.opts.APIKey
+	}
+	return true
+}
+
+// SetKeys replaces the accepted API keys, as when a key is rotated or
+// revoked. An empty list restores Options.APIKey.
+func (s *Server) SetKeys(keys []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.validKeys = nil
+	if len(keys) > 0 {
+		s.validKeys = map[string]bool{}
+		for _, k := range keys {
+			s.validKeys[k] = true
+		}
+	}
+}
+
+func (s *Server) handleTestKeys(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Valid []string `json:"valid"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.SetKeys(body.Valid)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

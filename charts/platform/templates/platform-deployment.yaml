@@ -47,6 +47,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: CREDENTIAL_REFRESH_INTERVAL
+              value: {{ .Values.credentials.refreshInterval | quote }}
+            - name: CREDENTIAL_GRACE
+              value: {{ .Values.credentials.grace | quote }}
+            - name: CREDENTIAL_MAX_STALE
+              value: {{ .Values.credentials.maxStale | quote }}
             {{- if .Values.vault.enabled }}
             - name: VAULT_ADDR
               value: {{ required "vault.address is required when vault.enabled" .Values.vault.address | quote }}

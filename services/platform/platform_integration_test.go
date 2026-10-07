@@ -51,7 +51,10 @@ func newEnv(t *testing.T) *env { return newEnvWithConsole(t, false) }
 
 // newEnvWithConsole starts a platform; with console it serves /console/v1 to
 // consoleToken.
-func newEnvWithConsole(t *testing.T, console bool) *env {
+func newEnvWithConsole(t *testing.T, console bool) *env { return newEnvWith(t, console, nil) }
+
+// newEnvWith starts a platform after applying opts to its options.
+func newEnvWith(t *testing.T, console bool, opts func(*platform.Options)) *env {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	st, err := store.Open(ctx, pgtest.URL(t))
@@ -63,8 +66,8 @@ func newEnvWithConsole(t *testing.T, console bool) *env {
 	if console {
 		e.auth.SetConsole(consoleToken)
 	}
-	p := platform.New(ctx, platform.Options{
-		Store: st, Auth: e.auth, Console: console, Secrets: fakeconn.Secrets{}, Registry: prometheus.NewRegistry(),
+	o := platform.Options{
+		Store: st, Auth: e.auth, Console: console, Secrets: &fakeconn.Secrets{}, Registry: prometheus.NewRegistry(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Interval: 50 * time.Millisecond, RetryBackoff: time.Millisecond,
 		Factories: connections.Factories{
 			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": e.comm.Factory()},
@@ -73,7 +76,11 @@ func newEnvWithConsole(t *testing.T, console bool) *env {
 			Model: map[string]func(connectors.Config) (connectors.Model, error){
 				"anthropic": func(connectors.Config) (connectors.Model, error) { return fakeconn.Model{}, nil }},
 		},
-	})
+	}
+	if opts != nil {
+		opts(&o)
+	}
+	p := platform.New(ctx, o)
 	if err := p.Start(ctx); err != nil {
 		t.Fatal(err)
 	}

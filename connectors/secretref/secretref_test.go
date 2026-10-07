@@ -35,7 +35,7 @@ func TestKubernetes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["bot_token"] != "xoxb-1" || got["app_token"] != "xapp-1" || len(got) != 2 {
+	if got.Values["bot_token"] != "xoxb-1" || got.Values["app_token"] != "xapp-1" || len(got.Values) != 2 || got.Digest == "" {
 		t.Fatalf("got %v", got)
 	}
 	// Only the configured namespace is visible.
@@ -108,7 +108,7 @@ func newVault(t *testing.T, f *fakeVault, jwt string) *Vault {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s.(*Vault)
+	return s
 }
 
 func TestVaultResolveAndCache(t *testing.T) {
@@ -120,7 +120,7 @@ func TestVaultResolveAndCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got["api_key"] != "lin_api_secret" || got["n"] != "3" {
+	if got.Values["api_key"] != "lin_api_secret" || got.Values["n"] != "3" || got.Version != "1" {
 		t.Fatalf("got %v", got)
 	}
 	if _, err := v.Resolve(ctx, "vault:steadmesh/linear"); err != nil {
@@ -186,7 +186,9 @@ func TestVaultErrors(t *testing.T) {
 
 type staticResolver map[string]string
 
-func (s staticResolver) Resolve(context.Context, string) (map[string]string, error) { return s, nil }
+func (s staticResolver) Resolve(context.Context, string) (connectors.Resolved, error) {
+	return resolved(s, "1"), nil
+}
 
 func TestMulti(t *testing.T) {
 	m := NewMulti(map[string]connectors.Secrets{
@@ -197,7 +199,7 @@ func TestMulti(t *testing.T) {
 	ctx := context.Background()
 	for ref, want := range map[string]string{"k8s:a": "k8s", "vault:a/b": "vault"} {
 		got, err := m.Resolve(ctx, ref)
-		if err != nil || got["from"] != want {
+		if err != nil || got.Values["from"] != want {
 			t.Errorf("%s: %v %v", ref, got, err)
 		}
 	}

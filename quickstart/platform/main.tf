@@ -41,10 +41,37 @@ module "steadmesh" {
 
 # Credentials, as Kubernetes Secrets in the control-plane namespace. Only the
 # platform service can read them; the organisation stage refers to them by
-# name. Their values are stored in this stage's Terraform state, so keep the
-# state private, or create the Secrets yourself and drop these resources.
+# name.
+#
+# Secrets created here keep their values in this stage's Terraform state, so
+# keep the state private. To keep credentials out of Terraform entirely,
+# create the Secrets (or Vault entries) yourself and pass their references in
+# existing_secret_refs: those are only referenced, never read here. Either
+# way, rotating a value in place takes effect without running Terraform.
+
+locals {
+  create = {
+    slack     = var.existing_secret_refs.slack == null
+    anthropic = var.existing_secret_refs.anthropic == null
+    linear    = var.existing_secret_refs.linear == null && var.linear_api_key != null
+  }
+}
+
+resource "terraform_data" "credentials" {
+  lifecycle {
+    precondition {
+      condition     = !local.create.slack || (var.slack_bot_token != null && var.slack_app_token != null)
+      error_message = "Set slack_bot_token and slack_app_token, or existing_secret_refs.slack."
+    }
+    precondition {
+      condition     = !local.create.anthropic || var.anthropic_api_key != null
+      error_message = "Set anthropic_api_key, or existing_secret_refs.anthropic."
+    }
+  }
+}
 
 resource "kubernetes_secret_v1" "slack" {
+  count = local.create.slack ? 1 : 0
   metadata {
     name      = "slack-credentials"
     namespace = module.steadmesh.system_namespace
@@ -56,6 +83,7 @@ resource "kubernetes_secret_v1" "slack" {
 }
 
 resource "kubernetes_secret_v1" "anthropic" {
+  count = local.create.anthropic ? 1 : 0
   metadata {
     name      = "anthropic-credentials"
     namespace = module.steadmesh.system_namespace
@@ -66,7 +94,7 @@ resource "kubernetes_secret_v1" "anthropic" {
 }
 
 resource "kubernetes_secret_v1" "linear" {
-  count = var.linear_api_key == null ? 0 : 1
+  count = local.create.linear ? 1 : 0
   metadata {
     name      = "linear-credentials"
     namespace = module.steadmesh.system_namespace

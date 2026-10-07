@@ -74,6 +74,25 @@ func TestVerifyConditions(t *testing.T) {
 	}
 }
 
+func TestVerifyConditionsSurfaceDegradedCredentials(t *testing.T) {
+	v := &runtimeapi.VerifyResponse{
+		Connections: map[string]runtimeapi.CheckResult{"slack": {OK: true}, "optional": {OK: true}},
+		Credentials: map[string]runtimeapi.CredentialStatus{
+			"slack":    {State: runtimeapi.CredentialReplacementRejected, Error: "replacement rejected: invalid_auth"},
+			"optional": {State: runtimeapi.CredentialRefreshFailing, Error: "vault sealed"},
+		},
+	}
+	cc := VerifyConditions(v, map[string]bool{"slack": true}, 1)[0]
+	if cc.Status != metav1.ConditionTrue || cc.Reason != "CredentialRefreshDegraded" ||
+		!strings.Contains(cc.Message, "slack: replacement_rejected") || strings.Contains(cc.Message, "optional") {
+		t.Fatalf("connections: %+v", cc)
+	}
+	v.Credentials["slack"] = runtimeapi.CredentialStatus{State: runtimeapi.CredentialCurrent}
+	if cc := VerifyConditions(v, map[string]bool{"slack": true}, 1)[0]; cc.Reason != "Verified" {
+		t.Fatalf("current credential: %+v", cc)
+	}
+}
+
 func seat(conds map[string]metav1.ConditionStatus, probe *v1alpha1.SeatProbeStatus) *v1alpha1.AgentSeat {
 	s := &v1alpha1.AgentSeat{}
 	for t, st := range conds {

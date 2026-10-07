@@ -74,7 +74,8 @@ func (s *Store) ConsoleOrganization(ctx context.Context, orgID string) (*runtime
 	}
 
 	checks := map[string]runtimeapi.ConsoleCheck{}
-	rows, err = s.pool.Query(ctx, `SELECT connection, ok, detail, checked_at FROM connection_checks WHERE organization_id = $1`, orgID)
+	rows, err = s.pool.Query(ctx, `SELECT connection, ok, detail, checked_at, credential_state, secret_version, credential_error,
+		refreshed_at, previous_until, refresh_failing_since FROM connection_checks WHERE organization_id = $1`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +83,8 @@ func (s *Store) ConsoleOrganization(ctx context.Context, orgID string) (*runtime
 	for rows.Next() {
 		var conn string
 		var c runtimeapi.ConsoleCheck
-		if err := rows.Scan(&conn, &c.OK, &c.Detail, &c.CheckedAt); err != nil {
+		if err := rows.Scan(&conn, &c.OK, &c.Detail, &c.CheckedAt, &c.Credential.State, &c.Credential.SecretVersion,
+			&c.Credential.Error, &c.Credential.RefreshedAt, &c.Credential.PreviousUntil, &c.Credential.FailingSince); err != nil {
 			return nil, err
 		}
 		checks[conn] = c

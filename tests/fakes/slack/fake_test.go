@@ -234,3 +234,27 @@ func TestEnvelopesWaitForConnection(t *testing.T) {
 		t.Fatalf("%+v %v", m, err)
 	}
 }
+
+func TestTokenRotation(t *testing.T) {
+	f := New(Options{})
+	defer f.Close()
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	postJSON(t, srv.URL+"/_test/tokens", `{"bot":["xoxb-old","xoxb-new"]}`).Body.Close()
+	for _, tok := range []string{"xoxb-old", "xoxb-new"} {
+		if r := api(t, srv.URL, "auth.test", tok, nil); r["ok"] != true {
+			t.Fatalf("%s during rotation: %v", tok, r)
+		}
+	}
+	if r := api(t, srv.URL, "auth.test", "xoxb-other", nil); r["error"] != "invalid_auth" {
+		t.Fatalf("unlisted token accepted: %v", r)
+	}
+	postJSON(t, srv.URL+"/_test/tokens", `{"bot":["xoxb-new"]}`).Body.Close()
+	if r := api(t, srv.URL, "auth.test", "xoxb-old", nil); r["error"] != "invalid_auth" {
+		t.Fatalf("revoked token accepted: %v", r)
+	}
+	postJSON(t, srv.URL+"/_test/tokens", `{}`).Body.Close()
+	if r := api(t, srv.URL, "auth.test", "xoxb-any", nil); r["ok"] != true {
+		t.Fatalf("default rule not restored: %v", r)
+	}
+}

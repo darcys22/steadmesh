@@ -12,6 +12,17 @@ database:
   secretName: steadmesh-db
   secretKey: url
 
+# Credential rotation. Connection secrets are re-read when they change
+# (Kubernetes Secrets are watched) and every refreshInterval (the Vault poll),
+# without running Terraform or restarting the platform. A replacement that
+# fails validation is never used: the previous credential stays in use for
+# grace, then the connection becomes unavailable. A credential whose secret
+# cannot be read stays in use for maxStale.
+credentials:
+  refreshInterval: 60s
+  grace: 10m
+  maxStale: 24h
+
 # Optional Vault (Kubernetes auth with the platform ServiceAccount token).
 vault:
   enabled: false

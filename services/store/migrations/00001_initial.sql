@@ -131,9 +131,12 @@ CREATE TABLE memory_stores (
     owner_seat_id   uuid REFERENCES seats(id),
     policy_revision bigint NOT NULL DEFAULT 1,
     retired_at      timestamptz,
-    created_at      timestamptz NOT NULL DEFAULT now(),
-    UNIQUE (organization_id, key)
+    created_at      timestamptz NOT NULL DEFAULT now()
 );
+-- A retired memory store keeps its rows (retention) but frees its key, so a
+-- store re-declared under the same key starts empty instead of silently
+-- re-granting retained private data to a new seat identity (§4.1, A18).
+CREATE UNIQUE INDEX memory_stores_active_key ON memory_stores (organization_id, key) WHERE retired_at IS NULL;
 
 -- array_to_string is only STABLE; generated columns need an immutable expression.
 -- +goose StatementBegin
@@ -283,6 +286,13 @@ CREATE TABLE connection_checks (
     connection      text NOT NULL,
     ok              boolean NOT NULL,
     detail          text NOT NULL DEFAULT '',
+    -- Credential refresh state (non-secret): runtimeapi.CredentialStatus.
+    credential_state   text NOT NULL DEFAULT '',
+    secret_version     text NOT NULL DEFAULT '',
+    credential_error   text NOT NULL DEFAULT '',
+    refreshed_at       timestamptz,
+    previous_until     timestamptz,
+    refresh_failing_since timestamptz,
     checked_at      timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (organization_id, connection)
 );
@@ -297,6 +307,16 @@ END;
 $$ LANGUAGE plpgsql;
 -- +goose StatementEnd
 CREATE TRIGGER deliveries_notify AFTER INSERT ON deliveries FOR EACH ROW EXECUTE FUNCTION notify_delivery();
+
+-- Read paths of the console API (/console/v1): run history, the activity
+-- feed and the work view.
+CREATE INDEX execution_events_execution ON execution_events (execution_id, id);
+CREATE INDEX execution_events_created ON execution_events (created_at);
+CREATE INDEX executions_started ON executions (started_at);
+CREATE INDEX executions_finished ON executions (finished_at) WHERE finished_at IS NOT NULL;
+CREATE INDEX messages_organization_created ON messages (organization_id, created_at);
+CREATE INDEX connector_operations_updated ON connector_operations (organization_id, updated_at);
+CREATE INDEX connector_operations_execution ON connector_operations (execution_id) WHERE execution_id IS NOT NULL;
 
 -- +goose Down
 DROP TRIGGER deliveries_notify ON deliveries;

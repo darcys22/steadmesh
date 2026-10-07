@@ -28,7 +28,26 @@ var (
 // Secrets resolves a secret reference (vault:<path> or k8s:<name>) into its
 // key/value pairs. Values never leave the platform process.
 type Secrets interface {
-	Resolve(ctx context.Context, ref string) (map[string]string, error)
+	Resolve(ctx context.Context, ref string) (Resolved, error)
+}
+
+// Resolved is the current content of a secret reference.
+type Resolved struct {
+	Values map[string]string
+	// Version identifies the stored version (Kubernetes resourceVersion,
+	// Vault KV version). It is not secret and may change without the
+	// content changing, for example on a metadata-only update.
+	Version string
+	// Digest identifies the content: it changes exactly when a value
+	// changes. It is a hash, safe to keep in memory, never logged.
+	Digest string
+}
+
+// SecretWatcher is implemented by resolvers that can report changes as they
+// happen. notify receives the reference that may have changed; the caller
+// resolves it again to find out. Watch blocks until ctx is cancelled.
+type SecretWatcher interface {
+	Watch(ctx context.Context, notify func(ref string)) error
 }
 
 // Config is what an adapter factory receives for one declared connection.

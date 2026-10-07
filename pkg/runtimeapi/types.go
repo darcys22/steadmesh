@@ -320,6 +320,53 @@ type VerifyResponse struct {
 	Connections map[string]CheckResult `json:"connections"`
 	Ingress     map[string]CheckResult `json:"ingress"`
 	Bindings    map[string]CheckResult `json:"bindings"`
+	// Credentials reports the refresh state of each connection's secret.
+	Credentials map[string]CredentialStatus `json:"credentials,omitempty"`
+}
+
+// Credential refresh states.
+const (
+	// CredentialCurrent: the latest secret content is in use.
+	CredentialCurrent = "current"
+	// CredentialNone: the connection has no secret reference.
+	CredentialNone = "none"
+	// CredentialReplacementRejected: the secret changed, the new credential
+	// failed validation, and the previous one stays in use until
+	// PreviousUntil.
+	CredentialReplacementRejected = "replacement_rejected"
+	// CredentialSecretMissing: the secret was deleted; the previous
+	// credential stays in use until PreviousUntil.
+	CredentialSecretMissing = "secret_missing"
+	// CredentialRefreshFailing: the secret store or the new credential's
+	// validation is failing transiently; the current credential stays in use.
+	CredentialRefreshFailing = "refresh_failing"
+	// CredentialUnavailable: no usable credential; the connection is down.
+	CredentialUnavailable = "unavailable"
+)
+
+// CredentialStatus is the non-secret refresh state of a connection's
+// credential.
+type CredentialStatus struct {
+	State string `json:"state"`
+	// SecretVersion is the store's version of the secret in use
+	// (Kubernetes resourceVersion or Vault KV version).
+	SecretVersion string     `json:"secret_version,omitempty"`
+	RefreshedAt   *time.Time `json:"refreshed_at,omitempty"`
+	// Error explains a degraded or unavailable state.
+	Error string `json:"error,omitempty"`
+	// PreviousUntil is when a previous credential stops being used.
+	PreviousUntil *time.Time `json:"previous_until,omitempty"`
+	// FailingSince is when refresh started failing.
+	FailingSince *time.Time `json:"failing_since,omitempty"`
+}
+
+// Degraded reports whether the credential works now but needs attention.
+func (s CredentialStatus) Degraded() bool {
+	switch s.State {
+	case CredentialReplacementRejected, CredentialSecretMissing, CredentialRefreshFailing:
+		return true
+	}
+	return false
 }
 
 type FenceRequest struct {

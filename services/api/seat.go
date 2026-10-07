@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/darcys22/steadmesh/connectors"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
@@ -336,12 +339,97 @@ func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) 
 		return
 	}
 	annotate(r.Context(), "connection", conn)
-	out := r.Clone(r.Context())
-	out.Header.Del("Authorization")
-	out.Header.Del("X-Api-Key")
-	out.Header.Del(runtimeapi.HeaderGeneration)
-	out.URL.Path = "/" + r.PathValue("rest")
-	out.URL.RawPath = ""
-	out.RequestURI = ""
-	model.Proxy().ServeHTTP(w, out)
+	// The body is buffered so a request rejected because the credential was
+	// rotated can be sent again; nothing reaches the seat until the retry is
+	// decided. Streaming responses still stream.
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxModelRequest))
+	if err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "invalid", "model request body too large or unreadable")
+		return
+	}
+	forward := func(dst http.ResponseWriter, m connectors.Model) {
+		out := r.Clone(r.Context())
+		out.Header.Del("Authorization")
+		out.Header.Del("X-Api-Key")
+		out.Header.Del(runtimeapi.HeaderGeneration)
+		out.URL.Path = "/" + r.PathValue("rest")
+		out.URL.RawPath = ""
+		out.RequestURI = ""
+		out.Body = io.NopCloser(bytes.NewReader(body))
+		out.ContentLength = int64(len(body))
+		m.Proxy().ServeHTTP(dst, out)
+	}
+	hold := &holdUnauthorized{ResponseWriter: w, header: http.Header{}}
+	forward(hold, model)
+	if !hold.rejected {
+		return
+	}
+	if s.Connections.RefreshNow(r.Context(), q.seat.OrganizationID, conn) {
+		if next, err := s.Connections.Model(q.seat.OrganizationID, conn); err == nil {
+			annotate(r.Context(), "credential_refreshed", true)
+			forward(w, next)
+			return
+		}
+	}
+	hold.replay()
+}
+
+// maxModelRequest bounds a buffered model request body.
+const maxModelRequest = 32 << 20
+
+// holdUnauthorized passes a response through unless its status is 401, in
+// which case it holds the response back so the request can be retried with
+// a refreshed credential, or replayed unchanged.
+type holdUnauthorized struct {
+	http.ResponseWriter
+	header   http.Header
+	decided  bool
+	rejected bool
+	status   int
+	body     bytes.Buffer
+}
+
+func (h *holdUnauthorized) Header() http.Header { return h.header }
+
+func (h *holdUnauthorized) WriteHeader(code int) {
+	if h.decided {
+		return
+	}
+	h.decided, h.status = true, code
+	if code == http.StatusUnauthorized {
+		h.rejected = true
+		return
+	}
+	maps.Copy(h.ResponseWriter.Header(), h.header)
+	h.ResponseWriter.WriteHeader(code)
+}
+
+func (h *holdUnauthorized) Write(b []byte) (int, error) {
+	if !h.decided {
+		h.WriteHeader(http.StatusOK)
+	}
+	if h.rejected {
+		if h.body.Len() < 64<<10 {
+			h.body.Write(b)
+		}
+		return len(b), nil
+	}
+	return h.ResponseWriter.Write(b)
+}
+
+func (h *holdUnauthorized) Flush() {
+	if h.decided && !h.rejected {
+		if f, ok := h.ResponseWriter.(http.Flusher); ok {
+			f.Flush()
+		}
+	}
+}
+
+func (h *holdUnauthorized) Unwrap() http.ResponseWriter { return h.ResponseWriter }
+
+// replay writes the held-back 401 response.
+func (h *holdUnauthorized) replay() {
+	maps.Copy(h.ResponseWriter.Header(), h.header)
+	h.ResponseWriter.WriteHeader(h.status)
+	_, _ = h.ResponseWriter.Write(h.body.Bytes())
 }

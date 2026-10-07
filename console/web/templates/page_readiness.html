@@ -41,7 +41,7 @@
   <h2>Connections</h2>
   {{if .H.Org.Connections}}
   <div class="table-wrap"><table>
-    <thead><tr><th>Connection</th><th>Adapter</th><th>Secret reference</th><th>Last check</th><th>Detail</th><th>Checked</th></tr></thead>
+    <thead><tr><th>Connection</th><th>Adapter</th><th>Secret reference</th><th>Credential</th><th>Last check</th><th>Detail</th><th>Checked</th></tr></thead>
     <tbody>
     {{range .H.Org.Connections}}
     <tr>
@@ -49,11 +49,12 @@
       <td>{{.Adapter}}</td>
       <td>{{if .SecretKind}}<code>{{.SecretKind}}</code> <code>{{.SecretPath}}</code>{{else}}<span class="muted">none</span>{{end}}</td>
       {{with .Check}}
+      <td>{{template "credential" (dict "C" .Credential "Now" $now)}}</td>
       <td>{{if .OK}}<span class="chip ok">authenticated</span>{{else}}<span class="chip bad">failed</span>{{end}}</td>
       <td class="clip">{{.Detail}}</td>
       <td>{{ago $now .CheckedAt}}</td>
       {{else}}
-      <td><span class="chip warn">not checked</span></td><td></td><td></td>
+      <td></td><td><span class="chip warn">not checked</span></td><td></td><td></td>
       {{end}}
     </tr>
     {{end}}

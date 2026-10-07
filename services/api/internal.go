@@ -72,7 +72,7 @@ func (s *server) verify(w http.ResponseWriter, r *http.Request) {
 	}
 	res := s.Connections.Verify(r.Context(), org.ID, &org.Manifest)
 	for key, c := range res.Connections {
-		if err := s.Store.RecordConnectionCheck(r.Context(), org.ID, key, c); err != nil {
+		if err := s.Store.RecordConnectionCheck(r.Context(), org.ID, key, c, res.Credentials[key]); err != nil {
 			s.storeError(w, r, err)
 			return
 		}

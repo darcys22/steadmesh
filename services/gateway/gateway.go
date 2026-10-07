@@ -41,6 +41,12 @@ type Trackers interface {
 	Tracker(orgID, key string) (connectors.Tracker, error)
 }
 
+// Refresher is implemented by Trackers that can reload a rotated credential.
+// RefreshNow reports whether a different credential is now in use.
+type Refresher interface {
+	RefreshNow(ctx context.Context, orgID, key string) bool
+}
+
 // Gateway invokes tracker operations on behalf of seats.
 type Gateway struct {
 	Ledger   Ledger
@@ -147,12 +153,23 @@ func (g *Gateway) Invoke(ctx context.Context, req Request) (*runtimeapi.Operatio
 func (g *Gateway) execute(ctx context.Context, tracker connectors.Tracker, req Request, params []byte, opID string, log *slog.Logger) (string, *connectors.Result, string, int) {
 	backoff := g.Backoff
 	readOnly := tracker.ReadOnly(req.Operation)
+	refreshed := false
 	for attempt := 1; ; attempt++ {
 		res, err := tracker.Invoke(ctx, req.Operation, params, opID)
 		retryable := errors.Is(err, connectors.ErrRetryable) || (readOnly && err != nil && !isPermanent(err))
 		switch {
 		case err == nil:
 			return store.OpSucceeded, &res, "", attempt
+		case errors.Is(err, connectors.ErrUnauthorized) && !refreshed:
+			// A rejected credential means nothing was applied. If the secret
+			// was rotated, retry once with the new credential.
+			refreshed = true
+			if next := g.refreshed(ctx, req); next != nil {
+				log.Info("retrying with a refreshed credential", "attempt", attempt)
+				tracker = next
+				continue
+			}
+			return store.OpFailed, nil, err.Error(), attempt
 		case isPermanent(err):
 			return store.OpFailed, nil, err.Error(), attempt
 		case retryable && attempt < g.Attempts:
@@ -183,6 +200,20 @@ func (g *Gateway) execute(ctx context.Context, tracker connectors.Tracker, req R
 			return store.OpUnknown, nil, detail, attempt
 		}
 	}
+}
+
+// refreshed reloads the connection's credential and returns the new tracker,
+// or nil when the credential did not change.
+func (g *Gateway) refreshed(ctx context.Context, req Request) connectors.Tracker {
+	r, ok := g.Trackers.(Refresher)
+	if !ok || !r.RefreshNow(ctx, req.Seat.OrganizationID, req.Connection) {
+		return nil
+	}
+	t, err := g.Trackers.Tracker(req.Seat.OrganizationID, req.Connection)
+	if err != nil {
+		return nil
+	}
+	return t
 }
 
 func isPermanent(err error) bool {

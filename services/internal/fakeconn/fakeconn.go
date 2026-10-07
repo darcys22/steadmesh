@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -178,12 +181,61 @@ func (Model) Proxy() http.Handler {
 	})
 }
 
-// Secrets resolves every reference to a fixed value.
-type Secrets struct{ Err error }
+// Secrets resolves every reference to {"api_key": "test"} unless Set
+// overrides it. Err, when set, fails every resolve. It is safe for
+// concurrent use through its methods; set Err only before use or through
+// SetErr.
+type Secrets struct {
+	Err error
 
-func (s Secrets) Resolve(context.Context, string) (map[string]string, error) {
-	if s.Err != nil {
-		return nil, s.Err
+	mu      sync.Mutex
+	values  map[string]map[string]string
+	version int
+}
+
+// Set replaces the content of ref (nil deletes it) and bumps its version.
+func (s *Secrets) Set(ref string, values map[string]string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.values == nil {
+		s.values = map[string]map[string]string{}
 	}
-	return map[string]string{"api_key": "test"}, nil
+	s.version++
+	s.values[ref] = values
+}
+
+// SetErr makes every resolve fail with err (nil clears it).
+func (s *Secrets) SetErr(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.Err = err
+}
+
+func (s *Secrets) Resolve(_ context.Context, ref string) (connectors.Resolved, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Err != nil {
+		return connectors.Resolved{}, s.Err
+	}
+	values := map[string]string{"api_key": "test"}
+	if v, ok := s.values[ref]; ok {
+		if v == nil {
+			return connectors.Resolved{}, fmt.Errorf("%w: secret %s not found", connectors.ErrPermanent, ref)
+		}
+		values = v
+	}
+	return connectors.Resolved{Values: values, Version: strconv.Itoa(s.version), Digest: digest(values)}, nil
+}
+
+func digest(values map[string]string) string {
+	keys := make([]string, 0, len(values))
+	for k := range values {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		b.WriteString(k + "\x00" + values[k] + "\x00")
+	}
+	return b.String()
 }

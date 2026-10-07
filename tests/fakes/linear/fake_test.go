@@ -93,3 +93,28 @@ func TestFailControl(t *testing.T) {
 		t.Fatalf("second call: %d %v %v", code, out, err)
 	}
 }
+
+func TestKeyRotation(t *testing.T) {
+	f := New(Options{APIKey: "lin_old"})
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	const q = `query { viewer { id } }`
+	if code, _, _ := gql(t, srv.URL, "lin_old", q, nil); code != http.StatusOK {
+		t.Fatalf("configured key: %d", code)
+	}
+	f.SetKeys([]string{"lin_new"})
+	if code, _, _ := gql(t, srv.URL, "lin_old", q, nil); code != http.StatusUnauthorized {
+		t.Fatalf("revoked key: %d", code)
+	}
+	if code, _, _ := gql(t, srv.URL, "lin_new", q, nil); code != http.StatusOK {
+		t.Fatalf("rotated key: %d", code)
+	}
+	resp, err := http.Post(srv.URL+"/_test/keys", "application/json", strings.NewReader(`{"valid":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if code, _, _ := gql(t, srv.URL, "lin_old", q, nil); code != http.StatusOK {
+		t.Fatalf("configured key not restored: %d", code)
+	}
+}

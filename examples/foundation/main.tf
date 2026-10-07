@@ -25,32 +25,6 @@ module "postgres" {
   postgres_storage = var.postgres_storage
 }
 
-# Postgres moved into modules/postgres; existing state stays in place.
-moved {
-  from = random_password.postgres
-  to   = module.postgres.random_password.postgres
-}
-
-moved {
-  from = kubernetes_secret_v1.postgres
-  to   = module.postgres.kubernetes_secret_v1.postgres
-}
-
-moved {
-  from = kubernetes_secret_v1.db
-  to   = module.postgres.kubernetes_secret_v1.db
-}
-
-moved {
-  from = kubernetes_service_v1.postgres
-  to   = module.postgres.kubernetes_service_v1.postgres
-}
-
-moved {
-  from = kubernetes_stateful_set_v1.postgres
-  to   = module.postgres.kubernetes_stateful_set_v1.postgres
-}
-
 # ---------------------------------------------------------------- Vault (optional, dev mode)
 
 resource "helm_release" "vault" {

@@ -53,10 +53,16 @@ func TestE2E(t *testing.T) {
 		"TF_VAR_harness=fake",
 		// The console is off by default; the e2e run turns it on to check it.
 		"TF_VAR_enable_console=true",
+		// Rotation is tested against both secret stores: Slack credentials stay
+		// in a Kubernetes Secret, the Linear key is served from Vault.
+		"TF_VAR_enable_vault=true",
+		"TF_VAR_vault_address=http://vault." + systemNS + ".svc:8200",
+		`TF_VAR_secret_refs={"slack":"k8s:slack-credentials","linear":"vault:steadmesh/linear","anthropic":"k8s:anthropic-credentials"}`,
 	}
 
 	step(t, "apply foundation", func(t *testing.T) {
 		mustRun(t, env, "make", "-C", "examples", "apply-foundation")
+		configureVault(t)
 		mustRun(t, nil, "kubectl", "--context", kctx, "apply", "-f", "tests/e2e/manifests/fakes.yaml")
 		mustRun(t, nil, "kubectl", "--context", kctx, "-n", systemNS, "rollout", "status", "deploy/steadmesh-fakes", "--timeout=180s")
 	})
@@ -186,6 +192,8 @@ func TestE2E(t *testing.T) {
 	})
 
 	consoleChecks(t)
+
+	credentialRotation(t, f)
 
 	// A17: seat identities have no Kubernetes management authority.
 	step(t, "A17 no management access from a seat", func(t *testing.T) {

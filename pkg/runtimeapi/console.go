@@ -78,6 +78,8 @@ type ConsoleCheck struct {
 	OK        bool      `json:"ok"`
 	Detail    string    `json:"detail,omitempty"`
 	CheckedAt time.Time `json:"checked_at"`
+	// Credential is the credential refresh state at the last check.
+	Credential CredentialStatus `json:"credential"`
 }
 
 type ConsoleChannelBinding struct {

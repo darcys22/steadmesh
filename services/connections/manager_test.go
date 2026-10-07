@@ -26,7 +26,7 @@ func TestSyncVerifyAndRebuild(t *testing.T) {
 	comm := fakeconn.NewComm(orgfixture.UserA)
 	builds := 0
 	secrets := &fakeconn.Secrets{Err: errors.New("vault sealed")}
-	m := connections.New(ctx, connections.Factories{
+	m := connections.New(ctx, connections.Options{Factories: connections.Factories{
 		Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": comm.Factory()},
 		Tracker: map[string]func(connectors.Config) (connectors.Tracker, error){"linear": func(cfg connectors.Config) (connectors.Tracker, error) {
 			builds++
@@ -35,7 +35,7 @@ func TestSyncVerifyAndRebuild(t *testing.T) {
 			}
 			return &fakeconn.Tracker{}, nil
 		}},
-	}, secrets, func(string) connectors.IngressSink { return nopSink{} }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	}, Secrets: secrets, Sinks: func(string) connectors.IngressSink { return nopSink{} }, Log: slog.New(slog.NewTextHandler(io.Discard, nil))})
 	defer m.Close()
 
 	manifest := orgfixture.Manifest(t)
@@ -44,7 +44,7 @@ func TestSyncVerifyAndRebuild(t *testing.T) {
 		t.Fatalf("verify with sealed secrets = %+v", v)
 	}
 	// Verify retries failed builds, so a recovered dependency is picked up (A25).
-	secrets.Err = nil
+	secrets.SetErr(nil)
 	deadline := time.Now().Add(2 * time.Second)
 	for ok, _ := comm.Healthy(); !ok && time.Now().Before(deadline); ok, _ = comm.Healthy() {
 		m.Sync(ctx, "org", manifest.Spec.Connections)

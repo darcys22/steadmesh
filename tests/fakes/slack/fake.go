@@ -175,6 +175,9 @@ type Server struct {
 	acks      []Ack
 	fails     map[string][]*failRule
 	conns     []*wsConn
+	// validBot and validApp, when non-nil, replace the token rules: only
+	// listed tokens are accepted (set with POST /_test/tokens).
+	validBot, validApp map[string]bool
 
 	kick chan struct{}
 	done chan struct{}
@@ -205,6 +208,7 @@ func New(opts Options) *Server {
 		writeJSON(w, 200, map[string]int{"connected": s.Connections()})
 	})
 	s.mux.HandleFunc("POST /_test/fail", s.handleTestFail)
+	s.mux.HandleFunc("POST /_test/tokens", s.handleTestTokens)
 	s.mux.HandleFunc("POST /_test/disconnect", func(w http.ResponseWriter, _ *http.Request) {
 		s.Disconnect()
 		writeJSON(w, 200, map[string]bool{"ok": true})
@@ -627,6 +631,15 @@ func (s *Server) handleAPI(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) tokenOK(token string, app bool) bool {
+	s.mu.Lock()
+	valid := s.validBot
+	if app {
+		valid = s.validApp
+	}
+	s.mu.Unlock()
+	if valid != nil {
+		return valid[token]
+	}
 	if app {
 		if s.opts.AppToken != "" {
 			return token == s.opts.AppToken
@@ -708,4 +721,39 @@ func hijackClose(w http.ResponseWriter) {
 		panic(http.ErrAbortHandler)
 	}
 	_ = conn.Close()
+}
+
+// TokenSet lists the tokens the fake accepts; an empty list restores the
+// default rule for that kind (Options, or any well-formed token).
+type TokenSet struct {
+	Bot []string `json:"bot"`
+	App []string `json:"app"`
+}
+
+// SetTokens replaces the accepted tokens, as when a token is rotated or
+// revoked.
+func (s *Server) SetTokens(t TokenSet) {
+	set := func(list []string) map[string]bool {
+		if len(list) == 0 {
+			return nil
+		}
+		m := map[string]bool{}
+		for _, v := range list {
+			m[v] = true
+		}
+		return m
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.validBot, s.validApp = set(t.Bot), set(t.App)
+}
+
+func (s *Server) handleTestTokens(w http.ResponseWriter, r *http.Request) {
+	var t TokenSet
+	if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.SetTokens(t)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

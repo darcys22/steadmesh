@@ -131,8 +131,23 @@ func checkCondition(t, noun, failReason string, results map[string]runtimeapi.Ch
 // VerifyConditions maps a platform verify response to the connection,
 // ingress and binding conditions. Only required connections block readiness.
 func VerifyConditions(v *runtimeapi.VerifyResponse, required map[string]bool, gen int64) []metav1.Condition {
+	conns := checkCondition(v1alpha1.CondConnectionsAuthenticated, "connection", "ConnectionUnauthenticated", v.Connections, func(k string) bool { return required[k] }, gen)
+	if conns.Status == metav1.ConditionTrue {
+		// Working now, but a rotated credential could not be applied or the
+		// secret store is failing: still ready, with the reason surfaced.
+		degraded := map[string]string{}
+		for k, c := range v.Credentials {
+			if required[k] && c.Degraded() {
+				degraded[k] = c.State + ": " + c.Error
+			}
+		}
+		if len(degraded) > 0 {
+			conns = Condition(v1alpha1.CondConnectionsAuthenticated, true, "CredentialRefreshDegraded",
+				conns.Message+"; credential refresh degraded: "+failures(degraded), gen)
+		}
+	}
 	return []metav1.Condition{
-		checkCondition(v1alpha1.CondConnectionsAuthenticated, "connection", "ConnectionUnauthenticated", v.Connections, func(k string) bool { return required[k] }, gen),
+		conns,
 		checkCondition(v1alpha1.CondIngressReady, "ingress", "IngressUnavailable", v.Ingress, nil, gen),
 		checkCondition(v1alpha1.CondBindingsValid, "binding", "BindingInvalid", v.Bindings, nil, gen),
 	}

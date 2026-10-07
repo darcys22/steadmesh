@@ -38,9 +38,17 @@ func env(key, def string) string {
 	return def
 }
 
+func envDuration(key string, def time.Duration) time.Duration {
+	if d, err := time.ParseDuration(os.Getenv(key)); err == nil {
+		return d
+	}
+	return def
+}
+
 type config struct {
 	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace string
 	vaultAddr, vaultRole, vaultMount, vaultJWT                             string
+	credentialRefresh, credentialGrace, credentialMaxStale                 time.Duration
 }
 
 func main() {
@@ -56,6 +64,12 @@ func main() {
 	flag.StringVar(&c.vaultRole, "vault-role", env("VAULT_ROLE", "steadmesh-platform"), "Vault Kubernetes auth role")
 	flag.StringVar(&c.vaultMount, "vault-mount", env("VAULT_MOUNT", ""), "Vault KV v2 mount (default secret)")
 	flag.StringVar(&c.vaultJWT, "vault-jwt-path", env("VAULT_JWT_PATH", ""), "ServiceAccount token for Vault login (default in-cluster token)")
+	flag.DurationVar(&c.credentialRefresh, "credential-refresh-interval", envDuration("CREDENTIAL_REFRESH_INTERVAL", connections.DefaultRefreshInterval),
+		"how often every connection secret is re-resolved (Vault poll and watch backstop)")
+	flag.DurationVar(&c.credentialGrace, "credential-grace", envDuration("CREDENTIAL_GRACE", connections.DefaultGrace),
+		"how long the previous credential stays in use after its replacement is rejected or its secret is deleted")
+	flag.DurationVar(&c.credentialMaxStale, "credential-max-stale", envDuration("CREDENTIAL_MAX_STALE", connections.DefaultMaxStale),
+		"how long a credential stays in use while its secret cannot be read")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -87,16 +101,38 @@ func run(c config, log *slog.Logger) error {
 		return err
 	}
 	resolvers := map[string]connectors.Secrets{"k8s": secretref.NewKubernetes(kube, c.secretsNamespace)}
+	var vaultLogin *secretref.Vault
 	if c.vaultAddr != "" {
 		v, err := secretref.NewVault(c.vaultAddr, c.vaultRole, c.vaultMount, c.vaultJWT)
 		if err != nil {
 			return fmt.Errorf("vault: %w", err)
 		}
 		resolvers["vault"] = v
+		vaultLogin = v
 	}
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	if vaultLogin != nil {
+		// The platform's own Vault login, separate from the credentials
+		// stored in Vault (those are reported per connection).
+		reg.MustRegister(
+			prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "steadmesh_vault_login_ok",
+				Help: "1 when the platform holds a valid Vault login."}, func() float64 {
+				if vaultLogin.LoginStatus().LoggedIn {
+					return 1
+				}
+				return 0
+			}),
+			prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "steadmesh_vault_login_expiry_seconds",
+				Help: "Seconds until the platform's Vault login lease ends (0 when it does not expire)."}, func() float64 {
+				if exp := vaultLogin.LoginStatus().ExpiresAt; !exp.IsZero() {
+					return time.Until(exp).Seconds()
+				}
+				return 0
+			}),
+		)
+	}
 	p := platform.New(ctx, platform.Options{
 		Store:   st,
 		Auth:    auth.NewTokenReview(kube, st, c.controllerUser, c.consoleUser),
@@ -106,9 +142,12 @@ func run(c config, log *slog.Logger) error {
 			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New},
 			Model:         map[string]func(connectors.Config) (connectors.Model, error){"anthropic": anthropic.New},
 		},
-		Secrets:  secretref.NewMulti(resolvers),
-		Registry: reg,
-		Log:      log,
+		Secrets:            secretref.NewMulti(resolvers),
+		CredentialRefresh:  c.credentialRefresh,
+		CredentialGrace:    c.credentialGrace,
+		CredentialMaxStale: c.credentialMaxStale,
+		Registry:           reg,
+		Log:                log,
 	})
 	if err := p.Start(ctx); err != nil {
 		return err

@@ -227,10 +227,17 @@ func (s *Store) Gauges(ctx context.Context) (*Gauges, error) {
 	return g, rows.Err()
 }
 
-// RecordConnectionCheck stores a verification result for readiness (§5.4).
-func (s *Store) RecordConnectionCheck(ctx context.Context, orgID, connection string, res runtimeapi.CheckResult) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO connection_checks (organization_id, connection, ok, detail) VALUES ($1, $2, $3, $4)
-		ON CONFLICT (organization_id, connection) DO UPDATE SET ok = EXCLUDED.ok, detail = EXCLUDED.detail, checked_at = now()`,
-		orgID, connection, res.OK, res.Detail)
+// RecordConnectionCheck stores a verification result and the connection's
+// credential refresh state for readiness (§5.4). Nothing secret is stored.
+func (s *Store) RecordConnectionCheck(ctx context.Context, orgID, connection string, res runtimeapi.CheckResult, cred runtimeapi.CredentialStatus) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO connection_checks (organization_id, connection, ok, detail,
+			credential_state, secret_version, credential_error, refreshed_at, previous_until, refresh_failing_since)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		ON CONFLICT (organization_id, connection) DO UPDATE SET ok = EXCLUDED.ok, detail = EXCLUDED.detail,
+			credential_state = EXCLUDED.credential_state, secret_version = EXCLUDED.secret_version,
+			credential_error = EXCLUDED.credential_error, refreshed_at = EXCLUDED.refreshed_at,
+			previous_until = EXCLUDED.previous_until, refresh_failing_since = EXCLUDED.refresh_failing_since,
+			checked_at = now()`,
+		orgID, connection, res.OK, res.Detail, cred.State, cred.SecretVersion, cred.Error, cred.RefreshedAt, cred.PreviousUntil, cred.FailingSince)
 	return err
 }

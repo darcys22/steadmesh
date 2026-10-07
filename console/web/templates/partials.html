@@ -100,3 +100,15 @@
   <td><time datetime="{{stamp $e.StartedAt}}" title="{{stamp $e.StartedAt}}">{{ago $now $e.StartedAt}}</time></td>
 </tr>
 {{end}}
+
+{{define "credential"}}
+{{$c := .C}}{{$now := .Now}}
+{{if eq $c.State "current"}}<span class="chip ok" title="Secret version {{$c.SecretVersion}}">current</span>{{with $c.RefreshedAt}} <span class="muted">since {{ago $now .}}</span>{{end}}
+{{else if eq $c.State "none"}}<span class="muted">no secret</span>
+{{else if eq $c.State ""}}<span class="muted">unknown</span>
+{{else}}<span class="chip {{if eq $c.State "unavailable"}}bad{{else}}warn{{end}}">{{$c.State}}</span>
+  {{with $c.PreviousUntil}}<div class="muted">previous credential until {{.Local.Format "15:04"}}</div>{{end}}
+  {{with $c.FailingSince}}<div class="muted">failing since {{ago $now .}}</div>{{end}}
+  {{with $c.Error}}<div class="bad clip">{{.}}</div>{{end}}
+{{end}}
+{{end}}

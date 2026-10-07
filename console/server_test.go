@@ -54,7 +54,8 @@ func (f *fakePlatform) Organization(_ context.Context, id string) (*runtimeapi.C
 				ConfigRevision: "rev-2", SendTo: []string{"lead"}},
 		},
 		Connections: []runtimeapi.ConsoleConnection{{Key: "tracker", Adapter: "linear", Required: ok, SecretKind: "vault", SecretPath: "steadmesh/linear",
-			Check: &runtimeapi.ConsoleCheck{OK: false, Detail: "401 from Linear", CheckedAt: now.Add(-time.Minute)}}},
+			Check: &runtimeapi.ConsoleCheck{OK: false, Detail: "401 from Linear", CheckedAt: now.Add(-time.Minute),
+				Credential: runtimeapi.CredentialStatus{State: runtimeapi.CredentialReplacementRejected, Error: "replacement credential (secret version 4) rejected: 401"}}}},
 	}, nil
 }
 
@@ -229,7 +230,7 @@ func TestPagesRender(t *testing.T) {
 		{"/orgs/" + orgID + "/work", []string{"LIN-42", "Needs attention", "project.create", "workspace://design.md", "harness exited"}},
 		{"/orgs/" + orgID + "/work?status=succeeded", []string{"LIN-42"}},
 		{"/orgs/" + orgID + "/activity", []string{"comm-map", "edge-lead--rep_a", "node-lead", "please build the login page", "/stream?after="}},
-		{"/orgs/" + orgID + "/readiness", []string{"ConnectionsAuthenticated", "older", "ws-lead-1234", "Bound", "steadmesh/linear", "401 from Linear", "passed"}},
+		{"/orgs/" + orgID + "/readiness", []string{"ConnectionsAuthenticated", "older", "ws-lead-1234", "Bound", "steadmesh/linear", "401 from Linear", "passed", "replacement_rejected", "secret version 4"}},
 		{"/seats/" + leadID, []string{leadID, "ship login", "OAuth provider", "<code>lead</code> (personal)", "seat-lead-1234-0", "connection:tracker"}},
 		{"/runs/" + runID, []string{"harness exited", "tool call", "result after 1.0s", "connections.invoke", "please build the login page"}},
 		{"/conversations/" + convID + "?org=" + orgID, []string{"please build the login page", "leased"}},

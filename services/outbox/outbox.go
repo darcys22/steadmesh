@@ -28,6 +28,11 @@ type Comms interface {
 	Communication(orgID, key string) (connectors.Communication, error)
 }
 
+// Refresher is implemented by Comms that can reload a rotated credential.
+type Refresher interface {
+	RefreshNow(ctx context.Context, orgID, key string) bool
+}
+
 // Dispatcher sends claimed outbox rows.
 type Dispatcher struct {
 	Store    Store
@@ -134,7 +139,15 @@ func (d *Dispatcher) send(ctx context.Context, it store.OutboxItem) (state, rece
 		return store.OutboxSent, receipt, ""
 	case errors.Is(err, connectors.ErrRetryable):
 		return store.OutboxPending, "", err.Error()
-	case errors.Is(err, connectors.ErrPermanent), errors.Is(err, connectors.ErrUnauthorized):
+	case errors.Is(err, connectors.ErrUnauthorized):
+		// Rejected before sending. The credential may have been rotated:
+		// reload it and retry under the normal bounded backoff rather than
+		// dropping the reply.
+		if r, ok := d.Comms.(Refresher); ok {
+			r.RefreshNow(ctx, it.OrganizationID, it.Connection)
+		}
+		return store.OutboxPending, "", err.Error()
+	case errors.Is(err, connectors.ErrPermanent):
 		return store.OutboxDead, "", err.Error()
 	default:
 		return store.OutboxUnknown, "", err.Error()

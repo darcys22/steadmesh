@@ -60,6 +60,9 @@ func TestSendOutcomes(t *testing.T) {
 		"retryable backs off":     {fmt.Errorf("429: %w", connectors.ErrRetryable), 2, resolved{store.OutboxPending, 8 * time.Second}},
 		"retryable exhausted":     {fmt.Errorf("429: %w", connectors.ErrRetryable), store.MaxAttempts, resolved{store.OutboxDead, 0}},
 		"permanent":               {fmt.Errorf("channel_not_found: %w", connectors.ErrPermanent), 1, resolved{store.OutboxDead, 0}},
+		// A rejected credential sends nothing; retrying lets a rotated key recover.
+		"unauthorized retries":   {fmt.Errorf("invalid_auth: %w", connectors.ErrUnauthorized), 1, resolved{store.OutboxPending, time.Second}},
+		"unauthorized exhausted": {fmt.Errorf("invalid_auth: %w", connectors.ErrUnauthorized), store.MaxAttempts, resolved{store.OutboxDead, 0}},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
