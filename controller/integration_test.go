@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -463,23 +464,41 @@ func TestCreateOrganizationIsReadyAndIdempotent(t *testing.T) {
 		t.Fatalf("seat probe = %+v", seat.Status.Probe)
 	}
 
-	// A failing required connection is reported after a fresh verification (A02/A25).
-	fp.mu.Lock()
-	fp.failConn = "tracker"
-	fp.mu.Unlock()
-	o = getOrg(t, ns, "acme")
-	patch = client.MergeFrom(o.DeepCopy())
-	o.Annotations[v1alpha1.AnnotationVerifyRequest] = "nonce-2"
-	if err := k8s.Patch(ctx, o, patch); err != nil {
-		t.Fatal(err)
+	verify := func(nonce, failing string) {
+		t.Helper()
+		fp.mu.Lock()
+		fp.failConn = failing
+		fp.mu.Unlock()
+		o := getOrg(t, ns, "acme")
+		patch := client.MergeFrom(o.DeepCopy())
+		o.Annotations[v1alpha1.AnnotationVerifyRequest] = nonce
+		if err := k8s.Patch(ctx, o, patch); err != nil {
+			t.Fatal(err)
+		}
 	}
+	// A failing optional connection (the tracker) is reported as
+	// IntegrationsDegraded and never blocks readiness.
+	verify("nonce-2", "tracker")
+	eventually(t, 30*time.Second, "degraded integration", func() error {
+		o := getOrg(t, ns, "acme")
+		d := meta.FindStatusCondition(o.Status.Conditions, v1alpha1.CondIntegrationsDegraded)
+		if o.Annotations[v1alpha1.AnnotationVerifyObserved] != "nonce-2" || d == nil || d.Status != metav1.ConditionTrue || !strings.Contains(d.Message, "tracker") {
+			return fmt.Errorf("observed %q degraded %+v", o.Annotations[v1alpha1.AnnotationVerifyObserved], d)
+		}
+		if !condTrue(o, v1alpha1.CondOperationalReady) {
+			return errors.New("an optional connection blocked readiness")
+		}
+		return nil
+	})
+	// A failing required connection is reported after a fresh verification (A02/A25).
+	verify("nonce-3", "slack")
 	eventually(t, 30*time.Second, "blocked condition", func() error {
 		o := getOrg(t, ns, "acme")
 		c := meta.FindStatusCondition(o.Status.Conditions, v1alpha1.CondOperationalReady)
-		if o.Annotations[v1alpha1.AnnotationVerifyObserved] != "nonce-2" || c.Status != metav1.ConditionFalse {
+		if o.Annotations[v1alpha1.AnnotationVerifyObserved] != "nonce-3" || c.Status != metav1.ConditionFalse {
 			return fmt.Errorf("observed %q ready %s", o.Annotations[v1alpha1.AnnotationVerifyObserved], c.Status)
 		}
-		if c.Reason != v1alpha1.CondConnectionsAuthenticated || !strings.Contains(c.Message, "tracker") {
+		if c.Reason != v1alpha1.CondConnectionsAuthenticated || !strings.Contains(c.Message, "slack") {
 			return fmt.Errorf("reason %s: %s", c.Reason, c.Message)
 		}
 		return nil
