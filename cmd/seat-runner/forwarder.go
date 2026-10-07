@@ -26,6 +26,8 @@ type forwarder struct {
 	log     *slog.Logger
 	in      <-chan harnesses.Event
 	onFence func(error)
+	// observe, when set, sees every event before it is queued.
+	observe func(harnesses.Event)
 	flushCh chan chan struct{}
 	done    chan struct{}
 
@@ -54,6 +56,9 @@ func capData(d json.RawMessage) json.RawMessage {
 }
 
 func (f *forwarder) add(e harnesses.Event) {
+	if f.observe != nil {
+		f.observe(e)
+	}
 	if e.ExecutionID == "" {
 		return
 	}

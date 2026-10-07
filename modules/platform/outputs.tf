@@ -10,6 +10,8 @@ output "seat_images" {
   description = "Seat image per harness adapter, for harness_profiles image_digest. Pin a digest in production."
   value = {
     "claude-code" = "${local.images.seat_claudecode}:${local.tag}"
+    "codex"       = "${local.images.seat_codex}:${local.tag}"
+    "pi"          = "${local.images.seat_pi}:${local.tag}"
     "fake"        = "${local.images.seat_fake}:${local.tag}"
   }
 }

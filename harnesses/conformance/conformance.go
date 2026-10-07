@@ -78,8 +78,18 @@ func NewToolServer(t testing.TB, token string) *ToolServer {
 	return ts
 }
 
+// SetToken changes the accepted seat token, as when it is rotated.
+func (ts *ToolServer) SetToken(tok string) {
+	ts.mu.Lock()
+	defer ts.mu.Unlock()
+	ts.Token = tok
+}
+
 func (ts *ToolServer) serve(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+ts.Token {
+	ts.mu.Lock()
+	tok := ts.Token
+	ts.mu.Unlock()
+	if r.Header.Get("Authorization") != "Bearer "+tok {
 		w.WriteHeader(http.StatusUnauthorized)
 		_ = json.NewEncoder(w).Encode(runtimeapi.Error{Code: "unauthenticated", Message: "bad token"})
 		return

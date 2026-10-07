@@ -1,0 +1,1 @@
+{"path": "/v1/chat/completions", "auth": "Bearer key-4", "x-api-key": null, "x-extra": "static-header", "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": ["system", "user"]}

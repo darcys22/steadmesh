@@ -29,6 +29,7 @@
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -49,7 +50,7 @@
 <tr><td>Terraform provider</td><td><code>provider/</code></td><td>Writes the resolved organisation with server-side apply (field manager <code>terraform-provider-steadmesh</code>, never forced). Waits for readiness, imports, detects drift.</td></tr>
 <tr><td>Controller</td><td><code>controller/</code>, <code>runtime/</code></td><td>Reconciles organisations into seats, runs seat lifecycle (wake, idle stop, safe restarts, fenced recovery, retirement), runs the sandbox backend and reports readiness.</td></tr>
 <tr><td>Platform service</td><td><code>services/</code></td><td>The trusted runtime: identity, durable inbox and outbox, memory, the tools gateway, the operation ledger, the scheduler, the model proxy, Slack ingress, verification and probes.</td></tr>
-<tr><td>Connectors</td><td><code>connectors/</code></td><td>Slack (Socket Mode), Linear (GraphQL), Anthropic (model proxy), and secret resolvers for Kubernetes and Vault.</td></tr>
+<tr><td>Connectors</td><td><code>connectors/</code></td><td>Slack (Socket Mode), Linear (GraphQL), model endpoints (Anthropic, OpenAI and any compatible endpoint, behind the model proxy), and secret resolvers for Kubernetes and Vault.</td></tr>
 <tr><td>Seat runtime</td><td><code>cmd/seat-runner</code>, <code>harnesses/</code>, <code>cmd/steadmesh-tools</code></td><td>The in-Pod supervisor (lease, inbox, checkpoints, probes), the harness adapters and the tool client.</td></tr>
 <tr><td>Packaging</td><td><code>charts/platform</code>, <code>build/</code></td><td>The Helm chart (CRDs, controller, platform service) and container images.</td></tr>
 </table>
@@ -88,7 +89,7 @@
 <ul>
 <li><code>k8s:&lt;name&gt;</code> refers to a Secret in the <strong>control-plane</strong> namespace, readable only by the platform ServiceAccount.</li>
 <li><code>vault:&lt;path&gt;</code> refers to Vault KV v2. The platform logs in with Kubernetes auth, using its own ServiceAccount token.</li>
-<li>Seats never receive external credentials. They use tools through the gateway and the model through the proxy. Credential values never appear in prompts, logs, manifests or tool configuration.</li>
+<li>Seats never receive external credentials. They use tools through the gateway and the model through the proxy, which a loopback forwarder in the seat runner reaches with the seat's current token. The proxy allows only the seat's configured model. Credential values never appear in prompts, logs, manifests or tool configuration.</li>
 <li>The resolvers are in <code>connectors/secretref</code>.</li>
 </ul>
 
@@ -108,7 +109,7 @@
 <li><strong>Workload.</strong> A StatefulSet with 0 or 1 replicas and one container running <code>/usr/local/bin/seat-runner</code>. It runs as uid 1000 and non-root, with a read-only root filesystem, all capabilities dropped and the <code>RuntimeDefault</code> seccomp profile. <code>automountServiceAccountToken</code> is false.</li>
 <li><strong>Identity.</strong> A projected token at <code>/var/run/steadmesh/token</code> with audience <code>steadmesh-gateway</code>, valid for 3600s and rotated by the kubelet. This is the seat's only credential, and the Kubernetes API rejects it.</li>
 <li><strong>Volumes.</strong> <code>/seat</code> is the persistent workspace: <code>workspace/</code> is the harness's working directory, <code>home/</code> is <code>HOME</code> and holds harness sessions, and <code>runner/</code> holds runner state. <code>/etc/steadmesh/manifest</code> is read-only and contains <code>manifest.json</code> (the resolved seat manifest) and <code>instructions.md</code> (the rendered instructions, in order). <code>/tmp</code> is an emptyDir. The runner creates the seat directories itself and fails clearly if they are not writable.</li>
-<li><strong>Environment.</strong> <code>STEADMESH_PLATFORM_URL</code>, <code>STEADMESH_TOKEN_FILE</code>, <code>STEADMESH_ORG_ID</code>, <code>STEADMESH_SEAT_ID</code>, <code>STEADMESH_SEAT_KEY</code>, <code>STEADMESH_CONFIG_REVISION</code>, <code>STEADMESH_HARNESS</code>, <code>STEADMESH_MODEL_CONNECTION</code>, <code>STEADMESH_MODEL</code>, <code>STEADMESH_MANIFEST_DIR</code>, and <code>POD_UID</code> from the downward API.</li>
+<li><strong>Environment.</strong> <code>STEADMESH_PLATFORM_URL</code>, <code>STEADMESH_TOKEN_FILE</code>, <code>STEADMESH_ORG_ID</code>, <code>STEADMESH_SEAT_ID</code>, <code>STEADMESH_SEAT_KEY</code>, <code>STEADMESH_CONFIG_REVISION</code>, <code>STEADMESH_HARNESS</code>, <code>STEADMESH_MANIFEST_DIR</code>, and <code>POD_UID</code> from the downward API.</li>
 <li><strong>Probes.</strong> <code>:8081/healthz</code>; <code>:8081/readyz</code> reports ready once the runner holds the lease and has loaded its bootstrap.</li>
 <li><strong>Termination.</strong> Grace period 300s. On SIGTERM the runner enters Quiescing: it lets the turn finish (interrupting it after 240s), checkpoints, reports Stopped and releases the lease.</li>
 <li><strong>Network.</strong> Ingress is denied. Egress is allowed only to the platform Pods on TCP 8080 and to DNS. The controller proves this with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
@@ -131,7 +132,7 @@
 <li><strong>Ingress.</strong> A Slack event is authorised from the verified team and user IDs matching a channel binding. It is stored before the event is acknowledged, and deduplicated by connection and event ID. The request handler never waits for a model.</li>
 <li><strong>Inbox.</strong> <code>GET /v1/inbox/next</code> long-polls, then atomically leases the oldest eligible delivery. Order is preserved within a conversation, and the call creates an execution record with the seat's configuration revision. A delivery lease lasts 15 minutes. If it expires, the message is requeued with backoff (1s, 8s, 64s, then 5m), and after 5 attempts it is dead-lettered so it never blocks the seat. Each seat holds at most 1000 pending internal messages.</li>
 <li><strong>Outbox.</strong> Replies to humans are written to an outbox in the same transaction as the reply. Each send is recorded as a connector operation, and an ambiguous send is marked unknown rather than resent.</li>
-<li><strong>Probes.</strong> Probe messages are handled by the runner itself, not the harness. The runner makes a tool call through <code>steadmesh-tools</code>, a workspace write and read, and a model ping when a model connection exists, then reports the checks.</li>
+<li><strong>Probes.</strong> The runner checks a workspace write and read. A harness with a model then proves itself with a real turn: it must reach the model through the proxy (<code>model</code>), call the platform <code>self</code> tool through its tool bridge (<code>tool</code>) and complete the turn (<code>turn</code>). A harness without a model calls <code>self</code> through <code>steadmesh-tools</code> instead. See <a href="harnesses.html#readiness">Harnesses and models</a>.</li>
 </ul>
 
 <h2 id="gateway">Gateway and operation ledger</h2>

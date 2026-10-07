@@ -73,12 +73,14 @@ resource "kubernetes_secret_v1" "linear" {
   }
 }
 
-resource "kubernetes_secret_v1" "anthropic" {
+# One Secret per model endpoint: <key>-credentials with key api_key.
+resource "kubernetes_secret_v1" "model" {
+  for_each = nonsensitive(toset(keys(var.model_api_keys)))
   metadata {
-    name      = "anthropic-credentials"
+    name      = "${each.key}-credentials"
     namespace = kubernetes_namespace_v1.system.metadata[0].name
   }
   data = {
-    api_key = var.anthropic_api_key
+    api_key = var.model_api_keys[each.key]
   }
 }

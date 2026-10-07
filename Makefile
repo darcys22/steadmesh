@@ -7,12 +7,12 @@ KIND_CLUSTER ?= steadmesh
 KCTX := kind-$(KIND_CLUSTER)
 KUBECTL := kubectl --context $(KCTX)
 TAG ?= dev
-IMAGES := controller platform console seat-fake seat-claudecode fakes
+IMAGES := controller platform console seat-fake seat-claudecode seat-codex seat-pi fakes
 ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses e2e e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -42,6 +42,25 @@ test:
 # provider via terraform-plugin-testing.
 test-integration:
 	$(GO) test -count=1 -tags integration -timeout 20m ./...
+
+# Harness conformance with the real pinned CLIs (claude, codex, pi) against a
+# scripted model through the real model forwarder: on this machine, using
+# binaries fetched and digest-checked by build/harness-bins.sh, and inside
+# the seat images with their Linux binaries.
+conformance:
+	build/harness-bins.sh
+	$(GO) test -count=1 -tags integration -run ModelConformance ./harnesses/...
+
+CONFORMANCE_ARCH ?= $(shell $(GO) env GOARCH)
+conformance-images:
+	@mkdir -p out/conformance
+	set -e; for h in claudecode:claude:seat-claudecode codex:codex:seat-codex pi:pi:seat-pi; do \
+	  IFS=: read pkg bin img <<<"$$h"; \
+	  CGO_ENABLED=0 GOOS=linux GOARCH=$(CONFORMANCE_ARCH) $(GO) test -c -tags integration -o out/conformance/$$pkg.test ./harnesses/$$pkg; \
+	  echo "==> $$img"; \
+	  docker run --rm -v $(CURDIR)/out/conformance:/t:ro -e STEADMESH_$$(echo $$bin | tr a-z A-Z)_BIN=$$bin \
+	    --entrypoint /t/$$pkg.test steadmesh/$$img:$(TAG) -test.run ModelConformance -test.count=1; \
+	done
 
 provider:
 	$(GO) build -o $(BIN)/terraform-provider-steadmesh ./cmd/terraform-provider-steadmesh
@@ -97,3 +116,9 @@ e2e-reset:
 # Live tests against real Slack, Linear and Anthropic. Requires credentials (see tests/live/README.md).
 live: kind-up kind-load provider orgctl
 	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags live -timeout 60m ./tests/live/...
+
+# Each real harness CLI on its real model endpoint, without a cluster:
+# ANTHROPIC_API_KEY, OPENAI_API_KEY and/or I14_API_KEY (see tests/live/README.md).
+live-harnesses:
+	build/harness-bins.sh
+	$(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...

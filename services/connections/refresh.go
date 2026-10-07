@@ -194,7 +194,7 @@ func (m *Manager) refresh(ctx context.Context, c *conn) bool {
 // definitively rejected.
 func (m *Manager) tryCandidate(ctx context.Context, c *conn, res connectors.Resolved) bool {
 	now := m.now()
-	cand, err := m.construct(c.org, c.key, c.decl, res.Values)
+	cand, err := m.construct(c, res.Values)
 	definitive := err != nil
 	if err == nil {
 		err = cand.verify(ctx)

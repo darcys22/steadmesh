@@ -4,12 +4,14 @@ package platform_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/spec"
 	"github.com/darcys22/steadmesh/services/internal/orgfixture"
 )
 
@@ -218,4 +220,51 @@ func TestConsoleTracesDelegationAndSurvivesRestart(t *testing.T) {
 func jsonInt(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
+}
+
+func TestModelRequestEvents(t *testing.T) {
+	e := newEnvWithConsole(t, true)
+	sp := orgfixture.Spec()
+	sp.Connections["model"] = spec.Connection{Adapter: "anthropic", SecretRef: "k8s:anthropic"}
+	sp.HarnessProfiles["claude"] = spec.HarnessProfile{Adapter: "claude-code", ImageDigest: "seat:dev", Model: &spec.ModelSelection{Connection: "model", ID: "claude-x"}}
+	sp.Seats["lead"] = func(s spec.Seat) spec.Seat { s.HarnessProfile = "claude"; return s }(sp.Seats["lead"])
+	e.sync(sp)
+	repA, lead := e.seat("rep_a"), e.seat("lead")
+	repA.mustTool("messages.send", map[string]any{"to": "lead", "body": "think about it"})
+	d := lead.next()
+	if d == nil {
+		t.Fatal("no delivery")
+	}
+	infer := func(model string) int {
+		code, _ := e.request("POST", "/v1/model/model/v1/messages", lead.token, map[string]string{
+			runtimeapi.HeaderGeneration: fmt.Sprint(lead.gen), runtimeapi.HeaderExecution: d.ExecutionID}, map[string]any{"model": model})
+		return code
+	}
+	if code := infer("claude-x"); code != http.StatusOK {
+		t.Fatalf("allowed model: %d", code)
+	}
+	if code := infer("claude-other"); code != http.StatusForbidden {
+		t.Fatalf("other model: %d", code)
+	}
+	lead.ack(d)
+
+	var run runtimeapi.ConsoleExecutionDetail
+	e.console(runtimeapi.PathConsoleExecutions+d.ExecutionID, &run)
+	var got []runtimeapi.ModelRequest
+	for _, ev := range run.Events {
+		if ev.Kind == runtimeapi.EventModelRequest {
+			var mr runtimeapi.ModelRequest
+			_ = json.Unmarshal(ev.Data, &mr)
+			got = append(got, mr)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("model_request events %+v", got)
+	}
+	if ok := got[0]; ok.Model != "claude-x" || ok.API != "anthropic_messages" || ok.Connection != "model" || ok.Status != http.StatusOK || ok.Rejected != "" {
+		t.Fatalf("allowed request recorded as %+v", ok)
+	}
+	if no := got[1]; no.Model != "claude-other" || no.Status != http.StatusForbidden || !strings.Contains(no.Rejected, "not allowed") {
+		t.Fatalf("refused request recorded as %+v", no)
+	}
 }

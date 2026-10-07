@@ -9,12 +9,12 @@
 //
 // with the prompt (envelope + body) on stdin, HOME=/seat/home and
 // cwd=/seat/workspace. Platform tools arrive through `steadmesh-tools mcp`.
-// The model is reached only through the platform model proxy
-// (ANTHROPIC_BASE_URL=<platform>/v1/model/<connection>); the seat's projected
-// token authenticates it, via an apiKeyHelper that re-reads the token file
-// (sent as both Authorization: Bearer and X-Api-Key) or, as a fallback,
-// ANTHROPIC_AUTH_TOKEN (Authorization: Bearer only). No model credential
-// enters the sandbox.
+// The model is reached only through the seat runner's local forwarder
+// (ANTHROPIC_BASE_URL=http://127.0.0.1:<port>/model/<connection>), which adds
+// the seat's current token to every request for the platform model proxy;
+// ANTHROPIC_API_KEY is a placeholder. No model credential enters the sandbox.
+// Every model role (background, subagent) is pinned to the profile's model,
+// the only one the proxy accepts for the seat.
 //
 // Checkpoint = session id + claude version (application_checkpoint). When a
 // session cannot be resumed, the adapter starts a new session seeded with the
@@ -64,7 +64,6 @@ const (
 	ConfigVersion        = "version"         // when set, Prepare requires exactly this version
 	ConfigPermissionMode = "permission_mode" // default bypassPermissions
 	ConfigBare           = "bare"            // default "true"
-	ConfigAuth           = "auth"            // api_key_helper (default) or auth_token
 	ConfigAllowedTools   = "allowed_tools"   // optional --allowedTools value
 	ConfigPromptSnapshot = "system_prompt_snapshot"
 	ConfigInterruptGrace = "interrupt_grace" // Go duration, default 10s
@@ -106,7 +105,6 @@ type Adapter struct {
 type config struct {
 	permissionMode string
 	bare           bool
-	auth           string
 	allowedTools   string
 	promptSnapshot string
 	grace          time.Duration
@@ -115,6 +113,23 @@ type config struct {
 
 // New returns a Claude Code adapter.
 func New() *Adapter { return &Adapter{bus: harnesses.NewEventBus(4096)} }
+
+// SettingEffort is the model.settings key passed as --effort (CONTRACT.md).
+const SettingEffort = "effort"
+
+func init() {
+	harnesses.Register(harnesses.Descriptor{
+		Name:       AdapterName,
+		Aliases:    []string{"claudecode", "claude"},
+		APIs:       []string{harnesses.APIAnthropicMessages},
+		NeedsModel: true,
+		Settings: map[string]harnesses.Setting{
+			SettingEffort: {Description: "effort level (--effort)", Values: []string{"low", "medium", "high", "xhigh", "max"}},
+		},
+		Capabilities: []string{"tools", "mcp", "event_stream", "session_resume", "interrupt", "application_checkpoint"},
+		New:          func() harnesses.Adapter { return New() },
+	})
+}
 
 var _ harnesses.Adapter = (*Adapter)(nil)
 
@@ -135,7 +150,7 @@ func (a *Adapter) DescribeCapabilities() harnesses.Capabilities {
 var versionRe = regexp.MustCompile(`\d+\.\d+\.\d+`)
 
 func parseConfig(m map[string]string) (config, error) {
-	c := config{permissionMode: "bypassPermissions", bare: true, auth: "api_key_helper", promptSnapshot: "off", grace: defaultInterruptGrace, maxRetries: 4}
+	c := config{permissionMode: "bypassPermissions", bare: true, promptSnapshot: "off", grace: defaultInterruptGrace, maxRetries: 4}
 	if v := m[ConfigPermissionMode]; v != "" {
 		c.permissionMode = v
 	}
@@ -145,12 +160,6 @@ func parseConfig(m map[string]string) (config, error) {
 			return c, fmt.Errorf("claudecode: %s: %w", ConfigBare, err)
 		}
 		c.bare = b
-	}
-	if v := m[ConfigAuth]; v != "" {
-		if v != "api_key_helper" && v != "auth_token" {
-			return c, fmt.Errorf("claudecode: %s must be api_key_helper or auth_token", ConfigAuth)
-		}
-		c.auth = v
 	}
 	c.allowedTools = m[ConfigAllowedTools]
 	if v := m[ConfigMaxRetries]; v != "" {
@@ -185,8 +194,11 @@ func (a *Adapter) Prepare(ctx context.Context, env harnesses.Environment) error 
 	if err != nil {
 		return err
 	}
-	if env.ModelProxyURL == "" {
-		return errors.New("claudecode: a model connection (model proxy URL) is required")
+	if env.Model == nil || env.Model.BaseURL == "" || env.Model.ID == "" {
+		return errors.New("claudecode: a model is required")
+	}
+	if env.Model.API != harnesses.APIAnthropicMessages {
+		return fmt.Errorf("claudecode: Claude Code speaks only %s, not %q", harnesses.APIAnthropicMessages, env.Model.API)
 	}
 	if env.ToolCommand == "" || env.TokenFile == "" {
 		return errors.New("claudecode: ToolCommand and TokenFile are required")
@@ -230,7 +242,7 @@ func (a *Adapter) Prepare(ctx context.Context, env harnesses.Environment) error 
 	if err := writeJSON(filepath.Join(stateDir, "mcp.json"), mcpConfig(env)); err != nil {
 		return err
 	}
-	if err := writeJSON(filepath.Join(stateDir, "settings.json"), settings(env, cfg)); err != nil {
+	if err := writeJSON(filepath.Join(stateDir, "settings.json"), settings(cfg)); err != nil {
 		return err
 	}
 	a.mu.Lock()
@@ -256,23 +268,16 @@ func mcpConfig(env harnesses.Environment) map[string]any {
 	}}
 }
 
-func settings(env harnesses.Environment, cfg config) map[string]any {
+func settings(cfg config) map[string]any {
 	// Only well-known keys: with -p, a settings file that fails validation is
-	// silently ignored, which would drop the apiKeyHelper.
-	s := map[string]any{
+	// silently ignored.
+	return map[string]any{
 		"permissions": map[string]any{"defaultMode": cfg.permissionMode},
 		// Seats live for months; the default 30-day cleanup would delete the
 		// transcript that --resume needs.
 		"cleanupPeriodDays": 3650,
 	}
-	if cfg.auth == "api_key_helper" {
-		// Re-read on every helper invocation: projected tokens rotate.
-		s["apiKeyHelper"] = "cat " + shellQuote(env.TokenFile)
-	}
-	return s
 }
-
-func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 func writeJSON(path string, v any) error {
 	b, _ := json.MarshalIndent(v, "", "  ")
@@ -298,13 +303,16 @@ func (a *Adapter) baseEnv(env harnesses.Environment) []string {
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1",
 		"DISABLE_TELEMETRY=1",
 		"DISABLE_ERROR_REPORTING=1",
-		"CLAUDE_CODE_API_KEY_HELPER_TTL_MS=300000",
 	}
 	if env.TmpDir != "" {
 		out = append(out, "TMPDIR="+env.TmpDir)
 	}
-	if env.ModelProxyURL != "" {
-		out = append(out, "ANTHROPIC_BASE_URL="+env.ModelProxyURL)
+	if m := env.Model; m != nil {
+		out = append(out, "ANTHROPIC_BASE_URL="+m.BaseURL, "ANTHROPIC_API_KEY="+m.APIKey)
+		for _, k := range []string{"ANTHROPIC_MODEL", "ANTHROPIC_SMALL_FAST_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+			"ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"} {
+			out = append(out, k+"="+m.ID)
+		}
 	}
 	for _, kv := range env.ExtraEnv {
 		if k, _, ok := strings.Cut(kv, "="); ok && strings.HasPrefix(k, "STEADMESH_") {
@@ -581,8 +589,11 @@ func (a *Adapter) Args(sessionID, systemPrompt string) []string {
 	if a.cfg.allowedTools != "" {
 		args = append(args, "--allowedTools", a.cfg.allowedTools)
 	}
-	if a.env.Model != "" {
-		args = append(args, "--model", a.env.Model)
+	if m := a.env.Model; m != nil {
+		args = append(args, "--model", m.ID)
+		if e := m.Settings[SettingEffort]; e != "" {
+			args = append(args, "--effort", e)
+		}
 	}
 	return args
 }
@@ -613,15 +624,7 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 	cmd.Dir = env.WorkspaceDir
 	cmd.Env = a.baseEnv(env)
 	cmd.Env = append(cmd.Env, "CLAUDE_CODE_MAX_RETRIES="+strconv.Itoa(cfg.maxRetries))
-	cmd.Env = append(cmd.Env, "ANTHROPIC_CUSTOM_HEADERS="+fmt.Sprintf("%s: %d\n%s: %s", runtimeapi.HeaderGeneration, env.Generation, runtimeapi.HeaderExecution, d.ExecutionID))
 	cmd.Env = append(cmd.Env, "STEADMESH_EXECUTION="+d.ExecutionID)
-	if cfg.auth == "auth_token" {
-		tok, err := os.ReadFile(env.TokenFile)
-		if err != nil {
-			return nil, fmt.Errorf("read token: %w", err)
-		}
-		cmd.Env = append(cmd.Env, "ANTHROPIC_AUTH_TOKEN="+strings.TrimSpace(string(tok)))
-	}
 	cmd.Stdin = strings.NewReader(a.prompt(d, recovery, sessionID == ""))
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
@@ -678,8 +681,8 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 			emit(ev.Kind, ev.CorrelationID, ev.Data)
 		}
 		if !hadInit && p.Init != nil {
-			if cfg.auth == "api_key_helper" && p.Init.APIKeySource != "" && p.Init.APIKeySource != "apiKeyHelper" {
-				emit(harnesses.EventError, "", map[string]any{"error": "settings not applied: apiKeySource is " + p.Init.APIKeySource + ", expected apiKeyHelper"})
+			if p.Init.APIKeySource != "" && p.Init.APIKeySource != "ANTHROPIC_API_KEY" {
+				emit(harnesses.EventError, "", map[string]any{"error": "apiKeySource is " + p.Init.APIKeySource + ", expected ANTHROPIC_API_KEY"})
 			}
 			if st := mcpStatus(p.Init); st != "connected" {
 				emit(harnesses.EventError, "", map[string]any{"error": "steadmesh MCP server status: " + st})

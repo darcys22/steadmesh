@@ -277,8 +277,6 @@ func seatEnv(s *seatruntime.Seat, o Options) []corev1.EnvVar {
 		{Name: "STEADMESH_SEAT_KEY", Value: s.SeatKey},
 		{Name: "STEADMESH_CONFIG_REVISION", Value: s.ConfigRevision},
 		{Name: "STEADMESH_HARNESS", Value: h.Adapter},
-		{Name: "STEADMESH_MODEL_CONNECTION", Value: h.ModelConnection},
-		{Name: "STEADMESH_MODEL", Value: h.Model},
 		{Name: "STEADMESH_MANIFEST_DIR", Value: ManifestDir},
 		{Name: "HOME", Value: SeatMount + "/home"},
 		{Name: "POD_UID", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.uid"}}},

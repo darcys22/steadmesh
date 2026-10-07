@@ -398,3 +398,25 @@ type ProbeResponse struct {
 	Checks map[string]string `json:"checks,omitempty"`
 	Error  string            `json:"error,omitempty"`
 }
+
+// EventModelRequest is the ExecutionEvent.Kind the platform records for each
+// model request a seat makes through the model proxy. Data is a ModelRequest.
+const EventModelRequest = "model_request"
+
+// ModelRequest records what a seat actually asked of which endpoint.
+type ModelRequest struct {
+	Connection   string `json:"connection"`
+	API          string `json:"api"`
+	Model        string `json:"model,omitempty"`
+	UpstreamHost string `json:"upstream_host"`
+	Status       int    `json:"status"`
+	Stream       bool   `json:"stream,omitempty"`
+	DurationMS   int64  `json:"duration_ms"`
+	// Usage is the token usage the endpoint reported, when it did.
+	Usage map[string]int64 `json:"usage,omitempty"`
+	// Rejected is why the platform refused the request before sending it.
+	Rejected string `json:"rejected,omitempty"`
+	// CredentialRefreshed is true when the request was retried after the
+	// connection's credential was refreshed.
+	CredentialRefreshed bool `json:"credential_refreshed,omitempty"`
+}

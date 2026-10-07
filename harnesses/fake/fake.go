@@ -101,6 +101,14 @@ type Adapter struct {
 // New returns a fake adapter.
 func New() *Adapter { return &Adapter{bus: harnesses.NewEventBus(1024)} }
 
+func init() {
+	harnesses.Register(harnesses.Descriptor{
+		Name:         AdapterName,
+		Capabilities: []string{"tools", "event_stream", "interrupt", "application_checkpoint"},
+		New:          func() harnesses.Adapter { return New() },
+	})
+}
+
 var _ harnesses.Adapter = (*Adapter)(nil)
 
 func (a *Adapter) DescribeCapabilities() harnesses.Capabilities {

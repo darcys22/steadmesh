@@ -29,6 +29,7 @@
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -67,16 +68,17 @@
 <pre><code>export TF_VAR_slack_bot_token=xoxb-…
 export TF_VAR_slack_app_token=xapp-…
 export TF_VAR_linear_api_key=lin_api_…
-export TF_VAR_anthropic_api_key=sk-ant-…</code></pre>
-<div class="callout warn"><p>The Kubernetes provider stores Secret values in the <em>foundation</em> stage's Terraform state, so protect that state. Alternatively, create the Secrets <code>slack-credentials</code> (keys <code>bot_token</code>, <code>app_token</code>), <code>linear-credentials</code> (<code>api_key</code>) and <code>anthropic-credentials</code> (<code>api_key</code>) out of band, and leave the placeholder defaults. Vault is also supported: set <code>secret_ref = "vault:&lt;path&gt;"</code> and enable Vault in the chart values.</p></div>
+export TF_VAR_model_api_keys='{anthropic="sk-ant-…"}'   <span class="c"># one per model endpoint, e.g. openai, i14</span></code></pre>
+<div class="callout warn"><p>The Kubernetes provider stores Secret values in the <em>foundation</em> stage's Terraform state, so protect that state. Alternatively, create the Secrets <code>slack-credentials</code> (keys <code>bot_token</code>, <code>app_token</code>), <code>linear-credentials</code> (<code>api_key</code>) and one <code>&lt;key&gt;-credentials</code> per model endpoint, such as <code>anthropic-credentials</code> (<code>api_key</code>), out of band, and leave the placeholder defaults. Vault is also supported: set <code>secret_ref = "vault:&lt;path&gt;"</code> and enable Vault in the chart values.</p></div>
 
 <h2>4. Configure the organisation</h2>
 <pre><code>unset TF_VAR_slack_endpoint_ref TF_VAR_linear_endpoint_ref   <span class="c"># use the real services</span>
 export TF_VAR_harness=claude-code
+export TF_VAR_model='{connection="anthropic",id="claude-sonnet-5-5"}'
 export TF_VAR_slack_workspace_id=T0123ABCD
 export TF_VAR_linear_team_id=&lt;team id&gt;
 export TF_VAR_humans='{sean={slack_user_id="U0SEAN123"},alex={slack_user_id="U0ALEX456"}}'</code></pre>
-<p><code>harness = "claude-code"</code> switches every seat to the Claude Code image and adds a <code>model</code> connection (adapter <code>anthropic</code>). Each seat is implicitly allowed <code>model.infer</code> on that connection.</p>
+<p><code>harness = "claude-code"</code> switches every seat to the Claude Code image, and <code>model</code> selects the model and the connection that serves it (declared from <code>model_connections</code>). Each seat is implicitly allowed <code>model.infer</code> on that connection, for that model only. To give seats different harnesses, set <code>seat_harnesses</code>, for example <code>{ engineer = { adapter = "codex", model = { connection = "openai", id = "gpt-5.5" } } }</code>; see <a href="harnesses.html">Harnesses and models</a>.</p>
 
 <h2>5. Apply</h2>
 <pre><code>make kind-up kind-load provider build
@@ -87,7 +89,7 @@ make -C examples apply</code></pre>
 <li><code>users.info</code> succeeds for every bound human.</li>
 <li>The Socket Mode connection is up.</li>
 <li>The Linear <code>viewer</code> query succeeds.</li>
-<li><code>GET /v1/models</code> succeeds at Anthropic.</li>
+<li>A one-token request for the selected model succeeds at Anthropic, and each seat passes a probe turn that calls a platform tool.</li>
 </ul>
 <p>If anything is missing, the apply stops and names it, for example:</p>
 <pre><code>OperationalReady  False  ConnectionsAuthenticated  connection slack: unauthorized: invalid_auth</code></pre>
@@ -99,7 +101,7 @@ make -C examples apply</code></pre>
 <ul>
 <li><strong>One process per turn.</strong> Each delivered message runs one <code>claude -p</code> process that resumes the seat's session. The session files live on the seat's persistent volume, so the conversation continues across restarts.</li>
 <li><strong>Tools.</strong> Platform tools are exposed over MCP by <code>steadmesh-tools mcp</code> (they appear as <code>mcp__steadmesh__memory_search</code> and so on). Built-in tools default to Bash, Edit and Read in the seat's workspace.</li>
-<li><strong>Model access.</strong> Requests go through the platform's model proxy. The seat authenticates with its own rotating identity token, and the platform swaps it for the real Anthropic key. The API key never enters the sandbox.</li>
+<li><strong>Model access.</strong> Requests go through a local forwarder to the platform's model proxy. The seat authenticates with its own rotating identity token, and the platform swaps it for the real Anthropic key. The API key never enters the sandbox, and the seat can only request its configured model.</li>
 <li><strong>Unattended operation.</strong> There are no permission prompts. The sandbox (network policy, non-root, read-only image, resource limits) and the platform's grant checks are the boundary.</li>
 <li><strong>Version pinning.</strong> The Claude Code version is pinned exactly in <code>build/seat-claudecode.Dockerfile</code>. A version change is treated as a session format change: the seat resumes from a portable handoff and records that it did.</li>
 </ul>

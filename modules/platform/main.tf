@@ -26,6 +26,8 @@ locals {
     console         = "${var.image_registry}/console"
     seat_fake       = "${var.image_registry}/seat-fake"
     seat_claudecode = "${var.image_registry}/seat-claudecode"
+    seat_codex      = "${var.image_registry}/seat-codex"
+    seat_pi         = "${var.image_registry}/seat-pi"
   }
 }
 

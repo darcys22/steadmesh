@@ -19,9 +19,9 @@ output "seat_images" {
 output "secret_refs" {
   description = "secret_ref per connection; references only."
   value = {
-    slack     = local.create.slack ? "k8s:${kubernetes_secret_v1.slack[0].metadata[0].name}" : var.existing_secret_refs.slack
-    anthropic = local.create.anthropic ? "k8s:${kubernetes_secret_v1.anthropic[0].metadata[0].name}" : var.existing_secret_refs.anthropic
-    linear    = local.create.linear ? "k8s:${kubernetes_secret_v1.linear[0].metadata[0].name}" : var.existing_secret_refs.linear
+    slack  = local.create.slack ? "k8s:${kubernetes_secret_v1.slack[0].metadata[0].name}" : var.existing_secret_refs.slack
+    linear = local.create.linear ? "k8s:${kubernetes_secret_v1.linear[0].metadata[0].name}" : var.existing_secret_refs.linear
+    models = merge(var.existing_secret_refs.models, { for k, s in kubernetes_secret_v1.model : k => "k8s:${s.metadata[0].name}" })
   }
 }
 

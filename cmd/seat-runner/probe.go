@@ -7,8 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -22,10 +20,14 @@ import (
 	"github.com/darcys22/steadmesh/pkg/runtimeapi/client"
 )
 
-// handleProbe runs the synthetic readiness probe (contracts.md, Probe
-// messages) without involving the harness: a tool call through the
-// steadmesh-tools binary, a workspace write/read, and a model-proxy GET
-// /v1/models when a model connection exists. It creates no business work.
+// handleProbe runs the readiness probe (contracts.md, Probe messages). It
+// always checks a workspace write and read. A harness with a model must prove
+// itself with a real turn: the model is reached through the platform proxy
+// (model), the harness calls the platform `self` tool through its tool
+// bridge (tool), and the turn completes (turn). A connection probe alone is
+// never evidence that a harness works. A harness without a model calls
+// `self` through the steadmesh-tools binary instead. Probes create no
+// business work.
 func (r *Runner) handleProbe(d runtimeapi.InboxDelivery) {
 	log := r.log.With("delivery_id", d.DeliveryID, "execution_id", d.ExecutionID, "message_id", d.Message.MessageID)
 	r.setExecution(d.ExecutionID)
@@ -34,13 +36,15 @@ func (r *Runner) handleProbe(d runtimeapi.InboxDelivery) {
 	defer cancel()
 
 	checks := map[string]string{}
-	checks["tool"] = result(r.probeTool(ctx, d.ExecutionID))
 	checks["workspace"] = result(r.probeWorkspace(d.ExecutionID))
 	r.mu.Lock()
-	conn := r.modelConn
+	model := r.model
 	r.mu.Unlock()
-	if conn != "" {
-		checks["model"] = result(r.probeModel(ctx, conn))
+	if model != nil {
+		m, tool, turn := r.probeHarness(ctx, d)
+		checks["model"], checks["tool"], checks["turn"] = result(m), result(tool), result(turn)
+	} else {
+		checks["tool"] = result(r.probeTool(ctx, d.ExecutionID))
 	}
 	ok := true
 	var failed []string
@@ -115,16 +119,65 @@ func (r *Runner) probeWorkspace(executionID string) error {
 	return nil
 }
 
-func (r *Runner) probeModel(ctx context.Context, conn string) error {
-	path := runtimeapi.PathModelProxy + url.PathEscape(conn) + "/v1/models"
-	resp, err := r.c.Raw(ctx, http.MethodGet, path, nil, nil)
-	if err != nil {
-		return err
+// probeHarness delivers harnesses.ProbePrompt to the harness and reports the model,
+// tool and turn checks from what the runner observed.
+func (r *Runner) probeHarness(ctx context.Context, d runtimeapi.InboxDelivery) (model, tool, turn error) {
+	r.mu.Lock()
+	a, fwd := r.adapter, r.fwd
+	r.mu.Unlock()
+	tr, stop := r.trace(d.ExecutionID)
+	defer stop()
+	msg := d.Message
+	msg.Body = harnesses.ProbePrompt
+	res, err := a.Deliver(ctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: msg})
+	// Events emitted before Deliver returned are observed once flushed.
+	fctx, cancel := context.WithTimeout(r.workCtx, 10*time.Second)
+	fwd.Flush(fctx)
+	cancel()
+	t := r.snapshot(tr)
+
+	switch {
+	case err != nil:
+		turn = err
+	case res.Status != harnesses.TurnCompleted:
+		turn = fmt.Errorf("turn %s: %s", res.Status, res.Error)
 	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("GET %s: %d %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
+	ok := false
+	for _, s := range t.modelStatuses {
+		ok = ok || s/100 == 2
 	}
-	return nil
+	switch {
+	case ok:
+	case len(t.modelStatuses) == 0:
+		model = errors.New("the harness made no model request")
+	default:
+		model = fmt.Errorf("no model request succeeded (statuses %v)", t.modelStatuses)
+	}
+	called := false
+	for corr, name := range t.toolCalls {
+		if isSelfTool(name) {
+			if t.toolErrors[corr] {
+				tool = fmt.Errorf("the self tool call (%s) failed", name)
+			}
+			called = true
+		}
+	}
+	if !called {
+		names := make([]string, 0, len(t.toolCalls))
+		for _, n := range t.toolCalls {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		tool = fmt.Errorf("the harness did not call the self tool (tool calls: %v)", names)
+	}
+	return model, tool, turn
+}
+
+// isSelfTool matches the platform self tool as harnesses name it:
+// self, mcp__steadmesh__self, or a namespaced form ending in "self".
+func isSelfTool(name string) bool {
+	if name == "self" {
+		return true
+	}
+	return strings.HasSuffix(name, "__self") || strings.HasSuffix(name, "/self") || strings.HasSuffix(name, ".self")
 }

@@ -29,6 +29,7 @@
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -124,16 +125,22 @@
 <h3><code>shared_workspaces</code></h3>
 <p>Fields: <code>access_mode</code> (required; <code>ReadWriteMany</code> or <code>ReadOnlyMany</code>, which the storage class must support), <code>storage_class</code>, <code>size_gb</code> (default 5) and <code>retention</code>. Declaring and granting shared workspaces is validated, but mounting them into seats is not implemented yet in this release.</p>
 
-<h3><code>harness_profiles</code></h3>
+<h3 id="harness_profiles"><code>harness_profiles</code></h3>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
-<tr><td><code>adapter</code></td><td><code>claude-code</code> or <code>fake</code></td></tr>
+<tr><td><code>adapter</code></td><td><code>claude-code</code>, <code>codex</code>, <code>pi</code> or <code>fake</code>. See <a href="harnesses.html">Harnesses and models</a>.</td></tr>
 <tr><td><code>image_digest</code></td><td>Required. The seat image; pin <code>image@sha256:…</code> in production.</td></tr>
-<tr><td><code>model_connection</code></td><td>A connection with a model adapter. Required for <code>claude-code</code>.</td></tr>
-<tr><td><code>model</code></td><td>Model name passed to the harness (optional).</td></tr>
-<tr><td><code>required_capabilities</code></td><td>Must be a subset of the adapter's capabilities. <code>claude-code</code>: tools, mcp, event_stream, session_resume, interrupt, application_checkpoint. <code>fake</code>: tools, event_stream, interrupt, application_checkpoint.</td></tr>
-<tr><td><code>config</code></td><td>Adapter options, for example <code>bare = "false"</code> for the full Claude Code tool set.</td></tr>
+<tr><td><code>model</code></td><td>Required for every adapter except <code>fake</code>. An object:
+<ul>
+<li><code>connection</code>: a model connection;</li>
+<li><code>id</code>: the model identifier sent to the endpoint. The platform rejects requests from the seat for any other model;</li>
+<li><code>api</code> (optional): <code>anthropic_messages</code>, <code>openai_responses</code> or <code>openai_chat</code>. When unset, the first API the harness speaks that the connection and model also serve is chosen. No overlap is an error naming both lists and the harnesses that would work;</li>
+<li><code>settings</code> (optional): harness model settings, validated per harness: <code>effort</code> (claude-code); <code>reasoning_effort</code> (codex); <code>thinking</code>, <code>context_window</code>, <code>max_tokens</code>, <code>reasoning</code> (pi).</li>
+</ul></td></tr>
+<tr><td><code>required_capabilities</code></td><td>Must be a subset of the adapter's capabilities. <code>claude-code</code>, <code>codex</code>, <code>pi</code>: tools, mcp, event_stream, session_resume, interrupt, application_checkpoint. <code>fake</code>: tools, event_stream, interrupt, application_checkpoint.</td></tr>
+<tr><td><code>config</code></td><td>Adapter options, for example <code>bare = "false"</code> for the full Claude Code tool set, or <code>interrupt_grace</code>.</td></tr>
 </table>
+<p>Changing a profile's adapter, model, API or settings changes the seat's configuration revision: the seat reaches a turn boundary and its Pod is replaced. The seat keeps its identity, volume, memory, inbox and handoff. The same harness resumes its native session; a different harness starts a new session from the portable handoff, which the next turn and the console report.</p>
 
 <h3><code>execution_profiles</code></h3>
 <table>
@@ -161,15 +168,16 @@
 <h3><code>connections</code></h3>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
-<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker) or <code>anthropic</code> (model)</td></tr>
-<tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; Anthropic <code>api_key</code>.</td></tr>
+<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker), or a model adapter: <code>anthropic</code>, <code>openai</code>, or <code>model</code> for any compatible endpoint</td></tr>
+<tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; model connections <code>api_key</code>.</td></tr>
 <tr><td><code>account_id</code></td><td>The authorised account: the Slack team ID (checked against <code>auth.test</code>), or the Linear organisation ID or URL key.</td></tr>
-<tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints.</td></tr>
+<tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints. For model connections it is the API base, usually ending in <code>/v1</code>: <code>https://api.openai.com/v1</code>, <code>https://api.anthropic.com/v1</code>. Required for the <code>model</code> adapter.</td></tr>
+<tr><td><code>model</code></td><td>Model connections only. <code>apis</code>: the APIs the endpoint serves (defaults: anthropic <code>anthropic_messages</code>; openai <code>openai_responses</code>, <code>openai_chat</code>; required for <code>model</code>). <code>auth</code>: <code>bearer</code> (default; <code>x-api-key</code> for anthropic) or <code>header:&lt;Name&gt;</code>. <code>models</code>: a list of <code>{id, apis}</code>; when set, profiles may only select these. <code>verify</code>: how readiness checks the claims: <code>request</code> (default; a minimal request for each declared model and API and each one a profile uses, trusted for 6 hours once it succeeds), <code>models</code> (list models) or <code>none</code>.</td></tr>
 <tr><td><code>config</code></td><td>Adapter options. For Linear, <code>team_id</code> is the default team.</td></tr>
 <tr><td><code>required</code></td><td>Whether the organisation is not ready until this connection authenticates. By default it is decided by role: model connections a harness uses, and communication connections with channel bindings, are required. Others, such as a work tracker, are optional. A failing optional connection is reported in the <code>IntegrationsDegraded</code> condition and never blocks readiness or internal work.</td></tr>
 <tr><td><code>ownership</code></td><td><code>external</code> (default): never deleted by the platform. <code>managed</code> is rejected in this release.</td></tr>
 </table>
-<p>Operations a grant can name: Slack <code>channel.reply</code> (normally implicit through bindings); Linear <code>project.read</code>, <code>project.create</code>, <code>task.read</code>, <code>task.write</code>, <code>comment.write</code>; Anthropic <code>model.infer</code> (normally implicit through the harness).</p>
+<p>Operations a grant can name: Slack <code>channel.reply</code> (normally implicit through bindings); Linear <code>project.read</code>, <code>project.create</code>, <code>task.read</code>, <code>task.write</code>, <code>comment.write</code>; model connections <code>model.infer</code> (normally implicit through the harness).</p>
 
 <h3><code>grants</code></h3>
 <table>
@@ -223,7 +231,7 @@
 <tr><td><code>modules/team-accounting</code></td><td>as above</td><td>an accounting specialisation of <code>base</code></td></tr>
 <tr><td><code>modules/representative</code></td><td><code>human</code>, <code>external_user_id</code>, <code>role_ref</code>, <code>connection</code>, <code>display_name</code>, profile keys, <code>seat_key</code>, <code>memory_store_key</code>, <code>memory_retention</code></td><td><code>seat_key</code>, <code>seats</code>, <code>memory_stores</code>, <code>channel_bindings</code> (seat <code>representative_&lt;human&gt;</code>, store <code>rep_&lt;human&gt;</code>)</td></tr>
 </table>
-<div class="pager"><a href="operations.html"><small>Previous</small>Operating an organisation</a><a href="tools.html" style="text-align:right"><small>Next</small>Agent tools</a></div>
+<div class="pager"><a href="operations.html"><small>Previous</small>Operating an organisation</a><a href="harnesses.html" style="text-align:right"><small>Next</small>Harnesses and models</a></div>
 <p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
 </main>
 </div>

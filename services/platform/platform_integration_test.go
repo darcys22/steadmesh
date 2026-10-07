@@ -502,10 +502,10 @@ func TestModelProxy(t *testing.T) {
 	e := newEnv(t)
 	sp := orgfixture.Spec()
 	sp.Connections["model"] = spec.Connection{Adapter: "anthropic", SecretRef: "k8s:anthropic"}
-	sp.HarnessProfiles["claude"] = spec.HarnessProfile{Adapter: "claude-code", ImageDigest: "seat:dev", ModelConnection: "model"}
+	sp.HarnessProfiles["claude"] = spec.HarnessProfile{Adapter: "claude-code", ImageDigest: "seat:dev", Model: &spec.ModelSelection{Connection: "model", ID: "claude-x"}}
 	sp.Seats["lead"] = func(s spec.Seat) spec.Seat { s.HarnessProfile = "claude"; return s }(sp.Seats["lead"])
 	e.sync(sp)
-	code, b := e.request("POST", "/v1/model/model/v1/messages", "", map[string]string{"X-Api-Key": "tok-lead"}, map[string]any{})
+	code, b := e.request("POST", "/v1/model/model/v1/messages", "", map[string]string{"X-Api-Key": "tok-lead"}, map[string]any{"model": "claude-x"})
 	var echo map[string]string
 	_ = json.Unmarshal(b, &echo)
 	if code != http.StatusOK || echo["path"] != "/v1/messages" || echo["x_api_key"] != "" || echo["authorization"] != "" {
@@ -513,6 +513,23 @@ func TestModelProxy(t *testing.T) {
 	}
 	if code, _ := e.request("GET", "/v1/model/model/v1/models", "tok-engineer", nil, nil); code != http.StatusForbidden {
 		t.Fatalf("seat without model.infer: %d", code)
+	}
+	// Only the profile's model, over the profile's API, through model API paths.
+	for _, c := range []struct {
+		method, path string
+		body         any
+		want         int
+	}{
+		{"POST", "/v1/model/model/v1/messages", map[string]any{"model": "claude-other"}, http.StatusForbidden},
+		{"POST", "/v1/model/model/v1/messages", map[string]any{}, http.StatusForbidden},
+		{"POST", "/v1/model/model/v1/chat/completions", map[string]any{"model": "claude-x"}, http.StatusForbidden},
+		{"POST", "/v1/model/model/v1/files", map[string]any{"model": "claude-x"}, http.StatusNotFound},
+		{"DELETE", "/v1/model/model/v1/messages", nil, http.StatusMethodNotAllowed},
+		{"GET", "/v1/model/model/v1/models", nil, http.StatusOK},
+	} {
+		if code, b := e.request(c.method, c.path, "tok-lead", nil, c.body); code != c.want {
+			t.Errorf("%s %s %v: %d %s, want %d", c.method, c.path, c.body, code, b, c.want)
+		}
 	}
 }
 

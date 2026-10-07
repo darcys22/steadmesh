@@ -12,14 +12,20 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/harnesses/conformance"
+	"github.com/darcys22/steadmesh/harnesses/fake"
+	"github.com/darcys22/steadmesh/pkg/compile"
+	"github.com/darcys22/steadmesh/pkg/modelforward"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 const testToken = "seat-token"
@@ -63,7 +69,7 @@ func writeErr(w http.ResponseWriter, status int, code, msg string) {
 }
 
 func (p *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") != "Bearer "+testToken {
+	if a := r.Header.Get("Authorization"); a != "Bearer "+testToken && a != "Bearer rotated-token" {
 		writeErr(w, 401, "unauthenticated", "bad token")
 		return
 	}
@@ -138,9 +144,10 @@ func (p *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewDecoder(r.Body).Decode(&c)
 		p.record("checkpoint:" + c.CheckpointRef)
 		w.WriteHeader(204)
-	case strings.HasPrefix(path, runtimeapi.PathModelProxy) && strings.HasSuffix(path, "/v1/models"):
-		p.record("model:" + path)
-		_, _ = w.Write([]byte(`{"data":[{"id":"claude-x"}]}`))
+	case strings.HasPrefix(path, runtimeapi.PathModelProxy):
+		p.record(fmt.Sprintf("model:%s %s auth=%s gen=%s exec=%s", r.Method, path, r.Header.Get("Authorization"),
+			r.Header.Get(runtimeapi.HeaderGeneration), r.Header.Get(runtimeapi.HeaderExecution)))
+		_, _ = w.Write([]byte(`{"ok":true}`))
 	default:
 		writeErr(w, 404, "not_found", path)
 	}
@@ -214,6 +221,11 @@ type testRunner struct {
 
 func newTestRunner(t *testing.T, p *fakePlatform, mutate func(*Config)) *testRunner {
 	t.Helper()
+	return newTestRunnerWith(t, p, mutate, DefaultAdapters)
+}
+
+func newTestRunnerWith(t *testing.T, p *fakePlatform, mutate func(*Config), adapters AdapterFactory) *testRunner {
+	t.Helper()
 	srv := httptest.NewServer(p)
 	t.Cleanup(srv.Close)
 	root := t.TempDir()
@@ -234,7 +246,7 @@ func newTestRunner(t *testing.T, p *fakePlatform, mutate func(*Config)) *testRun
 	if testing.Verbose() {
 		log = slog.New(slog.NewTextHandler(os.Stderr, nil))
 	}
-	r, err := NewRunner(cfg, log, DefaultAdapters)
+	r, err := NewRunner(cfg, log, adapters)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -375,12 +387,12 @@ func TestFencedRenewalKillsHarness(t *testing.T) {
 
 func TestProbeHandledByRunner(t *testing.T) {
 	p := newFakePlatform()
-	tr := newTestRunner(t, p, func(c *Config) { c.ModelConnection = "model" })
+	tr := newTestRunner(t, p, nil)
 	p.waitFor(t, "state:Warm", 10*time.Second)
 	d := p.enqueue("probe", "probe")
 	p.waitFor(t, fmt.Sprintf("ack:%d:completed", d.DeliveryID), 10*time.Second)
 	log := p.snapshot()
-	if indexOf(log, "tool:self:"+d.ExecutionID) < 0 || indexOf(log, "model:/v1/model/model/v1/models") < 0 {
+	if indexOf(log, "tool:self:"+d.ExecutionID) < 0 {
 		t.Fatalf("probe checks not performed: %v", log)
 	}
 	if indexOf(log, "state:Executing") >= 0 {
@@ -394,8 +406,11 @@ func TestProbeHandledByRunner(t *testing.T) {
 	}
 	var pr runtimeapi.ProbeResult
 	_ = json.Unmarshal(evs[0].Data, &pr)
-	if !pr.OK || pr.Checks["tool"] != "ok" || pr.Checks["workspace"] != "ok" || pr.Checks["model"] != "ok" {
+	if !pr.OK || pr.Checks["tool"] != "ok" || pr.Checks["workspace"] != "ok" {
 		t.Fatalf("probe result %+v", pr)
+	}
+	if _, ok := pr.Checks["model"]; ok {
+		t.Fatalf("a seat without a model has no model check: %+v", pr)
 	}
 	entries, _ := os.ReadDir(filepath.Join(tr.cfg.RunnerDir, "probe"))
 	if len(entries) != 0 {
@@ -525,5 +540,105 @@ func TestCapDataEscapeHeavy(t *testing.T) {
 	big, _ := json.Marshal(map[string]string{"text": strings.Repeat("\x01\"<", runtimeapi.MaxEventDataBytes)})
 	if c := capData(big); len(c) > runtimeapi.MaxEventDataBytes || !json.Valid(c) {
 		t.Fatalf("capped to %d bytes", len(c))
+	}
+}
+
+// modelHarness is a minimal model-backed adapter: each turn sends one
+// request to its model endpoint and, when told to, reports a self tool call.
+type modelHarness struct {
+	*fake.Adapter
+	env      harnesses.Environment
+	callSelf bool
+}
+
+func (m *modelHarness) Prepare(ctx context.Context, env harnesses.Environment) error {
+	m.env = env
+	return m.Adapter.Prepare(ctx, env)
+}
+
+func (m *modelHarness) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.TurnResult, error) {
+	body := fmt.Sprintf(`{"model":%q}`, m.env.Model.ID)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, m.env.Model.BaseURL+"/v1/messages", strings.NewReader(body))
+	req.Header.Set("X-Api-Key", m.env.Model.APIKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return harnesses.TurnResult{MessageID: d.Message.MessageID, Status: harnesses.TurnFailed, Error: err.Error()}, nil
+	}
+	resp.Body.Close()
+	if m.callSelf {
+		d.Message.Body = "/tool self {}"
+	} else {
+		d.Message.Body = "nothing"
+	}
+	return m.Adapter.Deliver(ctx, d)
+}
+
+func writeModelManifest(t *testing.T, dir string) {
+	t.Helper()
+	sm := compile.SeatManifest{Key: "alice", Harness: spec.HarnessProfile{Adapter: "model-harness",
+		Model: &spec.ModelSelection{Connection: "llm", ID: "m-1", API: harnesses.APIAnthropicMessages}}}
+	b, _ := json.Marshal(sm)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestModelHarnessProbeAndForwarder(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		callSelf bool
+		wantOK   bool
+	}{{"proves the harness", true, true}, {"no self call fails the tool check", false, false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newFakePlatform()
+			var mh *modelHarness
+			factory := func(string) (harnesses.Adapter, error) {
+				mh = &modelHarness{Adapter: fake.New(), callSelf: tc.callSelf}
+				return mh, nil
+			}
+			tr := newTestRunnerWith(t, p, func(c *Config) {
+				c.Harness = "model-harness"
+				writeModelManifest(t, c.ManifestDir)
+			}, factory)
+			p.waitFor(t, "state:Warm", 10*time.Second)
+			if mh.env.Model == nil || mh.env.Model.ID != "m-1" || !strings.HasPrefix(mh.env.Model.BaseURL, "http://127.0.0.1:") || mh.env.Model.APIKey != modelforward.LocalAPIKey {
+				t.Fatalf("model environment %+v", mh.env.Model)
+			}
+			d := p.enqueue("probe", "probe")
+			p.waitFor(t, fmt.Sprintf("ack:%d:completed", d.DeliveryID), 10*time.Second)
+			// The forwarder replaced the placeholder with the seat token and
+			// added the generation and execution.
+			want := fmt.Sprintf("model:POST %sllm/v1/messages auth=Bearer %s gen=", runtimeapi.PathModelProxy, testToken)
+			log := p.snapshot()
+			i := slices.IndexFunc(log, func(s string) bool { return strings.HasPrefix(s, want) })
+			if i < 0 || !strings.HasSuffix(log[i], "exec="+d.ExecutionID) {
+				t.Fatalf("forwarded request not found (want %q): %v", want, log)
+			}
+			p.mu.Lock()
+			evs := p.events[d.ExecutionID]
+			p.mu.Unlock()
+			var pr runtimeapi.ProbeResult
+			for _, e := range evs {
+				if e.Kind == runtimeapi.EventProbeResult {
+					_ = json.Unmarshal(e.Data, &pr)
+				}
+			}
+			if pr.OK != tc.wantOK || pr.Checks["model"] != "ok" || pr.Checks["turn"] != "ok" || (pr.Checks["tool"] == "ok") != tc.wantOK {
+				t.Fatalf("probe result %+v", pr)
+			}
+
+			// A rotated token is used by the next request without a restart.
+			if err := os.WriteFile(tr.cfg.TokenFile, []byte("rotated-token"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			d2 := p.enqueue("human", "hello")
+			p.waitFor(t, fmt.Sprintf("ack:%d:completed", d2.DeliveryID), 10*time.Second)
+			if slices.IndexFunc(p.snapshot(), func(s string) bool { return strings.Contains(s, "auth=Bearer rotated-token") }) < 0 {
+				t.Fatalf("rotated token not forwarded: %v", p.snapshot())
+			}
+		})
 	}
 }

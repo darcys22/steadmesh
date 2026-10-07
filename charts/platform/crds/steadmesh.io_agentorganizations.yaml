@@ -75,15 +75,60 @@ spec:
                     account_id:
                       type: string
                     adapter:
-                      description: Adapter is slack, linear, anthropic or fake-* in
-                        tests.
+                      description: Adapter is slack, linear, anthropic, openai, model
+                        or fake-* in tests.
                       type: string
                     config:
                       additionalProperties:
                         type: string
                       type: object
                     endpoint_ref:
+                      description: |-
+                        EndpointRef overrides the service base URL. For model connections it
+                        is the API base, usually ending in /v1 (https://api.openai.com/v1).
                       type: string
+                    model:
+                      description: |-
+                        Model describes a model endpoint: the APIs it serves and its models.
+                        The anthropic and openai adapters have defaults; the model adapter
+                        (any compatible endpoint) must declare its APIs.
+                      properties:
+                        apis:
+                          description: 'APIs the endpoint serves: anthropic_messages,
+                            openai_responses, openai_chat.'
+                          items:
+                            type: string
+                          type: array
+                        auth:
+                          description: 'Auth is how the credential is sent: bearer,
+                            x-api-key or header:<Name>.'
+                          type: string
+                        models:
+                          description: |-
+                            Models the endpoint serves. When set, harness profiles may only select
+                            these, and readiness checks each one.
+                          items:
+                            description: ModelEntry is one model a connection serves.
+                            properties:
+                              apis:
+                                description: |-
+                                  APIs restricts the APIs this model is served on; empty means all of
+                                  the connection's APIs.
+                                items:
+                                  type: string
+                                type: array
+                              id:
+                                type: string
+                            required:
+                            - id
+                            type: object
+                          type: array
+                        verify:
+                          description: |-
+                            Verify is how readiness checks the endpoint: request (a minimal request
+                            per declared API and model), models (list models) or none.
+                          type: string
+                      type: object
                     ownership:
                       description: Ownership is external (default, never deleted)
                         or managed.
@@ -177,23 +222,46 @@ spec:
                 additionalProperties:
                   properties:
                     adapter:
-                      description: Adapter is the harness adapter name, e.g. claude-code
-                        or fake.
+                      description: 'Adapter is the harness adapter name: claude-code,
+                        codex, pi or fake.'
                       type: string
                     config:
                       additionalProperties:
                         type: string
+                      description: Config holds adapter-specific options (docs/harnesses.html).
                       type: object
                     image_digest:
                       description: ImageDigest pins the harness image (image@sha256:...
                         or a local tag in dev).
                       type: string
                     model:
-                      type: string
-                    model_connection:
-                      description: ModelConnection names a connection with a model
-                        adapter.
-                      type: string
+                      description: Model selects the model and the connection that
+                        serves it.
+                      properties:
+                        api:
+                          description: |-
+                            API is the protocol: anthropic_messages, openai_responses or
+                            openai_chat. When unset, the first API the harness speaks that the
+                            connection and model also serve is used.
+                          type: string
+                        connection:
+                          description: Connection names a model connection.
+                          type: string
+                        id:
+                          description: |-
+                            ID is the model identifier sent to the endpoint. The platform rejects
+                            requests from the seat for any other model.
+                          type: string
+                        settings:
+                          additionalProperties:
+                            type: string
+                          description: Settings are harness-specific model settings,
+                            e.g. reasoning_effort.
+                          type: object
+                      required:
+                      - connection
+                      - id
+                      type: object
                     required_capabilities:
                       items:
                         type: string

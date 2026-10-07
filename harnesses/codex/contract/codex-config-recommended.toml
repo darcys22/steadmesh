@@ -1,0 +1,36 @@
+model = "gpt-5.5"
+model_provider = "steadmesh"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+check_for_update_on_startup = false
+mcp_optional_startup_grace_ms = 0
+
+[analytics]
+enabled = false
+
+[feedback]
+enabled = false
+
+[otel]
+metrics_exporter = "none"
+
+[features]
+plugins = false
+
+[model_providers.steadmesh]
+name = "Steadmesh proxy"
+base_url = "http://127.0.0.1:8787/v1"
+wire_api = "responses"
+experimental_bearer_token = "placeholder"
+http_headers = { "X-Steadmesh-Seat" = "seat-1" }
+env_http_headers = { "X-Steadmesh-Run" = "STEADMESH_RUN_ID" }
+query_params = { "api-version" = "1" }
+
+[mcp_servers.steadmesh]
+command = "/usr/local/bin/steadmesh-tools"
+args = ["mcp"]
+env = { STEADMESH_SOCKET = "/run/steadmesh.sock" }
+startup_timeout_sec = 30
+tool_timeout_sec = 600
+required = true
+default_tools_approval_mode = "approve"

@@ -1,0 +1,11 @@
+d72b0a94b84e51fbe5686577f322488a89f844c275985e8054e16951c6dd3e64  anthropic-ai-claude-code-2.1.289.tgz
+0aa86cf337ede6041513a72e814e703a5d94c1e75e983f0e5b0e3f2ed1e0b700  anthropic-ai-claude-code-darwin-arm64-2.1.289.tgz
+50a6eb433422febcfa7b7ac1e78ba795cdf79f1fe58f017fb1d9aeb9491b337d  anthropic-ai-claude-code-linux-x64-2.1.289.tgz
+8ce94b9478bb9868f9641f818e06cd722fbe55d4c22e2d2ed11971b20146173a  x/anthropic-ai-claude-code-linux-x64-2.1.289/package/LICENSE.md
+a186b99e4a9c88366cd49df2f7dad56c61fc306ef0140b19ee64b7c42a8d1348  x/anthropic-ai-claude-code-linux-x64-2.1.289/package/claude
+ab4b9d72c3aa1ac7357e8eeb8b77c62e308e9af01ac0ecdb181f3bf1e57e25d5  x/anthropic-ai-claude-code-linux-x64-2.1.289/package/README.md
+481fa02b9a1d76d397d765bb3ac1d5d9a7568f10516090cfd797692448586cd0  x/anthropic-ai-claude-code-linux-x64-2.1.289/package/package.json
+8ce94b9478bb9868f9641f818e06cd722fbe55d4c22e2d2ed11971b20146173a  x/anthropic-ai-claude-code-darwin-arm64-2.1.289/package/LICENSE.md
+03d66745e3bb69ec727d66023696f3820bc0a00a8a5ba725eb6706d0c67cbe69  x/anthropic-ai-claude-code-darwin-arm64-2.1.289/package/claude
+26170f86550171a90850a39d867b0487d0d218e100ab5552e51ba4f1159b9a0c  x/anthropic-ai-claude-code-darwin-arm64-2.1.289/package/README.md
+317f9013aac9e626ebc1a05735361524c8bf1d1a4c41c91d147fb495d680da23  x/anthropic-ai-claude-code-darwin-arm64-2.1.289/package/package.json

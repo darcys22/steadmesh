@@ -130,6 +130,7 @@ func (i *ingress) stop() {
 type conn struct {
 	org, key    string
 	decl        spec.Connection
+	uses        []connectors.ModelUse
 	fingerprint string
 
 	// refreshMu serialises credential refreshes of this connection.
@@ -185,10 +186,26 @@ func New(ctx context.Context, o Options) *Manager {
 	return m
 }
 
-func fingerprint(c spec.Connection) string {
-	b, _ := json.Marshal(c)
+func fingerprint(c spec.Connection, uses []connectors.ModelUse) string {
+	b, _ := json.Marshal(struct {
+		C spec.Connection
+		U []connectors.ModelUse
+	}{c, uses})
 	sum := sha256.Sum256(b)
 	return string(sum[:])
+}
+
+// SyncManifest syncs the organisation's connections from its compiled
+// manifest, including the models and APIs its seats use, which model
+// connections verify.
+func (m *Manager) SyncManifest(ctx context.Context, orgID string, manifest *compile.Manifest) {
+	uses := map[string][]connectors.ModelUse{}
+	for conn, us := range compile.ModelUses(manifest) {
+		for _, u := range us {
+			uses[conn] = append(uses[conn], connectors.ModelUse{ID: u.ID, API: u.API})
+		}
+	}
+	m.sync(ctx, orgID, manifest.Spec.Connections, uses)
 }
 
 // Sync (re)builds the organisation's adapters so they match its declared
@@ -197,6 +214,10 @@ func fingerprint(c spec.Connection) string {
 // that handles rotation, so a credential known to be invalid is never
 // reactivated.
 func (m *Manager) Sync(ctx context.Context, orgID string, declared map[string]spec.Connection) {
+	m.sync(ctx, orgID, declared, nil)
+}
+
+func (m *Manager) sync(ctx context.Context, orgID string, declared map[string]spec.Connection, uses map[string][]connectors.ModelUse) {
 	m.syncMu.Lock()
 	defer m.syncMu.Unlock()
 	m.mu.Lock()
@@ -206,7 +227,7 @@ func (m *Manager) Sync(ctx context.Context, orgID string, declared map[string]sp
 	next := map[string]*conn{}
 	var stale, retry []*conn
 	for key, c := range declared {
-		fp := fingerprint(c)
+		fp := fingerprint(c, uses[key])
 		if cur, ok := current[key]; ok && cur.fingerprint == fp {
 			next[key] = cur
 			m.mu.Lock()
@@ -220,7 +241,7 @@ func (m *Manager) Sync(ctx context.Context, orgID string, declared map[string]sp
 		if cur, ok := current[key]; ok {
 			stale = append(stale, cur)
 		}
-		next[key] = m.build(ctx, orgID, key, c, fp)
+		next[key] = m.build(ctx, orgID, key, c, uses[key], fp)
 	}
 	for key, cur := range current {
 		if _, ok := declared[key]; !ok {
@@ -241,8 +262,8 @@ func (m *Manager) Sync(ctx context.Context, orgID string, declared map[string]sp
 // build constructs a connection from its declaration without validating it
 // first: a new or changed declaration is the operator's intent, and Verify
 // reports whether it works.
-func (m *Manager) build(ctx context.Context, orgID, key string, d spec.Connection, fp string) *conn {
-	c := &conn{org: orgID, key: key, decl: d, fingerprint: fp}
+func (m *Manager) build(ctx context.Context, orgID, key string, d spec.Connection, uses []connectors.ModelUse, fp string) *conn {
+	c := &conn{org: orgID, key: key, decl: d, uses: uses, fingerprint: fp}
 	values, res, err := m.resolve(ctx, d)
 	if err != nil {
 		c.err = fmt.Errorf("resolve secret for connection %s: %w", key, err)
@@ -250,7 +271,7 @@ func (m *Manager) build(ctx context.Context, orgID, key string, d spec.Connectio
 		m.log.Warn("connection unavailable", "organization_id", orgID, "connection", key, "error", c.err)
 		return c
 	}
-	a, err := m.construct(orgID, key, d, values)
+	a, err := m.construct(c, values)
 	if err != nil {
 		c.err = err
 		c.cred = runtimeapi.CredentialStatus{State: runtimeapi.CredentialUnavailable, Error: err.Error()}
@@ -286,9 +307,10 @@ func (m *Manager) currentStatus(d spec.Connection, res connectors.Resolved) runt
 }
 
 // construct builds adapters without starting ingress.
-func (m *Manager) construct(orgID, key string, d spec.Connection, secret map[string]string) (adapters, error) {
-	cfg := connectors.Config{OrganizationID: orgID, Key: key, Adapter: d.Adapter, AccountID: d.AccountID,
-		Endpoint: d.EndpointRef, Extra: d.Config, HTTP: m.http, Secret: secret}
+func (m *Manager) construct(c *conn, secret map[string]string) (adapters, error) {
+	d := c.decl
+	cfg := connectors.Config{OrganizationID: c.org, Key: c.key, Adapter: d.Adapter, AccountID: d.AccountID,
+		Endpoint: d.EndpointRef, Extra: d.Config, Model: d.Model, ModelUses: c.uses, HTTP: m.http, Secret: secret}
 	var a adapters
 	var err error
 	switch f := m.opts.Factories; {
@@ -443,7 +465,7 @@ func (m *Manager) Credentials(orgID string) map[string]runtimeapi.CredentialStat
 // Verify re-checks the organisation's connections, ingress and bindings
 // without creating business work or sending messages (§5.4).
 func (m *Manager) Verify(ctx context.Context, orgID string, manifest *compile.Manifest) runtimeapi.VerifyResponse {
-	m.Sync(ctx, orgID, manifest.Spec.Connections)
+	m.SyncManifest(ctx, orgID, manifest)
 	// A requested verification sees rotated secrets now, not at the next
 	// refresh tick.
 	m.refreshOrg(ctx, orgID)

@@ -6,7 +6,7 @@
 //
 // run acquires the seat lease (renewing it every 10s and killing the harness
 // if it is fenced), loads the bootstrap and manifest, prepares the harness
-// selected by STEADMESH_HARNESS (fake or claude-code), and then long-polls
+// selected by STEADMESH_HARNESS (any registered adapter), and then long-polls
 // the inbox. Each delivery is executed, its events streamed, acknowledged and
 // checkpointed. Probe deliveries are handled by the runner itself. On SIGTERM
 // it quiesces (bounded by 240s), checkpoints, reports Stopped and releases
@@ -22,12 +22,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/darcys22/steadmesh/harnesses"
-	"github.com/darcys22/steadmesh/harnesses/claudecode"
-	"github.com/darcys22/steadmesh/harnesses/fake"
+	_ "github.com/darcys22/steadmesh/harnesses/all"
 )
 
 func main() {
@@ -50,16 +50,17 @@ func main() {
 	}
 }
 
-// DefaultAdapters returns the built-in harness adapters.
+// DefaultAdapters constructs a registered harness adapter by name.
 func DefaultAdapters(name string) (harnesses.Adapter, error) {
-	switch name {
-	case fake.AdapterName:
-		return fake.New(), nil
-	case claudecode.AdapterName, "claudecode", "claude":
-		return claudecode.New(), nil
-	default:
-		return nil, fmt.Errorf("unknown harness adapter %q (supported: %s, %s)", name, fake.AdapterName, claudecode.AdapterName)
+	d, ok := harnesses.Lookup(name)
+	if !ok {
+		var names []string
+		for _, d := range harnesses.Registered() {
+			names = append(names, d.Name)
+		}
+		return nil, fmt.Errorf("unknown harness adapter %q (registered: %s)", name, strings.Join(names, ", "))
 	}
+	return d.New(), nil
 }
 
 func runMain() int {

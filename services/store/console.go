@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 // Read-only queries behind the console API. None of them return secret
@@ -111,7 +113,7 @@ func (s *Store) ConsoleOrganization(ctx context.Context, orgID string) (*runtime
 
 func seatConfig(orgID, id string, sm compile.SeatManifest, policy int64, created time.Time, adopted string) runtimeapi.ConsoleSeatConfig {
 	c := runtimeapi.ConsoleSeatConfig{SeatID: id, OrganizationID: orgID, Key: sm.Key, DisplayName: sm.DisplayName, RoleRef: sm.RoleRef,
-		Teams: sm.Teams, IsRepresentative: sm.IsRepresentative, HarnessAdapter: sm.Harness.Adapter, Model: sm.Harness.Model,
+		Teams: sm.Teams, IsRepresentative: sm.IsRepresentative, HarnessAdapter: sm.Harness.Adapter, Model: modelLabel(sm.Harness.Model),
 		ConfigRevision: sm.ConfigRevision, PolicyRevision: policy, PersonalMemory: sm.PersonalMemory,
 		ChannelBindings: sm.ChannelBindings, PersistentWorkspace: sm.Workspace.Persistent,
 		SharedWorkspaces: sm.Workspace.Shared, CreatedAt: created, AdoptedFrom: adopted}
@@ -577,4 +579,12 @@ func (s *Store) ConsoleWork(ctx context.Context, orgID string, limit int) ([]run
 		}
 		return w, json.Unmarshal(pubs, &w.Publications)
 	})
+}
+
+// modelLabel describes a model selection for operators.
+func modelLabel(m *spec.ModelSelection) string {
+	if m == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s on %s (%s)", m.ID, m.Connection, m.API)
 }

@@ -2,7 +2,8 @@
 #
 # Each person in `humans` gets a personal representative they message over
 # Slack. Representatives delegate to a small engineering team (a lead and an
-# engineer). Edit instructions/*.md to set your culture and how
+# engineer). Each seat runs a harness (Claude Code, Codex or Pi) on a model
+# you choose. Edit instructions/*.md to set your culture and how
 # representatives behave; add seats, teams and routes below as you grow.
 
 terraform {
@@ -83,6 +84,7 @@ module "representative" {
   external_user_id = each.value.slack_user_id
   connection       = "slack"
   role_ref         = module.representative_role.ref
+  harness_profile  = contains(keys(var.seat_harnesses), "representative_${each.key}") ? "seat_representative_${each.key}" : "primary"
 }
 
 locals {
@@ -95,13 +97,26 @@ locals {
       role_ref          = "role:${s.role}"
       display_name      = s.display_name
       teams             = ["engineering"]
-      harness_profile   = "primary"
+      harness_profile   = contains(keys(var.seat_harnesses), k) ? "seat_${k}" : "primary"
       execution_profile = "interactive"
       sandbox_profile   = "standard"
       personal_memory   = k
       workspace         = { persistent = true }
     }
   }
+
+  default_model = var.harness == "fake" ? null : var.model
+  harness_profiles = merge(
+    { primary = { adapter = var.harness, image_digest = local.platform.seat_images[var.harness], model = local.default_model } },
+    { for k, h in var.seat_harnesses : "seat_${k}" => { adapter = h.adapter, image_digest = local.platform.seat_images[h.adapter], model = h.model } },
+  )
+  # Only the model connections some seat uses are declared; their keys come
+  # from the platform stage.
+  used_models = toset(compact(concat(
+    [local.default_model == null ? "" : local.default_model.connection],
+    [for h in var.seat_harnesses : h.model.connection],
+  )))
+  model_connections = { for k in local.used_models : k => merge(var.model_connections[k], { secret_ref = local.platform.secret_refs.models[k] }) }
 }
 
 # ---------------------------------------------------------------- organisation
@@ -123,14 +138,7 @@ resource "steadmesh_organization" "this" {
       [for m in module.representative : m.memory_stores]...
     )
 
-    harness_profiles = {
-      primary = {
-        adapter          = var.harness
-        image_digest     = local.platform.seat_images[var.harness]
-        model_connection = var.harness == "claude-code" ? "model" : null
-        model            = var.harness == "claude-code" ? var.model : null
-      }
-    }
+    harness_profiles = local.harness_profiles
 
     execution_profiles = {
       interactive = {
@@ -152,9 +160,7 @@ resource "steadmesh_organization" "this" {
           secret_ref   = local.platform.secret_refs.slack
         }
       },
-      { for k, v in {
-        model = { adapter = "anthropic", secret_ref = local.platform.secret_refs.anthropic }
-      } : k => v if var.harness == "claude-code" },
+      local.model_connections,
       { for k, v in {
         linear = {
           adapter      = "linear"

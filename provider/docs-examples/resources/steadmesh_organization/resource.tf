@@ -39,10 +39,13 @@ resource "steadmesh_organization" "acme" {
 
     harness_profiles = {
       claude = {
-        adapter          = "claude-code"
-        image_digest     = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.1.1"
-        model_connection = "model"
+        adapter      = "claude-code"
+        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.1.1"
+        model        = { connection = "anthropic", id = "claude-sonnet-5-5" }
       }
+      # Another seat could run Codex on OpenAI, or Pi on any compatible endpoint:
+      # codex = { adapter = "codex", image_digest = "…/seat-codex:0.1.1",
+      #           model = { connection = "openai", id = "gpt-5.5" } }
     }
     execution_profiles = {
       interactive = {
@@ -84,9 +87,9 @@ resource "steadmesh_organization" "acme" {
     # in the control-plane namespace, vault:<path> a Vault KV entry. Slack
     # needs bot_token and app_token; Anthropic and Linear need api_key.
     connections = {
-      slack  = { adapter = "slack", account_id = "T0123456", secret_ref = "k8s:slack-credentials" }
-      model  = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }
-      linear = { adapter = "linear", secret_ref = "k8s:linear-credentials", config = { team_id = "ENG" } }
+      slack     = { adapter = "slack", account_id = "T0123456", secret_ref = "k8s:slack-credentials" }
+      anthropic = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }
+      linear    = { adapter = "linear", secret_ref = "k8s:linear-credentials", config = { team_id = "ENG" } }
     }
 
     grants = {

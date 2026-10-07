@@ -55,10 +55,13 @@ resource "steadmesh_organization" "acme" {
 
     harness_profiles = {
       claude = {
-        adapter          = "claude-code"
-        image_digest     = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.1.1"
-        model_connection = "model"
+        adapter      = "claude-code"
+        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.1.1"
+        model        = { connection = "anthropic", id = "claude-sonnet-5-5" }
       }
+      # Another seat could run Codex on OpenAI, or Pi on any compatible endpoint:
+      # codex = { adapter = "codex", image_digest = "…/seat-codex:0.1.1",
+      #           model = { connection = "openai", id = "gpt-5.5" } }
     }
     execution_profiles = {
       interactive = {
@@ -100,9 +103,9 @@ resource "steadmesh_organization" "acme" {
     # in the control-plane namespace, vault:<path> a Vault KV entry. Slack
     # needs bot_token and app_token; Anthropic and Linear need api_key.
     connections = {
-      slack  = { adapter = "slack", account_id = "T0123456", secret_ref = "k8s:slack-credentials" }
-      model  = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }
-      linear = { adapter = "linear", secret_ref = "k8s:linear-credentials", config = { team_id = "ENG" } }
+      slack     = { adapter = "slack", account_id = "T0123456", secret_ref = "k8s:slack-credentials" }
+      anthropic = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }
+      linear    = { adapter = "linear", secret_ref = "k8s:linear-credentials", config = { team_id = "ENG" } }
     }
 
     grants = {
@@ -213,16 +216,40 @@ Optional:
 
 Required:
 
-- `adapter` (String) Connector adapter: slack, linear or anthropic.
+- `adapter` (String) Connector adapter: slack, linear, anthropic, openai or model (any compatible model endpoint).
 
 Optional:
 
 - `account_id` (String) Authorised account or workspace identity.
 - `config` (Map of String) Adapter configuration, e.g. team_id for linear.
-- `endpoint_ref` (String) Base URL override (fakes, self-hosted).
+- `endpoint_ref` (String) Base URL override (fakes, self-hosted). For model connections, the API base, usually ending in /v1.
+- `model` (Attributes) What a model connection serves. Defaults for anthropic and openai; the model adapter must declare its APIs. Claims are verified at readiness. (see [below for nested schema](#nestedatt--spec--connections--model))
 - `ownership` (String) external (default) or managed.
 - `required` (Boolean) Whether the connection must authenticate before the organisation is ready. By default model connections a harness uses and communication connections with channel bindings are required; others, such as a work tracker, are optional: their failures are reported as IntegrationsDegraded but never block readiness or internal work.
 - `secret_ref` (String) vault:<path> or k8s:<secret-name>. Never a raw credential.
+
+<a id="nestedatt--spec--connections--model"></a>
+### Nested Schema for `spec.connections.model`
+
+Optional:
+
+- `apis` (List of String) APIs the endpoint serves: anthropic_messages, openai_responses, openai_chat.
+- `auth` (String) How the credential is sent: bearer (default), x-api-key or header:<Name>.
+- `models` (Attributes List) Models the endpoint serves. When set, harness profiles may only select these, and readiness checks each. (see [below for nested schema](#nestedatt--spec--connections--model--models))
+- `verify` (String) Readiness check: request (default; a minimal request per API and model), models (list models) or none.
+
+<a id="nestedatt--spec--connections--model--models"></a>
+### Nested Schema for `spec.connections.model.models`
+
+Required:
+
+- `id` (String) Model identifier.
+
+Optional:
+
+- `apis` (List of String) APIs this model is served on; empty means all of the connection's APIs.
+
+
 
 
 <a id="nestedatt--spec--execution_profiles"></a>
@@ -265,15 +292,28 @@ Optional:
 
 Required:
 
-- `adapter` (String) Harness adapter, e.g. claude-code or fake.
+- `adapter` (String) Harness adapter: claude-code, codex, pi or fake.
 - `image_digest` (String) Pinned harness image.
 
 Optional:
 
 - `config` (Map of String) Adapter configuration.
-- `model` (String) Model name.
-- `model_connection` (String) Connection with a model adapter.
+- `model` (Attributes) The model the harness uses and the connection that serves it. (see [below for nested schema](#nestedatt--spec--harness_profiles--model))
 - `required_capabilities` (List of String) Capabilities the adapter must support.
+
+<a id="nestedatt--spec--harness_profiles--model"></a>
+### Nested Schema for `spec.harness_profiles.model`
+
+Required:
+
+- `connection` (String) A model connection.
+- `id` (String) Model identifier sent to the endpoint. The platform rejects requests from the seat for any other model.
+
+Optional:
+
+- `api` (String) anthropic_messages, openai_responses or openai_chat. When unset, the first API the harness speaks that the connection and model also serve.
+- `settings` (Map of String) Harness-specific model settings: effort (claude-code); reasoning_effort (codex); thinking, context_window, max_tokens, reasoning (pi).
+
 
 
 <a id="nestedatt--spec--memory_stores"></a>

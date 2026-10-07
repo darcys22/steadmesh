@@ -232,7 +232,7 @@ func TestFieldErrorPath(t *testing.T) {
 		"execution_profiles.interactive.bogus.x":   spec.AtName("execution_profiles").AtMapKey("interactive"),
 		"grants.reviewer_tracker.operations":       spec.AtName("grants").AtMapKey("reviewer_tracker").AtName("operations"),
 		"channel_bindings.sean.external_user_id":   spec.AtName("channel_bindings").AtMapKey("sean").AtName("external_user_id"),
-		"harness_profiles.fake.model_connection":   spec.AtName("harness_profiles").AtMapKey("fake").AtName("model_connection"),
+		"harness_profiles.fake.model.connection":   spec.AtName("harness_profiles").AtMapKey("fake").AtName("model").AtName("connection"),
 		"team_templates.base":                      spec.AtName("team_templates").AtMapKey("base"),
 		"message_routes.rep_to_reviewer.from":      spec.AtName("message_routes").AtMapKey("rep_to_reviewer").AtName("from"),
 		"sandbox_profiles.standard.runtime_class":  spec.AtName("sandbox_profiles").AtMapKey("standard").AtName("runtime_class"),

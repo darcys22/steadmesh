@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 // Outcome errors. Adapters wrap one of these so the gateway can decide whether
@@ -60,8 +62,16 @@ type Config struct {
 	Endpoint string
 	Secret   map[string]string
 	Extra    map[string]string
-	HTTP     *http.Client
+	// Model describes a model connection's endpoint (compiled defaults applied).
+	Model *spec.ModelEndpoint
+	// ModelUses are the models and APIs seats use through a model
+	// connection; readiness checks them.
+	ModelUses []ModelUse
+	HTTP      *http.Client
 }
+
+// ModelUse is a model requested over an API.
+type ModelUse struct{ ID, API string }
 
 // InboundEvent is a verified event from a communication service.
 type InboundEvent struct {

@@ -36,12 +36,59 @@ variable "humans" {
 }
 
 variable "harness" {
-  description = "Harness for every seat: claude-code (real model) or fake (deterministic)."
+  description = "Harness for every seat not listed in seat_harnesses: claude-code, codex, pi or fake (deterministic, no model)."
   type        = string
   default     = "fake"
   validation {
-    condition     = contains(["claude-code", "fake"], var.harness)
-    error_message = "harness must be \"claude-code\" or \"fake\"."
+    condition     = contains(["claude-code", "codex", "pi", "fake"], var.harness)
+    error_message = "harness must be claude-code, codex, pi or fake."
+  }
+}
+
+variable "model" {
+  description = "Model for the default harness: connection (a key of model_connections), id, and optionally api and settings. Required unless harness is fake."
+  type = object({
+    connection = string
+    id         = string
+    api        = optional(string)
+    settings   = optional(map(string))
+  })
+  default = null
+}
+
+variable "seat_harnesses" {
+  description = "Per-seat harness and model, e.g. { engineer = { adapter = \"codex\", model = { connection = \"openai\", id = \"gpt-5.5\" } } }. Other seats use harness and model."
+  type = map(object({
+    adapter = string
+    model = optional(object({
+      connection = string
+      id         = string
+      api        = optional(string)
+      settings   = optional(map(string))
+    }))
+  }))
+  default = {}
+}
+
+variable "model_connections" {
+  description = "Model endpoints, keyed by connection: adapter (anthropic, openai, or model for any compatible endpoint), secret_ref, and optionally endpoint_ref (the API base, usually ending in /v1) and model (apis, auth, models, verify). Only connections a seat uses are declared."
+  type = map(object({
+    adapter      = string
+    secret_ref   = string
+    endpoint_ref = optional(string)
+    model = optional(object({
+      apis   = optional(list(string))
+      auth   = optional(string)
+      verify = optional(string)
+      models = optional(list(object({
+        id   = string
+        apis = optional(list(string))
+      })))
+    }))
+  }))
+  default = {
+    anthropic = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }
+    openai    = { adapter = "openai", secret_ref = "k8s:openai-credentials" }
   }
 }
 
@@ -50,14 +97,10 @@ variable "harness_images" {
   type        = map(string)
   default = {
     "claude-code" = "steadmesh/seat-claudecode:dev"
+    "codex"       = "steadmesh/seat-codex:dev"
+    "pi"          = "steadmesh/seat-pi:dev"
     "fake"        = "steadmesh/seat-fake:dev"
   }
-}
-
-variable "model" {
-  description = "Model name for the claude-code harness; null uses the adapter default."
-  type        = string
-  default     = null
 }
 
 variable "slack_workspace_id" {
@@ -84,23 +127,15 @@ variable "linear_endpoint_ref" {
   default     = ""
 }
 
-variable "model_endpoint_ref" {
-  description = "Model API base URL override. Empty uses the provider default."
-  type        = string
-  default     = ""
-}
-
 variable "secret_refs" {
   description = "secret_ref per connection (foundation output secret_refs). References only; values stay in the control plane."
   type = object({
-    slack     = string
-    linear    = string
-    anthropic = string
+    slack  = string
+    linear = string
   })
   default = {
-    slack     = "k8s:slack-credentials"
-    linear    = "k8s:linear-credentials"
-    anthropic = "k8s:anthropic-credentials"
+    slack  = "k8s:slack-credentials"
+    linear = "k8s:linear-credentials"
   }
 }
 

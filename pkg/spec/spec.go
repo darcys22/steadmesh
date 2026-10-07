@@ -119,19 +119,35 @@ type SharedWorkspace struct {
 }
 
 type HarnessProfile struct {
-	// Adapter is the harness adapter name, e.g. claude-code or fake.
+	// Adapter is the harness adapter name: claude-code, codex, pi or fake.
 	Adapter string `json:"adapter"`
 	// ImageDigest pins the harness image (image@sha256:... or a local tag in dev).
 	ImageDigest string `json:"image_digest"`
-	// ModelConnection names a connection with a model adapter.
+	// Model selects the model and the connection that serves it.
 	// +optional
-	ModelConnection string `json:"model_connection,omitempty"`
-	// +optional
-	Model string `json:"model,omitempty"`
+	Model *ModelSelection `json:"model,omitempty"`
 	// +optional
 	RequiredCapabilities []string `json:"required_capabilities,omitempty"`
+	// Config holds adapter-specific options (docs/harnesses.html).
 	// +optional
 	Config map[string]string `json:"config,omitempty"`
+}
+
+// ModelSelection is a harness profile's model.
+type ModelSelection struct {
+	// Connection names a model connection.
+	Connection string `json:"connection"`
+	// ID is the model identifier sent to the endpoint. The platform rejects
+	// requests from the seat for any other model.
+	ID string `json:"id"`
+	// API is the protocol: anthropic_messages, openai_responses or
+	// openai_chat. When unset, the first API the harness speaks that the
+	// connection and model also serve is used.
+	// +optional
+	API string `json:"api,omitempty"`
+	// Settings are harness-specific model settings, e.g. reasoning_effort.
+	// +optional
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 type ExecutionProfile struct {
@@ -176,10 +192,12 @@ type SandboxProfile struct {
 }
 
 type Connection struct {
-	// Adapter is slack, linear, anthropic or fake-* in tests.
+	// Adapter is slack, linear, anthropic, openai, model or fake-* in tests.
 	Adapter string `json:"adapter"`
 	// +optional
 	AccountID string `json:"account_id,omitempty"`
+	// EndpointRef overrides the service base URL. For model connections it
+	// is the API base, usually ending in /v1 (https://api.openai.com/v1).
 	// +optional
 	EndpointRef string `json:"endpoint_ref,omitempty"`
 	// SecretRef points at a secret in a supported manager (vault:..., k8s:...).
@@ -192,8 +210,41 @@ type Connection struct {
 	// When unset it is decided by role (compile.RequiredConnections).
 	// +optional
 	Required *bool `json:"required,omitempty"`
+	// Model describes a model endpoint: the APIs it serves and its models.
+	// The anthropic and openai adapters have defaults; the model adapter
+	// (any compatible endpoint) must declare its APIs.
+	// +optional
+	Model *ModelEndpoint `json:"model,omitempty"`
 	// +optional
 	Config map[string]string `json:"config,omitempty"`
+}
+
+// ModelEndpoint describes what a model connection serves. Claims are
+// checked at readiness (Verify).
+type ModelEndpoint struct {
+	// APIs the endpoint serves: anthropic_messages, openai_responses, openai_chat.
+	// +optional
+	APIs []string `json:"apis,omitempty"`
+	// Auth is how the credential is sent: bearer, x-api-key or header:<Name>.
+	// +optional
+	Auth string `json:"auth,omitempty"`
+	// Models the endpoint serves. When set, harness profiles may only select
+	// these, and readiness checks each one.
+	// +optional
+	Models []ModelEntry `json:"models,omitempty"`
+	// Verify is how readiness checks the endpoint: request (a minimal request
+	// per declared API and model), models (list models) or none.
+	// +optional
+	Verify string `json:"verify,omitempty"`
+}
+
+// ModelEntry is one model a connection serves.
+type ModelEntry struct {
+	ID string `json:"id"`
+	// APIs restricts the APIs this model is served on; empty means all of
+	// the connection's APIs.
+	// +optional
+	APIs []string `json:"apis,omitempty"`
 }
 
 type Seat struct {

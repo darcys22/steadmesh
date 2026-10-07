@@ -1,0 +1,39 @@
+$ codex mcp get steadmesh --json  (CODEX_HOME=codex-home-reco)
+{
+  "name": "steadmesh",
+  "enabled": true,
+  "disabled_reason": null,
+  "transport": {
+    "type": "stdio",
+    "command": "/usr/local/bin/steadmesh-tools",
+    "args": [
+      "mcp"
+    ],
+    "env": {
+      "STEADMESH_SOCKET": "/run/steadmesh.sock"
+    },
+    "env_vars": [],
+    "cwd": null
+  },
+  "enabled_tools": null,
+  "disabled_tools": null,
+  "startup_timeout_sec": 30.0,
+  "tool_timeout_sec": 600.0
+}
+exit=0
+$ codex --strict-config mcp list
+Error: `--strict-config` is not supported for `codex mcp`
+exit=1
+
+# with auth command block appended (and experimental_bearer_token removed):
+$ codex --strict-config mcp list (CODEX_HOME=codex-home-auth)
+Error: `--strict-config` is not supported for `codex mcp`
+exit=1
+# auth + experimental_bearer_token together:
+Error: failed to load bootstrap configuration
+
+Caused by:
+    model_providers.steadmesh: provider auth cannot be combined with experimental_bearer_token
+    in `model_providers`
+    
+exit=1

@@ -16,8 +16,10 @@ import (
 
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/compile"
+	"github.com/darcys22/steadmesh/pkg/modelforward"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi/client"
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 // Exit codes.
@@ -79,8 +81,15 @@ type Runner struct {
 	adapter harnesses.Adapter
 	boot    runtimeapi.Bootstrap
 	fwd     *forwarder
-	// modelConn is the resolved model connection (env or manifest).
-	modelConn string
+	// model is the harness profile's model selection, nil without one.
+	model *spec.ModelSelection
+	// mfwd is the local model forwarder, started when the seat has a model.
+	mfwd *modelforward.Forwarder
+
+	// execution is the execution being worked on, for the model forwarder.
+	execution atomic.Value // string
+	traceMu   sync.Mutex
+	traces    map[string]*probeTrace
 }
 
 // NewRunner builds a runner.
@@ -159,6 +168,14 @@ func (r *Runner) reportState(ctx context.Context, state, detail string) {
 func (r *Runner) Run(stop context.Context) error {
 	r.workCtx, r.cancelWork = context.WithCancelCause(context.Background())
 	defer r.cancelWork(nil)
+	defer func() {
+		r.mu.Lock()
+		mf := r.mfwd
+		r.mu.Unlock()
+		if mf != nil {
+			mf.Close()
+		}
+	}()
 
 	if err := r.acquire(stop); err != nil {
 		return err
@@ -355,16 +372,24 @@ func (r *Runner) start(stop context.Context) error {
 	if err != nil {
 		return err
 	}
+	if manifest != nil && manifest.Harness.Model != nil && r.mfwd == nil {
+		mf, err := modelforward.Start(modelforward.Options{PlatformURL: r.cfg.PlatformURL, TokenFile: r.cfg.TokenFile,
+			Generation: r.gen.Load, Execution: r.currentExecution, Observe: r.observeModel, Log: r.log})
+		if err != nil {
+			return err
+		}
+		r.mu.Lock()
+		r.model, r.mfwd = manifest.Harness.Model, mf
+		r.mu.Unlock()
+	}
 	fwd := newForwarder(r.c, r.log, a.Events(), r.fence)
+	fwd.observe = r.observeEvent
 	r.mu.Lock()
 	r.adapter, r.boot, r.fwd = a, boot, fwd
 	r.mu.Unlock()
 	go fwd.run()
 
 	env := r.environment(boot, manifest, instructions)
-	r.mu.Lock()
-	r.modelConn = env.ModelConnection
-	r.mu.Unlock()
 	pctx, cancel := context.WithTimeout(r.workCtx, 2*time.Minute)
 	defer cancel()
 	caps := a.DescribeCapabilities()
@@ -437,44 +462,39 @@ func (r *Runner) loadManifest() (*compile.SeatManifest, string) {
 }
 
 func (r *Runner) environment(boot runtimeapi.Bootstrap, m *compile.SeatManifest, instructions string) harnesses.Environment {
-	conn, model := r.cfg.ModelConnection, r.cfg.Model
 	var hcfg map[string]string
 	display := boot.Self.DisplayName
 	if m != nil {
-		if conn == "" {
-			conn = m.Harness.ModelConnection
-		}
-		if model == "" {
-			model = m.Harness.Model
-		}
 		hcfg = m.Harness.Config
 		if display == "" {
 			display = m.DisplayName
 		}
 	}
 	env := harnesses.Environment{
-		OrganizationID:  firstNonEmpty(r.cfg.OrgID, boot.Self.OrganizationID),
-		SeatID:          firstNonEmpty(r.cfg.SeatID, boot.Self.SeatID),
-		SeatKey:         firstNonEmpty(r.cfg.SeatKey, boot.Self.SeatKey),
-		DisplayName:     display,
-		ConfigRevision:  r.cfg.ConfigRevision,
-		Generation:      r.gen.Load(),
-		PlatformURL:     r.cfg.PlatformURL,
-		TokenFile:       r.cfg.TokenFile,
-		WorkspaceDir:    r.cfg.WorkspaceDir,
-		HomeDir:         r.cfg.HomeDir,
-		RunnerDir:       r.cfg.RunnerDir,
-		TmpDir:          r.cfg.TmpDir,
-		Instructions:    instructions,
-		Bootstrap:       boot,
-		ToolCommand:     r.cfg.ToolCommand,
-		ModelConnection: conn,
-		Model:           model,
-		HarnessConfig:   hcfg,
-		ExtraEnv:        r.toolEnv(),
+		OrganizationID: firstNonEmpty(r.cfg.OrgID, boot.Self.OrganizationID),
+		SeatID:         firstNonEmpty(r.cfg.SeatID, boot.Self.SeatID),
+		SeatKey:        firstNonEmpty(r.cfg.SeatKey, boot.Self.SeatKey),
+		DisplayName:    display,
+		ConfigRevision: r.cfg.ConfigRevision,
+		Generation:     r.gen.Load(),
+		PlatformURL:    r.cfg.PlatformURL,
+		TokenFile:      r.cfg.TokenFile,
+		WorkspaceDir:   r.cfg.WorkspaceDir,
+		HomeDir:        r.cfg.HomeDir,
+		RunnerDir:      r.cfg.RunnerDir,
+		TmpDir:         r.cfg.TmpDir,
+		Instructions:   instructions,
+		Bootstrap:      boot,
+		ToolCommand:    r.cfg.ToolCommand,
+		HarnessConfig:  hcfg,
+		ExtraEnv:       r.toolEnv(),
 	}
-	if conn != "" {
-		env.ModelProxyURL = r.c.ModelProxyURL(conn)
+	r.mu.Lock()
+	sel, mf := r.model, r.mfwd
+	r.mu.Unlock()
+	if sel != nil && mf != nil {
+		env.Model = &harnesses.ModelEndpoint{Connection: sel.Connection, ID: sel.ID, API: sel.API, Settings: sel.Settings,
+			BaseURL: mf.BaseURL(sel.Connection), APIKey: modelforward.LocalAPIKey}
 	}
 	return env
 }
@@ -542,6 +562,7 @@ func (r *Runner) loop(stop context.Context) error {
 }
 
 func (r *Runner) setExecution(id string) {
+	r.execution.Store(id)
 	if err := r.writeRunnerFile("execution", id); err != nil {
 		r.log.Warn("write execution file failed", "err", err)
 	}

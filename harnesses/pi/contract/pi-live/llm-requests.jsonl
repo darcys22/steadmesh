@@ -1,0 +1,5 @@
+{"path": "/v1/chat/completions", "auth": "Bearer key-1", "x-api-key": null, "x-extra": "static-header", "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": ["system", "user"]}
+{"path": "/v1/chat/completions", "auth": "Bearer key-2", "x-api-key": null, "x-extra": "static-header", "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": ["system", "user", "assistant", "user"]}
+{"path": "/v1/chat/completions", "auth": "Bearer key-3", "x-api-key": null, "x-extra": "static-header", "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": ["system", "user", "assistant", "user", "assistant", "tool"]}
+{"path": "/v1/responses", "auth": "Bearer placeholder", "x-api-key": null, "x-extra": null, "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": []}
+{"path": "/v1/messages?beta=true", "auth": null, "x-api-key": "placeholder", "x-extra": null, "model": "m1", "tools": ["read", "bash", "edit", "write", "mcp__bridge__echo"], "msg_roles": ["user", "assistant", "user", "assistant", "user", "assistant", "user", "user"]}

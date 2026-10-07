@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
+	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
@@ -397,8 +398,8 @@ func (c *compiler) applyDefaults(o *spec.OrganizationSpec) {
 	// integrations never block readiness unless declared required.
 	usedModel := map[string]bool{}
 	for _, s := range o.Seats {
-		if h, ok := o.HarnessProfiles[s.HarnessProfile]; ok && h.ModelConnection != "" {
-			usedModel[h.ModelConnection] = true
+		if h, ok := o.HarnessProfiles[s.HarnessProfile]; ok && h.Model != nil {
+			usedModel[h.Model.Connection] = true
 		}
 	}
 	bound := map[string]bool{}
@@ -413,6 +414,22 @@ func (c *compiler) applyDefaults(o *spec.OrganizationSpec) {
 			kind := c.cat.Connectors[conn.Adapter].Kind
 			r := (kind == "model" && usedModel[k]) || (kind == "communication" && bound[k])
 			conn.Required = &r
+		}
+		if info := c.cat.Connectors[conn.Adapter]; info.Kind == "model" {
+			m := spec.ModelEndpoint{}
+			if conn.Model != nil {
+				m = *conn.Model
+			}
+			if len(m.APIs) == 0 {
+				m.APIs = append([]string(nil), info.ModelAPIs...)
+			}
+			if m.Auth == "" {
+				m.Auth = info.DefaultAuth
+			}
+			if m.Verify == "" {
+				m.Verify = "request"
+			}
+			conn.Model = &m
 		}
 		o.Connections[k] = conn
 	}
@@ -450,16 +467,11 @@ func (c *compiler) checkProfiles(o *spec.OrganizationSpec) {
 				c.errf(path+".required_capabilities", "adapter %q does not support capability %q", h.Adapter, rc)
 			}
 		}
-		if info.NeedsModel && h.ModelConnection == "" {
-			c.errf(path+".model_connection", "adapter %q requires a model connection", h.Adapter)
+		if info.NeedsModel && h.Model == nil {
+			c.errf(path+".model", "adapter %q requires a model", h.Adapter)
 		}
-		if h.ModelConnection != "" {
-			conn, ok := o.Connections[h.ModelConnection]
-			if !ok {
-				c.errf(path+".model_connection", "unknown connection %q", h.ModelConnection)
-			} else if ci, ok := c.cat.Connectors[conn.Adapter]; ok && ci.Kind != "model" {
-				c.errf(path+".model_connection", "connection %q uses adapter %q, which is not a model adapter", h.ModelConnection, conn.Adapter)
-			}
+		if h.Model != nil {
+			c.checkModel(o, k, h, info)
 		}
 	}
 	for _, k := range sortedKeys(o.ExecutionProfiles) {
@@ -532,6 +544,139 @@ func (c *compiler) checkProfiles(o *spec.OrganizationSpec) {
 	}
 }
 
+// checkModel validates a harness profile's model selection against the
+// harness and the connection, chooses the API when none is given and records
+// the selection on the connection for readiness.
+func (c *compiler) checkModel(o *spec.OrganizationSpec, key string, h spec.HarnessProfile, info HarnessInfo) {
+	path := "harness_profiles." + key + ".model"
+	m := *h.Model
+	if m.ID == "" {
+		c.errf(path+".id", "is required")
+	}
+	conn, ok := o.Connections[m.Connection]
+	if !ok {
+		c.errf(path+".connection", "unknown connection %q", m.Connection)
+		return
+	}
+	if ci := c.cat.Connectors[conn.Adapter]; ci.Kind != "model" || conn.Model == nil {
+		c.errf(path+".connection", "connection %q uses adapter %q, which is not a model adapter", m.Connection, conn.Adapter)
+		return
+	}
+	served := conn.Model.APIs
+	if len(conn.Model.Models) > 0 {
+		i := slices.IndexFunc(conn.Model.Models, func(e spec.ModelEntry) bool { return e.ID == m.ID })
+		if i < 0 {
+			ids := make([]string, len(conn.Model.Models))
+			for j, e := range conn.Model.Models {
+				ids[j] = e.ID
+			}
+			c.errf(path+".id", "model %q is not one of connection %q's models (%s)", m.ID, m.Connection, strings.Join(ids, ", "))
+			return
+		}
+		if apis := conn.Model.Models[i].APIs; len(apis) > 0 {
+			served = apis
+		}
+	}
+	if m.API != "" {
+		switch {
+		case !slices.Contains(harnesses.ModelAPIs, m.API):
+			c.errf(path+".api", "unknown API %q (known: %s)", m.API, strings.Join(harnesses.ModelAPIs, ", "))
+			return
+		case !slices.Contains(info.APIs, m.API):
+			c.errf(path+".api", "harness %q does not speak %s (it speaks %s)", h.Adapter, m.API, strings.Join(info.APIs, ", "))
+			return
+		case !slices.Contains(served, m.API):
+			c.errf(path+".api", "connection %q does not serve %s for model %q (it serves %s)", m.Connection, m.API, m.ID, strings.Join(served, ", "))
+			return
+		}
+	} else {
+		for _, api := range info.APIs {
+			if slices.Contains(served, api) {
+				m.API = api
+				break
+			}
+		}
+		if m.API == "" {
+			var would []string
+			for _, name := range sortedKeys(c.cat.Harnesses) {
+				for _, api := range c.cat.Harnesses[name].APIs {
+					if slices.Contains(served, api) {
+						would = append(would, name)
+						break
+					}
+				}
+			}
+			hint := "no registered harness speaks them"
+			if len(would) > 0 {
+				hint = "harnesses that would work: " + strings.Join(would, ", ")
+			}
+			c.errf(path, "harness %q speaks %s but connection %q serves %s for model %q; %s",
+				h.Adapter, strings.Join(info.APIs, ", "), m.Connection, strings.Join(served, ", "), m.ID, hint)
+			return
+		}
+	}
+	for _, sk := range sortedKeys(m.Settings) {
+		st, ok := info.Settings[sk]
+		switch {
+		case !ok:
+			c.errf(path+".settings."+sk, "harness %q has no setting %q (settings: %s)", h.Adapter, sk, strings.Join(sortedKeys(info.Settings), ", "))
+		case m.Settings[sk] == "":
+			c.errf(path+".settings."+sk, "must not be empty")
+		case len(st.Values) > 0 && !slices.Contains(st.Values, m.Settings[sk]):
+			c.errf(path+".settings."+sk, "must be one of %s", strings.Join(st.Values, ", "))
+		}
+	}
+	h.Model = &m
+	o.HarnessProfiles[key] = h
+}
+
+// authRe matches a model connection's auth setting.
+var authRe = regexp.MustCompile(`^(bearer|x-api-key|header:[A-Za-z0-9-]+)$`)
+
+func (c *compiler) checkModelEndpoint(path string, conn spec.Connection, info ConnectorInfo) {
+	m := conn.Model
+	if info.Kind != "model" {
+		if m != nil {
+			c.errf(path+".model", "is only valid on model connections")
+		}
+		return
+	}
+	if len(info.ModelAPIs) == 0 && conn.EndpointRef == "" {
+		c.errf(path+".endpoint_ref", "is required for adapter %q: the endpoint's API base URL, e.g. https://host/v1", conn.Adapter)
+	}
+	if len(m.APIs) == 0 {
+		c.errf(path+".model.apis", "declare the APIs the endpoint serves (%s)", strings.Join(harnesses.ModelAPIs, ", "))
+	}
+	for _, api := range m.APIs {
+		if !slices.Contains(harnesses.ModelAPIs, api) {
+			c.errf(path+".model.apis", "unknown API %q (known: %s)", api, strings.Join(harnesses.ModelAPIs, ", "))
+		}
+	}
+	if !authRe.MatchString(m.Auth) {
+		c.errf(path+".model.auth", "must be bearer, x-api-key or header:<Name>")
+	}
+	switch m.Verify {
+	case "request", "models", "none":
+	default:
+		c.errf(path+".model.verify", "must be request, models or none")
+	}
+	seen := map[string]bool{}
+	for i, e := range m.Models {
+		ep := fmt.Sprintf("%s.model.models[%d]", path, i)
+		if e.ID == "" {
+			c.errf(ep+".id", "is required")
+		} else if seen[e.ID] {
+			c.errf(ep+".id", "duplicate model %q", e.ID)
+		}
+		seen[e.ID] = true
+		for _, api := range e.APIs {
+			if !slices.Contains(m.APIs, api) {
+				c.errf(ep+".apis", "%s is not one of the connection's APIs (%s)", api, strings.Join(m.APIs, ", "))
+			}
+		}
+	}
+}
+
 func (c *compiler) checkConnections(o *spec.OrganizationSpec) {
 	for _, k := range sortedKeys(o.Connections) {
 		conn := o.Connections[k]
@@ -546,6 +691,7 @@ func (c *compiler) checkConnections(o *spec.OrganizationSpec) {
 		} else if !secretRefRe.MatchString(conn.SecretRef) {
 			c.errf(path+".secret_ref", "must be vault:<path> or k8s:<secret-name>; raw credentials are never accepted")
 		}
+		c.checkModelEndpoint(path, conn, info)
 		switch conn.Ownership {
 		case "external":
 		case "managed":
@@ -696,8 +842,8 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 	if s.PersonalMemory != "" {
 		sm.addCapability("memory:"+s.PersonalMemory, PersonalMemoryOperations, nil, "implicit:personal_memory")
 	}
-	if mc := sm.Harness.ModelConnection; mc != "" {
-		sm.addCapability("connection:"+mc, []string{"model.infer"}, nil, "implicit:harness_model")
+	if m := sm.Harness.Model; m != nil {
+		sm.addCapability("connection:"+m.Connection, []string{"model.infer"}, nil, "implicit:harness_model")
 	}
 	for _, t := range s.Teams {
 		for _, store := range sortedKeys(o.Teams[t].SharedMemory) {

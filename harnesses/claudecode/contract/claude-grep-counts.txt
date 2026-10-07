@@ -1,0 +1,13 @@
+CLAUDE_CODE_API_KEY_HELPER_TTL_MS darwin=5 linux=5
+ANTHROPIC_BASE_URL darwin=65 linux=64
+ANTHROPIC_API_KEY darwin=70 linux=71
+ANTHROPIC_AUTH_TOKEN darwin=43 linux=43
+ANTHROPIC_CUSTOM_HEADERS darwin=26 linux=26
+DISABLE_AUTOUPDATER darwin=8 linux=8
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC darwin=22 linux=22
+DISABLE_TELEMETRY darwin=13 linux=13
+CLAUDE_CONFIG_DIR darwin=49 linux=50
+MCP_TIMEOUT darwin=7 linux=7
+MCP_TOOL_TIMEOUT darwin=10 linux=10
+"mcp__" darwin=33 linux=33
+apiKeyHelper darwin=55 linux=54

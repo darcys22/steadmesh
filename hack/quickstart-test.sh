@@ -58,7 +58,7 @@ cat > platform/terraform.tfvars <<EOF
 kube_context      = "$kctx"
 slack_bot_token   = "xoxb-fake-bot-token"
 slack_app_token   = "xapp-fake-app-token"
-anthropic_api_key = "sk-ant-fake"
+model_api_keys    = { anthropic = "sk-ant-fake" }
 linear_api_key    = "lin_api_fake"
 enable_console    = true
 EOF

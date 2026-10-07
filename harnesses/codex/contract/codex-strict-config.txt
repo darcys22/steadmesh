@@ -1,0 +1,14 @@
+$ echo '' | codex app-server --strict-config   (CODEX_HOME=codex-home-reco; initialize sent)
+exit=0
+$ echo '' | codex app-server --strict-config   (CODEX_HOME=codex-home-auth; initialize sent)
+{"id":1,"result":{"userAgent":"p/0.160.1 (Mac OS 26.6.2; arm64) ghostty/1.3.1 (p; 0)","codexHome":"$TMPDIR
+[2m2026-10-07T06:26:47.227799Z[0m [31mERROR[0m [2mcodex_login::auth::manager[0m[2m:[0m Failed to resolve external auth: provider auth command `/usr/local/bin/print-token` failed to start: No s
+[2m2026-10-07T06:26:47.228861Z[0m [31mERROR[0m [2mcodex_login::auth::manager[0m[2m:[0m Failed to resolve external auth: provider auth command `/usr/local/bin/print-token` failed to start: No s
+[2m2026-10-07T06:26:47.230035Z[0m [31mERROR[0m [2mcodex_models_manager::manager[0m[2m:[0m failed to refresh available models: task 214 was cancelled
+exit=0
+$ codex app-server --strict-config (CODEX_HOME=codex-home-bogus, contains bogus_key)
+Error: $CONTRACTS/codex-home-bogus/config.toml:1:1: unknown configuration field `bogus_key`
+
+# re-run for codex-home-reco (first run above raced stdin EOF and exited before replying):
+{"id":1,"result":{"userAgent":"p/0.160.1 (Mac OS 26.6.2; arm64) ghostty/1.3.1 (p; 0)","codexHome":"$TMPDIR
+exit=0

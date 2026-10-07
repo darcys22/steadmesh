@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/darcys22/steadmesh/connectors"
+	"github.com/darcys22/steadmesh/connectors/model"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
@@ -322,14 +324,17 @@ func (s *server) checkpoint(w http.ResponseWriter, r *http.Request, q *seatReq) 
 }
 
 // modelProxy forwards inference to the seat's model connection with the
-// platform-held credential; the seat token is removed first (§5.2).
+// platform-held credential; the seat token is removed first (§5.2). A seat
+// may only request its harness profile's model over its profile's API. Each
+// request is recorded as a model_request event on the seat's execution: the
+// record of the actual model and destination.
 func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	conn := r.PathValue("connection")
 	if !policy.Allows(&q.seat.Manifest, "connection:"+conn, "model.infer") {
 		writeError(w, http.StatusForbidden, "forbidden", fmt.Sprintf("model.infer is not granted on connection %s", conn))
 		return
 	}
-	model, err := s.Connections.Model(q.seat.OrganizationID, conn)
+	upstream, err := s.Connections.Model(q.seat.OrganizationID, conn)
 	if errors.Is(err, connections.ErrNotConfigured) {
 		writeError(w, http.StatusServiceUnavailable, "unavailable", err.Error())
 		return
@@ -339,39 +344,125 @@ func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) 
 		return
 	}
 	annotate(r.Context(), "connection", conn)
+	path := "/" + r.PathValue("rest")
+	api := model.APIForPath(path)
+	rec := runtimeapi.ModelRequest{Connection: conn, API: api, UpstreamHost: hostOf(upstream)}
+	start := time.Now()
+	defer func() {
+		rec.DurationMS = time.Since(start).Milliseconds()
+		s.recordModelRequest(r, q, rec)
+	}()
+	reject := func(status int, code, msg string) {
+		rec.Status, rec.Rejected = status, msg
+		writeError(w, status, code, msg)
+	}
 	// The body is buffered so a request rejected because the credential was
-	// rotated can be sent again; nothing reaches the seat until the retry is
-	// decided. Streaming responses still stream.
+	// rotated can be sent again, and so its model can be checked; nothing
+	// reaches the seat until the retry is decided. Streaming responses
+	// still stream.
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxModelRequest))
 	if err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "invalid", "model request body too large or unreadable")
+		reject(http.StatusRequestEntityTooLarge, "invalid", "model request body too large or unreadable")
 		return
+	}
+	var req struct {
+		Model  string `json:"model"`
+		Stream bool   `json:"stream"`
+	}
+	_ = json.Unmarshal(body, &req)
+	rec.Model, rec.Stream = req.Model, req.Stream
+	switch {
+	case api == "":
+		reject(http.StatusNotFound, "not_found", fmt.Sprintf("%s is not a model API path", path))
+		return
+	case api == "models":
+		if r.Method != http.MethodGet {
+			reject(http.StatusMethodNotAllowed, "invalid", "model listing is GET only")
+			return
+		}
+	case r.Method != http.MethodPost:
+		reject(http.StatusMethodNotAllowed, "invalid", fmt.Sprintf("%s %s is not allowed", r.Method, path))
+		return
+	default:
+		if msg := modelAllowed(q, conn, api, req.Model); msg != "" {
+			reject(http.StatusForbidden, "forbidden", msg)
+			return
+		}
 	}
 	forward := func(dst http.ResponseWriter, m connectors.Model) {
 		out := r.Clone(r.Context())
 		out.Header.Del("Authorization")
 		out.Header.Del("X-Api-Key")
 		out.Header.Del(runtimeapi.HeaderGeneration)
-		out.URL.Path = "/" + r.PathValue("rest")
+		out.URL.Path = path
 		out.URL.RawPath = ""
 		out.RequestURI = ""
 		out.Body = io.NopCloser(bytes.NewReader(body))
 		out.ContentLength = int64(len(body))
 		m.Proxy().ServeHTTP(dst, out)
 	}
-	hold := &holdUnauthorized{ResponseWriter: w, header: http.Header{}}
-	forward(hold, model)
+	mw := &meter{ResponseWriter: w}
+	defer func() {
+		mw.done()
+		rec.Status, rec.Usage = mw.status, mw.usage
+	}()
+	hold := &holdUnauthorized{ResponseWriter: mw, header: http.Header{}}
+	forward(hold, upstream)
 	if !hold.rejected {
 		return
 	}
 	if s.Connections.RefreshNow(r.Context(), q.seat.OrganizationID, conn) {
 		if next, err := s.Connections.Model(q.seat.OrganizationID, conn); err == nil {
 			annotate(r.Context(), "credential_refreshed", true)
-			forward(w, next)
+			rec.CredentialRefreshed = true
+			forward(mw, next)
 			return
 		}
 	}
 	hold.replay()
+}
+
+// modelAllowed returns why a seat may not request model over api through
+// conn, or "" when it may. Through its harness profile's connection a seat
+// may only use the profile's model and API; through another connection
+// granted model.infer explicitly, any model.
+func modelAllowed(q *seatReq, conn, api, id string) string {
+	sel := q.seat.Manifest.Harness.Model
+	if sel == nil || sel.Connection != conn {
+		return ""
+	}
+	switch {
+	case id == "":
+		return "the request names no model"
+	case id != sel.ID:
+		return fmt.Sprintf("model %q is not allowed for this seat; its harness profile selects %q", id, sel.ID)
+	case api != sel.API:
+		return fmt.Sprintf("API %s is not allowed for this seat; its harness profile uses %s", api, sel.API)
+	}
+	return ""
+}
+
+// hostOf is the upstream host of a model connection, when it reports one.
+func hostOf(m connectors.Model) string {
+	if h, ok := m.(interface{ Host() string }); ok {
+		return h.Host()
+	}
+	return ""
+}
+
+// recordModelRequest adds a model_request event to the seat's execution.
+// Requests outside an execution, or from a fenced generation, are only logged.
+func (s *server) recordModelRequest(r *http.Request, q *seatReq, rec runtimeapi.ModelRequest) {
+	annotate(r.Context(), "model", rec.Model, "api", rec.API, "upstream", rec.UpstreamHost, "upstream_status", rec.Status)
+	f, ok := q.fence()
+	if q.execution == "" || !ok {
+		return
+	}
+	data, _ := json.Marshal(rec)
+	ev := runtimeapi.ExecutionEvent{Kind: runtimeapi.EventModelRequest, Time: time.Now().UTC(), Data: data}
+	if err := s.Store.AppendEvents(context.WithoutCancel(r.Context()), f, q.execution, []runtimeapi.ExecutionEvent{ev}); err != nil {
+		annotate(r.Context(), "model_request_event_error", err.Error())
+	}
 }
 
 // maxModelRequest bounds a buffered model request body.

@@ -25,7 +25,7 @@ func testSeat() *seatruntime.Seat {
 		Owner:          &metav1.OwnerReference{APIVersion: "steadmesh.io/v1alpha1", Kind: "AgentSeat", Name: name, UID: "uid-1", Controller: ptr.To(true)},
 		Manifest: compile.SeatManifest{
 			Key: "reviewer", HarnessProfile: "fake",
-			Harness:   spec.HarnessProfile{Adapter: "fake", ImageDigest: "steadmesh/seat-fake:dev", ModelConnection: "model", Model: "m1"},
+			Harness:   spec.HarnessProfile{Adapter: "fake", ImageDigest: "steadmesh/seat-fake:dev"},
 			Execution: spec.ExecutionProfile{Backend: "kubernetes", IdlePolicy: "warm_then_stop", CPURequest: "250m", CPULimit: "2", MemoryRequest: "512Mi", MemoryLimit: "2Gi", WorkspaceSizeGB: 7, StorageClass: "fast"},
 			Sandbox:   spec.SandboxProfile{NetworkPolicyRef: "deny_all_except_platform", RuntimeClass: "gvisor"},
 		},
@@ -94,7 +94,7 @@ func TestStatefulSetPodContract(t *testing.T) {
 	for k, v := range map[string]string{
 		"STEADMESH_PLATFORM_URL": "http://steadmesh-platform.steadmesh-system.svc:8080", "STEADMESH_TOKEN_FILE": "/var/run/steadmesh/token",
 		"STEADMESH_ORG_ID": "org-1", "STEADMESH_SEAT_ID": "seat-1", "STEADMESH_SEAT_KEY": "reviewer", "STEADMESH_CONFIG_REVISION": "sha256:abc",
-		"STEADMESH_HARNESS": "fake", "STEADMESH_MODEL_CONNECTION": "model", "STEADMESH_MODEL": "m1", "STEADMESH_MANIFEST_DIR": "/etc/steadmesh/manifest",
+		"STEADMESH_HARNESS": "fake", "STEADMESH_MANIFEST_DIR": "/etc/steadmesh/manifest",
 	} {
 		if env[k].Value != v {
 			t.Errorf("env %s = %q, want %q", k, env[k].Value, v)

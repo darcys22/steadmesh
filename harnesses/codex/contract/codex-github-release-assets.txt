@@ -1,0 +1,6 @@
+codex-aarch64-apple-darwin.tar.gz sha256:670af2b049d9c95afb74d7da385f30c5033d13a07175001dd8958c51944984d0 https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-aarch64-apple-darwin.tar.gz
+codex-aarch64-unknown-linux-musl.tar.gz sha256:f54dc5852042445bf41da3aa31156f3cb02f52c5a1a04074de73dc5598f7e1f7 https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-aarch64-unknown-linux-musl.tar.gz
+codex-app-server-aarch64-unknown-linux-musl.tar.gz sha256:74a1e85f8cd301156689dbf06e0e7635f3f71e58106ea46b62f0df9e9514bdd1 https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-app-server-aarch64-unknown-linux-musl.tar.gz
+codex-app-server-x86_64-unknown-linux-musl.tar.gz sha256:fa36836211386644a67345aeaeb4b1362322abf2771450e0684eb8ad1fb30525 https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-app-server-x86_64-unknown-linux-musl.tar.gz
+codex-x86_64-unknown-linux-musl.tar.gz sha256:9226581be592d18f7e7f740a352fdb63aa61e45e39f7eb9b09d3888c84bba33f https://github.com/openai/codex/releases/download/rust-v0.160.1/codex-x86_64-unknown-linux-musl.tar.gz
+source commit: d27764b82f7118f674371e6d6e76271d9d606edb (shallow clone of tag rust-v0.160.1)

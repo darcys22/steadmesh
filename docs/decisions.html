@@ -29,6 +29,7 @@
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
@@ -57,7 +58,7 @@
 <li><strong>Turns.</strong> Each delivered message runs one <code>claude -p --output-format stream-json</code> process, resuming the seat's session with <code>--resume</code>. The prompt goes on stdin, and the process environment is an allow-list.</li>
 <li><strong>Tools.</strong> Platform tools come from <code>steadmesh-tools mcp</code>, with <code>--strict-mcp-config</code>.</li>
 <li><strong>Prompts.</strong> Permission prompts are disabled: an unattended seat must never hang waiting for a human, and the sandbox is the boundary.</li>
-<li><strong>Model access.</strong> Model calls go to <code>&lt;platform&gt;/v1/model/&lt;connection&gt;</code>. An <code>apiKeyHelper</code> re-reads the rotating seat token, which Claude Code sends as both <code>Authorization: Bearer</code> and <code>X-Api-Key</code>. The proxy authenticates the seat, strips both headers, injects the real key and answers the <code>HEAD /api/hello</code> startup check locally.</li>
+<li><strong>Model access.</strong> Every harness calls a loopback forwarder in the seat runner, with a placeholder key. The forwarder adds the rotating seat token, read for every request, and passes the call to <code>&lt;platform&gt;/v1/model/&lt;connection&gt;</code>. The proxy authenticates the seat, allows only the profile's model and API, strips the seat's headers and injects the real key. The forwarder answers Claude Code's <code>HEAD /api/hello</code> startup check locally. An earlier design used Claude Code's <code>apiKeyHelper</code>, whose result is cached for five minutes and which other harnesses lack; the forwarder works the same way for all of them (<a href="harnesses.html">Harnesses and models</a>).</li>
 <li><strong>Retries.</strong> <code>CLAUDE_CODE_MAX_RETRIES=4</code> makes a rejected credential fail in about 18s instead of retrying for minutes.</li>
 <li><strong>Checkpoints.</strong> A checkpoint is <code>claude-code-session/&lt;version&gt;</code> plus the session ID, with the guarantee <code>application_checkpoint</code>. If a resume fails, the seat starts a new session from the portable handoff and records a visible recovery note.</li>
 </ul>

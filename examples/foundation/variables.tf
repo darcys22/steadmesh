@@ -77,9 +77,9 @@ variable "linear_api_key" {
   sensitive   = true
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic API key (used by the platform model proxy when the claude-code harness is selected)."
-  type        = string
-  default     = "sk-ant-fake"
+variable "model_api_keys" {
+  description = "API keys for model endpoints, keyed by model connection: each becomes the Secret <key>-credentials, referenced as k8s:<key>-credentials. The platform model proxy injects them; they never reach a seat."
+  type        = map(string)
+  default     = { anthropic = "sk-ant-fake" }
   sensitive   = true
 }

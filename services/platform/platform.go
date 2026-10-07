@@ -95,7 +95,7 @@ func (p *Platform) Start(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		p.Connections.Sync(ctx, id, org.Manifest.Spec.Connections)
+		p.Connections.SyncManifest(ctx, id, &org.Manifest)
 	}
 	loop := &scheduler.Loop{Store: p.opts.Store, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
 	disp := &outbox.Dispatcher{Store: p.opts.Store, Comms: p.Connections, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}

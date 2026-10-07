@@ -14,9 +14,9 @@ output "database_secret" {
 output "secret_refs" {
   description = "secret_ref values for the organisation's connections."
   value = {
-    slack     = "k8s:${kubernetes_secret_v1.slack.metadata[0].name}"
-    linear    = "k8s:${kubernetes_secret_v1.linear.metadata[0].name}"
-    anthropic = "k8s:${kubernetes_secret_v1.anthropic.metadata[0].name}"
+    slack  = "k8s:${kubernetes_secret_v1.slack.metadata[0].name}"
+    linear = "k8s:${kubernetes_secret_v1.linear.metadata[0].name}"
+    models = { for k, s in kubernetes_secret_v1.model : k => "k8s:${s.metadata[0].name}" }
   }
 }
 

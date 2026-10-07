@@ -1,9 +1,12 @@
-// Command fakes serves the deterministic Slack and Linear fakes used by the
-// e2e tests, so they can run as a Deployment in kind (image steadmesh/fakes:dev).
+// Command fakes serves the deterministic Slack, Linear and model fakes used by
+// the e2e tests, so they can run as a Deployment in kind (image
+// steadmesh/fakes:dev). The model fake is the scripted endpoint harness
+// conformance uses (modelstub), speaking all three model APIs.
 package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"log/slog"
@@ -14,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/darcys22/steadmesh/harnesses/conformance/modelstub"
 	fakelinear "github.com/darcys22/steadmesh/tests/fakes/linear"
 	fakeslack "github.com/darcys22/steadmesh/tests/fakes/slack"
 )
@@ -31,6 +35,8 @@ func main() {
 		linearKey  = flag.String("linear-api-key", "", "required Linear API key (empty accepts any)")
 		linearOrg  = flag.String("linear-org", "org-fake", "fake Linear organisation id")
 		teams      = flag.String("linear-teams", "team-eng=ENG", "comma-separated id=key Linear teams")
+		modelAddr  = flag.String("model-addr", ":8092", "listen address for the fake model endpoint (/v1/...)")
+		modelKeys  = flag.String("model-api-keys", "", "comma-separated accepted model API keys (empty accepts any)")
 	)
 	flag.Parse()
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -53,9 +59,16 @@ func main() {
 	defer slackFake.Close()
 	linearFake := fakelinear.New(fakelinear.Options{APIKey: *linearKey, OrganizationID: *linearOrg, Teams: teamMap})
 
+	var keys []string
+	if *modelKeys != "" {
+		keys = strings.Split(*modelKeys, ",")
+	}
+	modelFake := modelstub.New(keys...)
+
 	servers := []*http.Server{
 		{Addr: *slackAddr, Handler: withHealth(slackFake), ReadHeaderTimeout: 10 * time.Second},
 		{Addr: *linearAddr, Handler: withHealth(linearFake), ReadHeaderTimeout: 10 * time.Second},
+		{Addr: *modelAddr, Handler: withHealth(modelHandler(modelFake)), ReadHeaderTimeout: 10 * time.Second},
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -102,4 +115,34 @@ func pairs(s string) (map[string]string, error) {
 		out[k] = v
 	}
 	return out, nil
+}
+
+// modelHandler serves the model stub with test endpoints:
+//
+//	GET  /_test/requests  recorded requests
+//	POST /_test/keys      {"valid":[...]} replaces the accepted keys (empty: any)
+//	POST /_test/reset     forgets recorded requests
+func modelHandler(s *modelstub.Stub) http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /_test/requests", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(s.Requests())
+	})
+	mux.HandleFunc("POST /_test/keys", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Valid []string `json:"valid"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.SetKeys(body.Valid...)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.HandleFunc("POST /_test/reset", func(w http.ResponseWriter, _ *http.Request) {
+		s.Reset()
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	})
+	mux.Handle("/", s)
+	return mux
 }

@@ -13,17 +13,15 @@ import (
 // (docs/architecture.html). Durations can be overridden for tests
 // and tuning with STEADMESH_RUNNER_* variables.
 type Config struct {
-	PlatformURL     string
-	TokenFile       string
-	OrgID           string
-	SeatID          string
-	SeatKey         string
-	ConfigRevision  string
-	Harness         string
-	ModelConnection string
-	Model           string
-	ManifestDir     string
-	PodUID          string
+	PlatformURL    string
+	TokenFile      string
+	OrgID          string
+	SeatID         string
+	SeatKey        string
+	ConfigRevision string
+	Harness        string
+	ManifestDir    string
+	PodUID         string
 
 	WorkspaceDir string
 	HomeDir      string
@@ -67,23 +65,21 @@ func durEnv(k string, def time.Duration) (time.Duration, error) {
 // ConfigFromEnv reads the configuration.
 func ConfigFromEnv() (Config, error) {
 	c := Config{
-		PlatformURL:     os.Getenv(client.EnvPlatformURL),
-		TokenFile:       getenv(client.EnvTokenFile, client.DefaultTokenFile),
-		OrgID:           os.Getenv("STEADMESH_ORG_ID"),
-		SeatID:          os.Getenv("STEADMESH_SEAT_ID"),
-		SeatKey:         os.Getenv("STEADMESH_SEAT_KEY"),
-		ConfigRevision:  os.Getenv("STEADMESH_CONFIG_REVISION"),
-		Harness:         getenv("STEADMESH_HARNESS", "fake"),
-		ModelConnection: os.Getenv("STEADMESH_MODEL_CONNECTION"),
-		Model:           os.Getenv("STEADMESH_MODEL"),
-		ManifestDir:     getenv("STEADMESH_MANIFEST_DIR", "/etc/steadmesh/manifest"),
-		PodUID:          os.Getenv("POD_UID"),
-		WorkspaceDir:    getenv("STEADMESH_WORKSPACE_DIR", "/seat/workspace"),
-		HomeDir:         getenv("STEADMESH_HOME_DIR", "/seat/home"),
-		RunnerDir:       client.RunnerDir(),
-		TmpDir:          getenv("TMPDIR", "/tmp"),
-		ToolCommand:     getenv("STEADMESH_TOOLS_BIN", "/usr/local/bin/steadmesh-tools"),
-		HealthAddr:      getenv("STEADMESH_HEALTH_ADDR", ":8081"),
+		PlatformURL:    os.Getenv(client.EnvPlatformURL),
+		TokenFile:      getenv(client.EnvTokenFile, client.DefaultTokenFile),
+		OrgID:          os.Getenv("STEADMESH_ORG_ID"),
+		SeatID:         os.Getenv("STEADMESH_SEAT_ID"),
+		SeatKey:        os.Getenv("STEADMESH_SEAT_KEY"),
+		ConfigRevision: os.Getenv("STEADMESH_CONFIG_REVISION"),
+		Harness:        getenv("STEADMESH_HARNESS", "fake"),
+		ManifestDir:    getenv("STEADMESH_MANIFEST_DIR", "/etc/steadmesh/manifest"),
+		PodUID:         os.Getenv("POD_UID"),
+		WorkspaceDir:   getenv("STEADMESH_WORKSPACE_DIR", "/seat/workspace"),
+		HomeDir:        getenv("STEADMESH_HOME_DIR", "/seat/home"),
+		RunnerDir:      client.RunnerDir(),
+		TmpDir:         getenv("TMPDIR", "/tmp"),
+		ToolCommand:    getenv("STEADMESH_TOOLS_BIN", "/usr/local/bin/steadmesh-tools"),
+		HealthAddr:     getenv("STEADMESH_HEALTH_ADDR", ":8081"),
 	}
 	if c.PlatformURL == "" {
 		return c, fmt.Errorf("%s is required", client.EnvPlatformURL)

@@ -21,8 +21,8 @@ func TestRequiredConnectionsByRole(t *testing.T) {
 			ChannelBindings: map[string]spec.ChannelBinding{"alice": {Connection: "slack", Seat: "rep"}},
 		},
 		Seats: map[string]SeatManifest{
-			"rep": {Harness: spec.HarnessProfile{ModelConnection: "model"}},
-			"x":   {Harness: spec.HarnessProfile{ModelConnection: "opt_out"}},
+			"rep": {Harness: spec.HarnessProfile{Model: &spec.ModelSelection{Connection: "model"}}},
+			"x":   {Harness: spec.HarnessProfile{Model: &spec.ModelSelection{Connection: "opt_out"}}},
 		},
 	}
 	got := RequiredConnections(m, DefaultCatalog())

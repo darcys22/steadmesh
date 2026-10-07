@@ -23,7 +23,6 @@ RUN npm install -g --omit=dev "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
     rm -rf /tmp/* /root/.npm && \
     mkdir -p /seat/workspace /seat/home /seat/runner && chown -R 1000:1000 /seat
 COPY --from=build /out/seat-runner /out/steadmesh-tools /usr/local/bin/
-# apiKeyHelper runs "cat <token file>" through /bin/sh; both ship in this base.
 ENV HOME=/seat/home \
     TMPDIR=/tmp \
     STEADMESH_HARNESS=claude-code \

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harnesses and models · Steadmesh</title>
+<meta name="description" content="Choose a harness (Claude Code, Codex or Pi) and a model endpoint per seat, how model access and credentials work, readiness checks, and how to add a harness.">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
+  <a class="brand" href="index.html">Steadmesh</a>
+  <div class="brand-sub">Platform documentation · v0.1</div>
+  <nav>
+    <div class="nav-group">Get started</div>
+    <ul>
+      <li><a href="index.html">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+    </ul>
+    <div class="nav-group">Guides</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+  </nav>
+</aside>
+<main>
+<h1>Harnesses and models</h1>
+<p>Each seat runs a <strong>harness</strong>: the agent program that reasons, edits files and calls tools. You choose a harness and a <strong>model</strong> per harness profile, and a seat uses its profile. Different seats in one organisation can use different harnesses and different model endpoints. They keep the same identity, workspace, memory, permissions and durable messaging whatever harness they run.</p>
+
+<h2>Compatibility</h2>
+<p>A model connection serves one or more APIs. A harness speaks one or more APIs. A profile uses an API both sides support.</p>
+<table>
+<tr><th>Harness (pinned version)</th><th><code>anthropic_messages</code></th><th><code>openai_responses</code></th><th><code>openai_chat</code></th><th>Model settings</th></tr>
+<tr><td><code>claude-code</code> (Claude Code 2.1.289)</td><td>yes</td><td>no</td><td>no</td><td><code>effort</code>: low, medium, high, xhigh, max</td></tr>
+<tr><td><code>codex</code> (Codex 0.160.1, app-server)</td><td>no</td><td>yes</td><td>no: Codex rejects <code>wire_api = "chat"</code></td><td><code>reasoning_effort</code></td></tr>
+<tr><td><code>pi</code> (Pi 1.0.4, <a href="https://pi.dev">pi.dev</a>)</td><td>yes</td><td>yes (preferred)</td><td>yes</td><td><code>thinking</code>: off … max; <code>context_window</code>, <code>max_tokens</code>, <code>reasoning</code></td></tr>
+<tr><td><code>fake</code> (deterministic, tests)</td><td colspan="3">no model</td><td></td></tr>
+</table>
+<p>Each row was verified against the pinned release, with the evidence checked in under <code>harnesses/&lt;name&gt;/CONTRACT.md</code>, and every harness passes the same conformance suite against all its APIs (see <a href="#verifying">Verifying</a>).</p>
+
+<h2>Declaring models</h2>
+<p>A model connection is declared once, with the APIs it serves and optionally its models. A harness profile then selects a connection and a model.</p>
+<pre><code>connections = {
+  anthropic = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }   <span class="c"># serves anthropic_messages</span>
+  openai    = { adapter = "openai", secret_ref = "k8s:openai-credentials" }         <span class="c"># openai_responses, openai_chat</span>
+  i14 = {
+    adapter      = "model"                          <span class="c"># any compatible endpoint</span>
+    endpoint_ref = "https://api-dev.i14.ai/v1"      <span class="c"># the API base</span>
+    secret_ref   = "k8s:i14-credentials"
+    model = {
+      apis   = ["openai_chat"]                      <span class="c"># claimed; checked at readiness</span>
+      models = [{ id = "qwen3.8-27b" }]
+    }
+  }
+}
+harness_profiles = {
+  claude = { adapter = "claude-code", image_digest = "…/seat-claudecode@sha256:…",
+             model = { connection = "anthropic", id = "claude-sonnet-5-5", settings = { effort = "high" } } }
+  codex  = { adapter = "codex", image_digest = "…/seat-codex@sha256:…",
+             model = { connection = "openai", id = "gpt-5.5", settings = { reasoning_effort = "high" } } }
+  pi_i14 = { adapter = "pi", image_digest = "…/seat-pi@sha256:…",
+             model = { connection = "i14", id = "qwen3.8-27b" } }          <span class="c"># api resolves to openai_chat</span>
+}</code></pre>
+<p>Compile errors are specific. For example, selecting the i14 connection for Codex fails with:</p>
+<pre><code>harness_profiles.codex.model: harness "codex" speaks openai_responses but connection "i14" serves openai_chat for model "qwen3.8-27b"; harnesses that would work: pi</code></pre>
+<p>The <code>auth</code> field says how the credential is sent: <code>bearer</code> (default), <code>x-api-key</code> (the Anthropic default) or <code>header:&lt;Name&gt;</code>. The <a href="configuration.html#harness_profiles">configuration reference</a> lists every field.</p>
+
+<h2>How model access works</h2>
+<ol>
+<li>The harness is configured with a model base URL on <code>127.0.0.1</code>: the seat runner's <strong>local forwarder</strong>. Its API key is a placeholder.</li>
+<li>The forwarder adds the seat's projected service-account token, read from the token file <em>for every request</em>, plus the lease generation and the current execution, and sends the request to the platform model proxy. A rotated token therefore takes effect immediately inside long-running harness processes (Codex and Pi stay running between turns), without relying on each harness's credential refresh.</li>
+<li>The platform authenticates the seat and checks the request: only <code>POST</code> to a model API path, only the profile's API, and only the profile's model ID (a request for another model is refused with 403). Model listing (<code>GET /v1/models</code>) is allowed.</li>
+<li>The platform replaces the seat token with the connection's credential and forwards the request to the endpoint. Credentials rotate as described in <a href="operations.html#credential-rotation">Rotating credentials</a>.</li>
+<li>Each request is recorded as a <code>model_request</code> event on the seat's execution: connection, API, model, upstream host, status, duration and the token usage the endpoint reported. This is the record of which model and endpoint a seat actually used; the console shows it on the run page.</li>
+</ol>
+<p>No model credential enters a sandbox.</p>
+
+<h2 id="readiness">Readiness</h2>
+<p>Readiness checks two things, separately:</p>
+<ol>
+<li><strong>The connection.</strong> With <code>verify = "request"</code> (the default), the platform sends a minimal valid request for each declared model and API, and for each model and API a profile uses: Anthropic <code>POST /v1/messages</code> with <code>max_tokens: 1</code>; Responses <code>POST /v1/responses</code> with <code>max_output_tokens: 16</code>; Chat <code>POST /v1/chat/completions</code> with <code>max_completion_tokens: 1</code> (falling back to <code>max_tokens</code> for older servers). A successful check is trusted for six hours; a failure names the API and model. <code>verify = "models"</code> lists models instead, and <code>none</code> skips the check.</li>
+<li><strong>The harness.</strong> Each seat's readiness probe is a real turn: the harness is asked to call the platform <code>self</code> tool. The probe passes only if a model request through the proxy succeeded (<code>model</code>), the harness called <code>self</code> through its tool bridge (<code>tool</code>), and the turn completed (<code>turn</code>). A connection check alone is never taken as evidence that a harness works.</li>
+</ol>
+
+<h2>Per-harness behaviour</h2>
+<h3>claude-code</h3>
+<ul>
+<li>One <code>claude -p</code> process per turn, resuming the seat's session (<code>--resume</code>); sessions live on the seat volume.</li>
+<li><code>ANTHROPIC_BASE_URL</code> is the forwarder. Every model role (main, background, subagent) is pinned to the profile's model, the only one the proxy accepts.</li>
+<li>Tools: <code>steadmesh-tools mcp</code> through <code>--mcp-config --strict-mcp-config</code>; no permission prompts (<code>bypassPermissions</code>). Interruption: SIGINT to the process group.</li>
+</ul>
+<h3>codex</h3>
+<ul>
+<li>One long-running <code>codex app-server</code> per seat, driven over JSON-RPC. <code>CODEX_HOME</code> is on the seat volume, so threads resume natively after a Pod replacement.</li>
+<li><code>config.toml</code> declares a custom provider at the forwarder with <code>wire_api = "responses"</code>, and <code>steadmesh-tools</code> as a required MCP server whose tools are approved without prompting. Approval policy <code>never</code> and <code>danger-full-access</code>: the Pod is the boundary. Curated plugin sync, analytics and feedback are disabled, so Codex makes no other network calls.</li>
+<li>Interruption: <code>turn/interrupt</code>; if the turn does not wind down within the grace period, the app-server is restarted and the thread resumed.</li>
+</ul>
+<h3>pi</h3>
+<ul>
+<li>One long-running <code>pi --mode rpc</code> per seat. Its agent directory and sessions are on the seat volume.</li>
+<li><code>models.json</code> declares a provider at the forwarder speaking the profile's API (<code>anthropic-messages</code>, <code>openai-responses</code> or <code>openai-completions</code>); <code>mcp.json</code> adds <code>steadmesh-tools</code> with <code>exposure: "direct"</code> (Pi's default would hide the tools). Pi runs offline, without telemetry, and never trusts project <code>.pi</code> resources.</li>
+<li>Interruption: <code>abort</code>; the turn ends at <code>agent_settled</code>.</li>
+</ul>
+
+<h2>Changing a seat's harness or model</h2>
+<p>Changing a profile's adapter, model, API or settings changes the seat's configuration revision. The seat finishes its turn, and its Pod is replaced. The seat ID, volume, memory, inbox and handoff are kept. With the same harness, the native session resumes. With a different harness, the seat starts a new session seeded from its portable handoff; the first turn reports that recovery and the console shows it.</p>
+
+<h2 id="verifying">Verifying</h2>
+<table>
+<tr><th>Command</th><th>What it runs</th></tr>
+<tr><td><code>make conformance</code></td><td>Fetches the pinned CLIs for your machine (<code>build/harness-bins.sh</code>, digest-checked, no install scripts) and runs each against a scripted model over every API it speaks, through the real forwarder: turn lifecycle, interruption, quiesce, native resume, handoff fallback, a tool call made by the model, the probe turn, the model and destination used, and token rotation during a running session.</td></tr>
+<tr><td><code>make conformance-images</code></td><td>The same suite inside each seat image, against its Linux binaries.</td></tr>
+<tr><td><code>make live-harnesses</code></td><td>Each harness on a real endpoint (Anthropic, OpenAI, the i14 endpoint) with a real tool call; see <code>tests/live/README.md</code>.</td></tr>
+<tr><td><code>make e2e</code></td><td>On kind: Codex and Pi seats join a running organisation, pass the probe turn, do delegated work with platform tools, record <code>model_request</code> events, and survive a model key rotation without a restart.</td></tr>
+</table>
+
+<h2>Adding a harness</h2>
+<p>A new harness needs no change to the platform core:</p>
+<ol>
+<li><strong>Verify the contract.</strong> Pin a release and record, with evidence, how it takes a custom base URL and key, how it reaches stdio MCP tools, how a turn starts, ends and is interrupted, how sessions resume, and what else it reaches over the network. Write <code>harnesses/&lt;name&gt;/CONTRACT.md</code>.</li>
+<li><strong>Write the adapter.</strong> A package implementing <code>harnesses.Adapter</code> that registers a <code>harnesses.Descriptor</code> in <code>init</code>: name, the APIs it speaks in order of preference, its model settings and capabilities. Point the harness at <code>Environment.Model.BaseURL</code>, use <code>Environment.Model.APIKey</code> as its key, and report tool calls as <code>tool_request</code> events with <code>data.name</code>.</li>
+<li><strong>Register it.</strong> Import the package from <code>harnesses/all</code>. Compile validation and the seat runner pick it up from the registry.</li>
+<li><strong>Build an image.</strong> <code>build/seat-&lt;name&gt;.Dockerfile</code>, pinning the version (the pins test checks it matches the adapter) and asserting it at build time.</li>
+<li><strong>Pass conformance.</strong> Add a <code>conformance.RunModel</code> test for each API it speaks, and a fetch rule to <code>build/harness-bins.sh</code>.</li>
+</ol>
+<div class="pager"><a href="configuration.html"><small>Previous</small>Configuration</a><a href="tools.html" style="text-align:right"><small>Next</small>Agent tools</a></div>
+<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+</main>
+</div>
+<script src="assets/site.js"></script>
+</body>
+</html>

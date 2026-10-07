@@ -60,7 +60,10 @@ func TestE2E(t *testing.T) {
 		// in a Kubernetes Secret, the Linear key is served from Vault.
 		"TF_VAR_enable_vault=true",
 		"TF_VAR_vault_address=http://vault." + systemNS + ".svc:8200",
-		`TF_VAR_secret_refs={"slack":"k8s:slack-credentials","linear":"vault:steadmesh/linear","anthropic":"k8s:anthropic-credentials"}`,
+		`TF_VAR_secret_refs={"slack":"k8s:slack-credentials","linear":"vault:steadmesh/linear"}`,
+		// Model keys for the model fake (mixedHarnesses); the fake-harness
+		// seats use no model.
+		`TF_VAR_model_api_keys={"stub":"stub-key-1"}`,
 	}
 
 	step(t, "apply foundation", func(t *testing.T) {
@@ -219,7 +222,7 @@ func TestE2E(t *testing.T) {
 
 	// A23: no raw credentials in plans or runtime configuration.
 	step(t, "A23 no credentials in plans or runtime config", func(t *testing.T) {
-		secrets := []string{"xoxb-fake-bot-token", "xapp-fake-app-token", "lin_api_fake"}
+		secrets := []string{"xoxb-fake-bot-token", "xapp-fake-app-token", "lin_api_fake", "stub-key-1"}
 		var corpus bytes.Buffer
 		for _, p := range []string{"examples/out/organisation.plan.txt", "examples/out/platform.plan.txt"} {
 			b, err := os.ReadFile(filepath.Join(root, p))
@@ -278,6 +281,8 @@ func TestE2E(t *testing.T) {
 			time.Sleep(15 * time.Second)
 		}
 	})
+
+	mixedHarnesses(t, env)
 }
 
 // ---- fake service clients ------------------------------------------------

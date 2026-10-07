@@ -79,7 +79,7 @@ func credentialsEnv(t *testing.T) (*env, *fakeconn.Secrets, *upstream) {
 	})
 	sp := orgfixture.Spec()
 	sp.Connections["model"] = spec.Connection{Adapter: "anthropic", SecretRef: "k8s:anthropic"}
-	sp.HarnessProfiles["claude"] = spec.HarnessProfile{Adapter: "claude-code", ImageDigest: "seat:dev", ModelConnection: "model"}
+	sp.HarnessProfiles["claude"] = spec.HarnessProfile{Adapter: "claude-code", ImageDigest: "seat:dev", Model: &spec.ModelSelection{Connection: "model", ID: "claude"}}
 	sp.Seats["lead"] = func(s spec.Seat) spec.Seat { s.HarnessProfile = "claude"; return s }(sp.Seats["lead"])
 	e.sync(sp)
 	return e, secrets, up
@@ -142,7 +142,7 @@ func TestVerifyReportsCredentialStatus(t *testing.T) {
 	if c.State != runtimeapi.CredentialReplacementRejected || c.PreviousUntil == nil || !v.Connections["model"].OK {
 		t.Fatalf("rejected replacement: %+v %+v", c, v.Connections["model"])
 	}
-	if code, out := e.infer(`{}`); code != http.StatusOK || out["key"] != "k1" {
+	if code, out := e.infer(`{"model":"claude"}`); code != http.StatusOK || out["key"] != "k1" {
 		t.Fatalf("previous key not in use: %d %v", code, out)
 	}
 	var org runtimeapi.ConsoleOrganization
@@ -158,7 +158,7 @@ func TestVerifyReportsCredentialStatus(t *testing.T) {
 	if c := e.verify().Credentials["model"]; c.State != runtimeapi.CredentialCurrent {
 		t.Fatalf("after valid replacement %+v", c)
 	}
-	if code, out := e.infer(`{}`); code != http.StatusOK || out["key"] != "k3" {
+	if code, out := e.infer(`{"model":"claude"}`); code != http.StatusOK || out["key"] != "k3" {
 		t.Fatalf("new key not in use: %d %v", code, out)
 	}
 	// No secret value appears in any status.

@@ -1,0 +1,1 @@
+{ "mcpServers": { "bridge": { "command": "python3", "args": ["-I", "$CONTRACTS/scripts/pi/mcp_echo.py"], "exposure": "direct" } } }

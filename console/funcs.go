@@ -37,6 +37,9 @@ var activityLabels = map[string]string{
 	"tool_result":  "tool result",
 	"error":        "error",
 	"operation":    "connector",
+	// model_request records the model and endpoint a request actually used.
+	"model_request": "model request",
+	"probe_result":  "readiness probe",
 }
 
 func derefTime(t *time.Time) time.Time {

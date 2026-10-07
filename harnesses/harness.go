@@ -124,17 +124,40 @@ type Environment struct {
 
 	// ToolCommand is the steadmesh-tools binary.
 	ToolCommand string
-	// ModelProxyURL is the Anthropic-compatible base URL
-	// (<platform>/v1/model/<connection>); empty without a model connection.
-	ModelProxyURL   string
-	ModelConnection string
-	Model           string
+	// Model is the seat's model selection; nil when the profile has none.
+	Model *ModelEndpoint
 
 	// HarnessConfig is the harness profile's free-form config.
 	HarnessConfig map[string]string
 	// ExtraEnv is passed to harness subprocesses (e.g. STEADMESH_* for tools).
 	ExtraEnv []string
 }
+
+// ModelEndpoint is how a harness reaches its model. Requests go to the
+// seat runner's local forwarder, which adds the seat's current token on every
+// request and sends them to the platform model proxy; the proxy injects the
+// connection's credential. No model credential enters the sandbox.
+type ModelEndpoint struct {
+	// Connection is the model connection key.
+	Connection string
+	// ID is the model the harness must request; the proxy rejects others.
+	ID string
+	// API is the protocol to speak (API* constants).
+	API string
+	// Settings are validated model.settings (Descriptor.Settings).
+	Settings map[string]string
+	// BaseURL is the forwarder base for the connection, without /v1. The API
+	// paths sit below it: /v1/messages, /v1/responses, /v1/chat/completions.
+	BaseURL string
+	// APIKey is a placeholder for harnesses that insist on a key. The
+	// forwarder replaces whatever credential the harness sends.
+	APIKey string
+}
+
+// ProbePrompt is the readiness probe turn the seat runner gives a
+// model-backed harness to prove it works end to end.
+const ProbePrompt = "This is a Steadmesh readiness probe, not a task. Call the steadmesh `self` tool exactly once, " +
+	"then answer with the single word: ready. Do not call any other tool and do not send any message."
 
 // RecoveryDescriptor is what StartOrResume restores from.
 type RecoveryDescriptor struct {

@@ -45,6 +45,7 @@ module "representative" {
   external_user_id = each.value.slack_user_id
   connection       = "slack"
   role_ref         = module.representative_role.ref
+  harness_profile  = contains(keys(var.seat_harnesses), "representative_${each.key}") ? "seat_representative_${each.key}" : "primary"
 }
 
 locals {
@@ -64,7 +65,7 @@ locals {
       role_ref          = "role:${s.role}"
       display_name      = s.display_name
       teams             = ["engineering"]
-      harness_profile   = "primary"
+      harness_profile   = contains(keys(var.seat_harnesses), k) ? "seat_${k}" : "primary"
       execution_profile = "interactive"
       sandbox_profile   = "standard"
       personal_memory   = k
@@ -73,14 +74,18 @@ locals {
   }
   all_seat_keys = sort(concat(keys(local.seats), keys(local.team_seats)))
 
-  is_claude = var.harness == "claude-code"
-  model_connections = { for k, v in {
-    model = {
-      adapter      = "anthropic"
-      endpoint_ref = var.model_endpoint_ref == "" ? null : var.model_endpoint_ref
-      secret_ref   = var.secret_refs.anthropic
-    }
-  } : k => v if local.is_claude }
+  # The default harness profile, plus one per seat with its own harness.
+  default_model = var.harness == "fake" ? null : var.model
+  harness_profiles = merge(
+    { primary = { adapter = var.harness, image_digest = var.harness_images[var.harness], model = local.default_model } },
+    { for k, h in var.seat_harnesses : "seat_${k}" => { adapter = h.adapter, image_digest = var.harness_images[h.adapter], model = h.model } },
+  )
+  # Only the model connections some profile uses are declared.
+  used_model_connections = toset(compact(concat(
+    [local.default_model == null ? "" : local.default_model.connection],
+    [for h in var.seat_harnesses : h.model == null ? "" : h.model.connection],
+  )))
+  model_connections = { for k in local.used_model_connections : k => var.model_connections[k] }
 }
 
 # ---------------------------------------------------------------- organisation
@@ -108,14 +113,7 @@ resource "steadmesh_organization" "this" {
       [for m in module.representative : m.memory_stores]...
     )
 
-    harness_profiles = {
-      primary = {
-        adapter          = var.harness
-        image_digest     = var.harness_images[var.harness]
-        model_connection = local.is_claude ? "model" : null
-        model            = local.is_claude ? var.model : null
-      }
-    }
+    harness_profiles = local.harness_profiles
 
     execution_profiles = {
       interactive = {

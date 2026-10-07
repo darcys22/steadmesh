@@ -51,10 +51,11 @@ module "steadmesh" {
 
 locals {
   create = {
-    slack     = var.existing_secret_refs.slack == null
-    anthropic = var.existing_secret_refs.anthropic == null
-    linear    = var.existing_secret_refs.linear == null && var.linear_api_key != null
+    slack  = var.existing_secret_refs.slack == null
+    linear = var.existing_secret_refs.linear == null && var.linear_api_key != null
   }
+  # Model connections whose key is given here rather than by reference.
+  model_keys = toset([for k in nonsensitive(keys(var.model_api_keys)) : k if !contains(keys(var.existing_secret_refs.models), k)])
 }
 
 resource "terraform_data" "credentials" {
@@ -64,8 +65,8 @@ resource "terraform_data" "credentials" {
       error_message = "Set slack_bot_token and slack_app_token, or existing_secret_refs.slack."
     }
     precondition {
-      condition     = !local.create.anthropic || var.anthropic_api_key != null
-      error_message = "Set anthropic_api_key, or existing_secret_refs.anthropic."
+      condition     = length(local.model_keys) + length(var.existing_secret_refs.models) > 0
+      error_message = "Set model_api_keys (e.g. { anthropic = \"sk-ant-...\" }), or existing_secret_refs.models."
     }
   }
 }
@@ -82,14 +83,14 @@ resource "kubernetes_secret_v1" "slack" {
   }
 }
 
-resource "kubernetes_secret_v1" "anthropic" {
-  count = local.create.anthropic ? 1 : 0
+resource "kubernetes_secret_v1" "model" {
+  for_each = local.model_keys
   metadata {
-    name      = "anthropic-credentials"
+    name      = "${each.key}-credentials"
     namespace = module.steadmesh.system_namespace
   }
   data = {
-    api_key = var.anthropic_api_key
+    api_key = var.model_api_keys[each.key]
   }
 }
 

@@ -1,0 +1,43 @@
+$ cat $CODEX_HOME/config.toml
+model = "gpt-5"
+model_provider = "proxy"
+check_for_update_on_startup = false
+[analytics]
+enabled = false
+[model_providers.proxy]
+name = "proxy"
+base_url = "http://127.0.0.1:9/v1"
+wire_api = "responses"
+experimental_bearer_token = "placeholder"
+http_headers = { "X-Seat" = "s1" }
+[mcp_servers.bridge]
+command = "/bin/cat"
+args = []
+env = { FOO = "bar" }
+startup_timeout_sec = 5
+tool_timeout_sec = 60
+$ codex mcp list
+Name    Command   Args  Env        Cwd  Status   Auth       
+bridge  /bin/cat  -     FOO=*****  -    enabled  Unsupported
+exit=0
+$ codex mcp get bridge --json
+{
+  "name": "bridge",
+  "enabled": true,
+  "disabled_reason": null,
+  "transport": {
+    "type": "stdio",
+    "command": "/bin/cat",
+    "args": [],
+    "env": {
+      "FOO": "bar"
+    },
+    "env_vars": [],
+    "cwd": null
+  },
+  "enabled_tools": null,
+  "disabled_tools": null,
+  "startup_timeout_sec": 5.0,
+  "tool_timeout_sec": 60.0
+}
+exit=0

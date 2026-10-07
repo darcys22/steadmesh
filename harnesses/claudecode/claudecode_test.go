@@ -115,9 +115,9 @@ func TestArgsAndConfig(t *testing.T) {
 	}
 	a.cfg = cfg
 	a.stateDir = "/seat/runner/claude"
-	a.env = harnesses.Environment{Model: "claude-sonnet-4-5"}
+	a.env = harnesses.Environment{Model: &harnesses.ModelEndpoint{ID: "claude-sonnet-4-5", Settings: map[string]string{SettingEffort: "high"}}}
 	args := strings.Join(a.Args("sess-1", "SYS"), " ")
-	for _, want := range []string{"-p --output-format stream-json --verbose --bare", "--resume sess-1", "--mcp-config /seat/runner/claude/mcp.json --strict-mcp-config", "--settings /seat/runner/claude/settings.json", "--permission-mode bypassPermissions", "--permission-prompts none", "--append-system-prompt SYS", "--system-prompt-snapshot off", "--model claude-sonnet-4-5"} {
+	for _, want := range []string{"-p --output-format stream-json --verbose --bare", "--resume sess-1", "--mcp-config /seat/runner/claude/mcp.json --strict-mcp-config", "--settings /seat/runner/claude/settings.json", "--permission-mode bypassPermissions", "--permission-prompts none", "--append-system-prompt SYS", "--system-prompt-snapshot off", "--model claude-sonnet-4-5", "--effort high"} {
 		if !strings.Contains(args, want) {
 			t.Errorf("args lack %q: %s", want, args)
 		}
@@ -128,21 +128,14 @@ func TestArgsAndConfig(t *testing.T) {
 	if _, err := parseConfig(map[string]string{ConfigPermissionMode: "manual"}); err == nil {
 		t.Error("a prompting permission mode must be rejected")
 	}
-	if _, err := parseConfig(map[string]string{ConfigAuth: "oauth"}); err == nil {
-		t.Error("unknown auth mode accepted")
-	}
 }
 
 func TestSettingsAndMCPConfig(t *testing.T) {
-	env := harnesses.Environment{PlatformURL: "http://p:8080", TokenFile: "/var/run/steadmesh/token", RunnerDir: "/seat/runner", ToolCommand: "/usr/local/bin/steadmesh-tools", ExtraEnv: []string{"STEADMESH_SEAT_KEY=alice", "ANTHROPIC_API_KEY=leak"}}
+	env := harnesses.Environment{PlatformURL: "http://p:8080", TokenFile: "/var/run/steadmesh/token", RunnerDir: "/seat/runner", ToolCommand: "/usr/local/bin/steadmesh-tools", ExtraEnv: []string{"STEADMESH_SEAT_KEY=alice", "ANTHROPIC_API_KEY=leak"},
+		Model: &harnesses.ModelEndpoint{ID: "claude-x", BaseURL: "http://127.0.0.1:7000/model/m", APIKey: "local"}}
 	cfg, _ := parseConfig(nil)
-	s := settings(env, cfg)
-	if s["apiKeyHelper"] != "cat '/var/run/steadmesh/token'" {
-		t.Fatalf("apiKeyHelper %v", s["apiKeyHelper"])
-	}
-	cfg.auth = "auth_token"
-	if _, ok := settings(env, cfg)["apiKeyHelper"]; ok {
-		t.Fatal("auth_token mode must not set apiKeyHelper")
+	if _, ok := settings(cfg)["apiKeyHelper"]; ok {
+		t.Fatal("settings must not carry a credential helper")
 	}
 	m := mcpConfig(env)["mcpServers"].(map[string]any)[MCPServerName].(map[string]any)
 	e := m["env"].(map[string]string)
@@ -153,9 +146,13 @@ func TestSettingsAndMCPConfig(t *testing.T) {
 		t.Fatal("non-STEADMESH env leaked into MCP config")
 	}
 	t.Setenv("ANTHROPIC_API_KEY", "should-not-leak")
-	for _, kv := range New().baseEnv(env) {
-		if strings.HasPrefix(kv, "ANTHROPIC_API_KEY") {
-			t.Fatal("ANTHROPIC_API_KEY leaked into claude env")
+	got := strings.Join(New().baseEnv(env), "\n")
+	for _, want := range []string{"ANTHROPIC_BASE_URL=http://127.0.0.1:7000/model/m", "ANTHROPIC_API_KEY=local", "ANTHROPIC_SMALL_FAST_MODEL=claude-x", "CLAUDE_CODE_SUBAGENT_MODEL=claude-x"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("claude env lacks %s", want)
 		}
+	}
+	if strings.Contains(got, "should-not-leak") {
+		t.Fatal("the runner's ANTHROPIC_API_KEY leaked into claude env")
 	}
 }

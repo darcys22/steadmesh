@@ -25,12 +25,13 @@ variable "existing_secret_refs" {
     Credentials you provision yourself, by reference (k8s:<secret name> in the
     control-plane namespace, or vault:<path>). A connection listed here gets no
     Terraform-managed Secret, so its value never enters Terraform state.
-    Expected keys: slack (bot_token, app_token), anthropic (api_key), linear (api_key).
+    Expected keys: slack (bot_token, app_token), linear (api_key), and in
+    models one entry per model connection, e.g. anthropic or openai (api_key).
   EOT
   type = object({
-    slack     = optional(string)
-    anthropic = optional(string)
-    linear    = optional(string)
+    slack  = optional(string)
+    linear = optional(string)
+    models = optional(map(string), {})
   })
   default = {}
 }
@@ -49,11 +50,11 @@ variable "slack_app_token" {
   default     = null
 }
 
-variable "anthropic_api_key" {
-  description = "Anthropic API key the agents' Claude Code harness uses. Not needed with existing_secret_refs.anthropic."
-  type        = string
+variable "model_api_keys" {
+  description = "API keys for the model endpoints your agents use, keyed by model connection, e.g. { anthropic = \"sk-ant-...\", openai = \"sk-...\" }. Each becomes the Secret <key>-credentials. Not needed for keys in existing_secret_refs.models."
+  type        = map(string)
   sensitive   = true
-  default     = null
+  default     = {}
 }
 
 variable "linear_api_key" {

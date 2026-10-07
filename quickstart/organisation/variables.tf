@@ -28,10 +28,56 @@ variable "linear_team_id" {
   default     = null
 }
 
-variable "model" {
-  description = "Claude model for every seat; null uses the harness default."
+variable "harness" {
+  description = "Harness for every seat not listed in seat_harnesses: claude-code, codex or pi (fake is for testing)."
   type        = string
-  default     = null
+  default     = "claude-code"
+}
+
+variable "model" {
+  description = "Model for the default harness: connection (a key of model_connections), id, and optionally api and settings (see the harness documentation)."
+  type = object({
+    connection = string
+    id         = string
+    api        = optional(string)
+    settings   = optional(map(string))
+  })
+  default = { connection = "anthropic", id = "claude-sonnet-5-5" }
+}
+
+variable "seat_harnesses" {
+  description = "Per-seat harness and model, e.g. { engineer = { adapter = \"codex\", model = { connection = \"openai\", id = \"gpt-5.5\" } } }."
+  type = map(object({
+    adapter = string
+    model = object({
+      connection = string
+      id         = string
+      api        = optional(string)
+      settings   = optional(map(string))
+    })
+  }))
+  default = {}
+}
+
+variable "model_connections" {
+  description = "Model endpoints, keyed like the platform stage's model_api_keys: adapter (anthropic, openai, or model for any compatible endpoint), and for the model adapter endpoint_ref (API base, e.g. https://host/v1) and model (apis, models, auth). Only connections a seat uses are declared."
+  type = map(object({
+    adapter      = string
+    endpoint_ref = optional(string)
+    model = optional(object({
+      apis   = optional(list(string))
+      auth   = optional(string)
+      verify = optional(string)
+      models = optional(list(object({
+        id   = string
+        apis = optional(list(string))
+      })))
+    }))
+  }))
+  default = {
+    anthropic = { adapter = "anthropic" }
+    openai    = { adapter = "openai" }
+  }
 }
 
 variable "seat_idle_timeout" {
@@ -41,12 +87,6 @@ variable "seat_idle_timeout" {
 }
 
 # ---- Advanced: used to test against fake services ---------------------------
-
-variable "harness" {
-  description = "claude-code (real model) or fake (scripted, for testing)."
-  type        = string
-  default     = "claude-code"
-}
 
 variable "slack_endpoint_ref" {
   description = "Slack API base URL override; null uses slack.com."

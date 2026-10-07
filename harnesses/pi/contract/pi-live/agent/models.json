@@ -1,0 +1,23 @@
+{
+  "providers": {
+    "mockchat": {
+      "baseUrl": "http://127.0.0.1:18431/v1",
+      "api": "openai-completions",
+      "apiKey": "!n=$(cat $CONTRACTS/evidence/pi-live/keycounter 2>/dev/null || echo 0); n=$((n+1)); echo $n > $CONTRACTS/evidence/pi-live/keycounter; echo key-$n",
+      "headers": { "X-Extra": "static-header" },
+      "models": [ { "id": "m1" } ]
+    },
+    "mockresp": {
+      "baseUrl": "http://127.0.0.1:18431/v1",
+      "api": "openai-responses",
+      "apiKey": "placeholder",
+      "models": [ { "id": "m1" } ]
+    },
+    "mockant": {
+      "baseUrl": "http://127.0.0.1:18431",
+      "api": "anthropic-messages",
+      "apiKey": "placeholder",
+      "models": [ { "id": "m1" } ]
+    }
+  }
+}
