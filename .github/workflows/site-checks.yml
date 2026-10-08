@@ -1,0 +1,25 @@
+name: site checks
+
+# Validation only: GitHub Pages publishes docs/ from main itself.
+on:
+  pull_request:
+    paths: ["docs/**", "hack/site.py", "hack/set-version.sh", "tests/e2e/demo_test.go", "quickstart/**", "README.md"]
+  push:
+    branches: [main]
+    paths: ["docs/**", "hack/site.py", "hack/set-version.sh", "tests/e2e/demo_test.go", "quickstart/**", "README.md"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Shared blocks, links, fragments and excerpts
+        run: python3 hack/site.py check
+      - name: Install commands pin the documented release
+        run: hack/set-version.sh --check "$(sed -n 's/.*?ref=v\([0-9.]*\).*/\1/p' quickstart/platform/main.tf | head -1)"

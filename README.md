@@ -2,13 +2,18 @@
 
 This platform turns an organisation declared in Terraform (culture, teams,
 seats, harnesses, memory, grants, message routes and channel bindings) into
-persistent agents running on Kubernetes. People message their personal
-representatives over Slack. Representatives keep context, delegate to other
-seats, and agents create work in Linear.
+persistent agents running on Kubernetes. Each seat runs Claude Code, Codex or
+Pi on a model endpoint you choose. People message their personal
+representatives over Slack (or a terminal). Representatives keep context,
+delegate to other seats, and agents can track work in Linear.
 
-**Documentation:** open [`docs/index.html`](docs/index.html) in a browser. It is
-a static site, with no build step, containing a quickstart, a tutorial, guides
-and reference pages. The design is in
+Steadmesh is early-stage. The current release is
+[v0.5.0](https://github.com/darcys22/steadmesh/releases/tag/v0.5.0).
+
+**Documentation:** [steadmesh.com](https://steadmesh.com/), built from the
+static pages in [`docs/`](docs/) with no build step: a quickstart, a tutorial,
+guides, reference pages, an FAQ, the [demo results](https://steadmesh.com/demo-results.html)
+and the [acceptance status](https://steadmesh.com/status.html). The design is in
 [`agent_organisation_initial_technical_design.md`](agent_organisation_initial_technical_design.md),
 and acceptance status is tracked in
 [`tests/acceptance/RESULTS.md`](tests/acceptance/RESULTS.md).
@@ -35,7 +40,9 @@ ghcr.io, and the modules from GitHub.
   - your workspace ID (`T…`);
   - the member ID (`U…`) of each person who gets a representative.
     In Slack: profile → ⋮ → Copy member ID.
-- **An Anthropic API key.** Agents run Claude Code.
+- **A model API key.** Seats run Claude Code on Anthropic by default; Codex
+  (OpenAI Responses) and Pi (Anthropic, OpenAI Responses or Chat Completions)
+  can be chosen per seat. Your provider bills every model request.
 - *Optional:* a **Linear** API key and team ID, so agents can create projects
   and issues.
 
@@ -43,7 +50,7 @@ ghcr.io, and the modules from GitHub.
 
 ```sh
 mkdir steadmesh && cd steadmesh
-terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.1.0"
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.5.0"
 ```
 
 This copies two small Terraform roots into the directory:
@@ -65,8 +72,9 @@ terraform apply
 
 This creates the `steadmesh-system` and `steadmesh` namespaces, Postgres, the
 platform chart and the credential Secrets. It never uses your current kubectl
-context, only the `kube_context` you set. The tokens end up in this root's
-Terraform state, so keep the state private.
+context, only the `kube_context` you set. Tokens given as variables end up in
+this root's Terraform state, so keep `terraform.tfvars` and the state private,
+or create the Secrets yourself and set `existing_secret_refs` instead.
 
 ### 3. Declare your organisation
 
@@ -129,8 +137,10 @@ identity, workspace and memory across applies. The
   Then apply `platform/`, then `organisation/`.
 - **Remove:** run `terraform destroy` in `organisation/`, then in `platform/`.
   With `data_retention = "retain"`, destroying the organisation keeps its
-  memory and history in the platform's database. Destroying `platform/`
-  deletes the namespaces, and with them that database.
+  memory and history in the platform's database. **Destroying `platform/`
+  deletes the namespaces, and with them that database.** Retention is not a
+  backup and there is no built-in backup yet: back up Postgres and the seat
+  volumes yourself first.
 
 ## Develop from source
 
@@ -223,13 +233,13 @@ One-time setup:
 | `provider/` | Terraform provider `steadmesh` (`steadmesh_organization`) |
 | `controller/`, `runtime/` | Reconciler, seat lifecycle (wake, idle stop, fenced recovery, retirement) and Kubernetes sandbox backend |
 | `services/` | Trusted platform service: identity, inbox/outbox, memory, tool gateway, operation ledger, scheduler, model proxy, console API |
-| `connectors/` | Slack (Socket Mode), Linear, Anthropic model proxy, Vault/Kubernetes secret resolvers |
-| `harnesses/`, `cmd/seat-runner`, `cmd/steadmesh-tools` | In-Pod seat supervisor, the Claude Code and fake harness adapters, and the MCP/CLI tool client |
+| `connectors/` | Slack (Socket Mode), terminal chat, Linear, GitHub, browser sessions, the model proxy, Vault/Kubernetes secret resolvers |
+| `harnesses/`, `cmd/seat-runner`, `cmd/steadmesh-tools` | In-Pod seat supervisor, the Claude Code, Codex, Pi and fake harness adapters, and the MCP/CLI tool client |
 | `console/`, `cmd/console` | The optional read-only Steadmesh Console |
 | `charts/platform` | Helm chart: CRDs, controller, platform service and console |
 | `modules/`, `bundles/` | Terraform modules (platform install, Postgres, team templates, representatives) and instruction bundles |
 | `examples/` | Foundation → platform → organisation deployment roots built from source, and `make plan/apply/status/teardown` |
-| `cmd/orgctl` | Status, fresh readiness verification and `orgctl console` |
+| `cmd/orgctl` | Status, fresh readiness verification, `orgctl chat` and `orgctl console` |
 
 ## License
 

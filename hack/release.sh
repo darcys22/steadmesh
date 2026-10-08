@@ -21,8 +21,8 @@ die() { echo "release: $*" >&2; exit 1; }
 
 [[ "$(git rev-parse --abbrev-ref HEAD)" == main ]] || die "not on main"
 [[ -n "${DRY_RUN:-}" || -z "$(git status --porcelain)" ]] || die "uncommitted changes; commit or stash them first"
-# A dry run reverts quickstart/ and provider/ afterwards, so they must be clean.
-[[ -z "$(git status --porcelain -- quickstart provider)" ]] || die "uncommitted changes in quickstart/ or provider/"
+# A dry run reverts what it pins afterwards, so those paths must be clean.
+[[ -z "$(git status --porcelain -- quickstart provider docs README.md tests/e2e/demo_test.go)" ]] || die "uncommitted changes in quickstart/, provider/, docs/, README.md or tests/e2e/demo_test.go"
 git fetch --quiet --tags origin main
 [[ -z "$(git rev-list HEAD..origin/main)" ]] || die "main is behind origin/main; pull first"
 
@@ -48,20 +48,21 @@ echo "==> releasing $tag (previous $last)"
 echo "==> make lint test"
 make lint test
 
-echo "==> pinning quickstart/ and the provider docs to $next"
+echo "==> pinning quickstart/, the provider docs and the website to $next"
 hack/set-version.sh "$next"
 make provider-docs
+hack/site.py sync
 hack/set-version.sh --check "$next"
 
 if [[ "${DRY_RUN:-}" == 1 ]]; then
   echo "==> dry run: $tag would change"
-  git --no-pager diff --stat -- quickstart provider
-  git checkout -- quickstart provider
+  git --no-pager diff --stat -- quickstart provider docs README.md tests/e2e/demo_test.go
+  git checkout -- quickstart provider docs README.md tests/e2e/demo_test.go
   echo "==> dry run: changes undone; nothing committed, tagged or pushed"
   exit 0
 fi
 
-git add -A quickstart provider
+git add -A quickstart provider docs README.md tests/e2e/demo_test.go
 if git diff --cached --quiet; then
   die "nothing changed for $tag"
 fi

@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo pull request · Steadmesh</title>
+<meta name="description" content="A redacted record of the pull request the Codex engineer seat opened during the recorded mixed-harness demo run on 8 October 2026.">
+<link rel="stylesheet" href="../assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/demo/pr-1.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Demo pull request · Steadmesh">
+<meta property="og:description" content="A redacted record of the pull request the Codex engineer seat opened during the recorded mixed-harness demo run on 8 October 2026.">
+<meta property="og:url" content="https://steadmesh.com/demo/pr-1.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="../"><img src="../assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <nav class="topnav" aria-label="Site">
+    <a href="../#how-it-works">How it works</a>
+    <a href="../#demo">Demo</a>
+    <a href="../docs/">Docs</a>
+    <a href="../faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="../quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<main id="content" class="standalone">
+<p><a href="../demo-results.html">← Demo results</a></p>
+<h1>Demo pull request</h1>
+<p class="lede">The pull request the engineer seat opened during step 2 of the recorded <a href="../demo-results.html">real-services demo run</a>. The repository is private, so this page records the pull request in redacted form.</p>
+
+<h2 id="summary">Summary</h2>
+<table>
+<tr><th>Field</th><th>Value</th></tr>
+<tr><td>Pull request</td><td>#1 in a private demo repository: “Add signup page documentation”</td></tr>
+<tr><td>Branch</td><td><code>add-signup-docs</code> → <code>main</code></td></tr>
+<tr><td>Commit</td><td><code>40054c8</code> “Add signup page documentation”. Authored by <code>Engineer &lt;engineer@seats.steadmesh.invalid&gt;</code> at 2026-10-08 00:17:56 UTC</td></tr>
+<tr><td>Opened</td><td>2026-10-08 00:18:06 UTC</td></tr>
+<tr><td>Opened by</td><td>The <code>engineer</code> seat (Codex harness, OpenAI Responses), using git and gh in its sandbox. On GitHub, the pull request shows the owner of the repository-scoped credential the seat was given, not the seat.</td></tr>
+<tr><td>Work item</td><td><code>engineering/W-1</code>, owned by the engineer</td></tr>
+<tr><td>Change</td><td>1 file, +21 −0</td></tr>
+</table>
+
+<h2 id="state">State: at recording time and now</h2>
+<table>
+<tr><th>When</th><th>State</th><th>Source</th></tr>
+<tr><td>Demo run, 2026-10-08 (run started 00:15 UTC)</td><td><code>W-1</code> was <code>in_review</code> and the pull request was open</td><td><a href="live-results.json">live-results.json</a>, step 2</td></tr>
+<tr><td>2026-10-08 04:24:33 UTC</td><td>Merged</td><td>GitHub. The merge was made by the maintainer’s own account about four hours after the run, not by a seat. It is not part of the recorded demo.</td></tr>
+</table>
+<p>No reviews or comments were recorded on GitHub. The reviewer seat’s work during the demo happened through Steadmesh messages and work items, not as a GitHub review.</p>
+
+<h2 id="description">Pull request description</h2>
+<p>This is the text the engineer seat wrote, reproduced verbatim:</p>
+<blockquote>
+<p><strong>Summary</strong><br>– Add docs/signup.md outlining the planned signup page fields, validation, and success state.</p>
+<p><strong>Verification</strong><br>– Confirmed the docs-only commit was created and pushed on branch add-signup-docs.</p>
+<p><strong>Notes</strong><br>– This PR satisfies the W-1 acceptance criterion that a pull request exists in [the demo repository].</p>
+</blockquote>
+
+<h2 id="patch">Patch</h2>
+<p>This is the complete diff, unchanged. It adds one new file and contains no secrets or personal data.</p>
+<pre><code>diff --git a/docs/signup.md b/docs/signup.md
+new file mode 100644
+--- /dev/null
++++ b/docs/signup.md
+@@ -0,0 +1,21 @@
++# Signup Page
++
++The signup page should help new users create an account with a small, accessible form.
++
++## Fields
++
++- Name
++- Email address
++- Password
++- Confirm password
++
++## Validation
++
++- All fields are required.
++- Email addresses must use a valid format.
++- Password and confirmation values must match.
++- Passwords should be masked and never logged.
++
++## Success State
++
++After a valid submission, the page should show a clear confirmation that the account request was received.</code></pre>
+
+<h2 id="limits">What this shows and what it does not</h2>
+<ul>
+<li>It shows a Codex seat, with only sandbox GitHub access, committing and opening a real pull request during a recorded run.</li>
+<li>The change is a small documentation file written to satisfy the demo's acceptance criterion. It is not evidence about code quality.</li>
+<li>The demo's Slack and Linear were deterministic fakes, even in the real-services run. See <a href="../demo-results.html">Demo results</a>.</li>
+</ul>
+
+<div class="callout"><p><strong>About this page.</strong> This page is derived from a private repository. The repository name, the GitHub account names and the link to the pull request have been removed. The commit identity is the seat’s placeholder address on the reserved <code>.invalid</code> domain. The maintainer reviewed the page before publication.</p></div>
+</main>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="../docs/">Documentation</a>
+    <a href="../faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="../status.html">Acceptance status</a>
+    <a href="../demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/demo/pr-1.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="../assets/site.js"></script>
+</body>
+</html>

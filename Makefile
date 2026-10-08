@@ -12,7 +12,7 @@ ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-automations live-github e2e demo release e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: site-preview site-check all generate build lint test test-integration conformance conformance-images live-harnesses live-automations live-github e2e demo release e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -159,3 +159,12 @@ live-harnesses:
 live-automations:
 	build/harness-bins.sh
 	$(LOADENV) $(GO) test -count=1 -tags 'integration live' -run LiveAutomations -v -timeout 60m ./services/platform/...
+
+# The website (docs/, published by GitHub Pages). site-check verifies the
+# shared page blocks, internal links, fragments and excerpts; site-preview
+# serves it at http://localhost:8000/. See WEBSITE-MAINTENANCE.md.
+site-check:
+	hack/site.py check
+
+site-preview:
+	cd docs && python3 -m http.server 8000

@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAQ · Steadmesh</title>
+<meta name="description" content="Plain-English answers about Steadmesh setup, models, chat, representatives, memory, GitHub access, data and teardown.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/faq.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="FAQ · Steadmesh">
+<meta property="og:description" content="Plain-English answers about Steadmesh setup, models, chat, representatives, memory, GitHub access, data and teardown.">
+<meta property="og:url" content="https://steadmesh.com/faq.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html" aria-current="page">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html" aria-current="page">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
+      <li><a href="status.html">Acceptance status</a></li>
+      <li><a href="demo-results.html">Demo results</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1>Frequently asked questions</h1>
+<p class="lede">Plain-English answers to the questions people ask most while setting up, running and taking down a Steadmesh organisation. Each answer links to the reference that covers it in depth.</p>
+
+<div class="callout"><p><strong>Version scope.</strong> Answers describe v0.5.0 and were checked against its source. Where an answer describes a choice in a particular setup rather than product behaviour, it says so. Commands that are still awaiting a clean-install check are marked <span class="tag pending">not yet clean-install tested</span>.</p></div>
+
+<nav class="toc" aria-label="Questions on this page">
+<p><strong>Setup and models</strong></p>
+<ul>
+<li><a href="#two-stages">Why are there two Terraform stages?</a></li>
+<li><a href="#modules">Should I write everything out or use the modules?</a></li>
+<li><a href="#api-keys">Where do API keys go, and which stage creates them?</a></li>
+<li><a href="#pi-key">Where is the Pi key?</a></li>
+<li><a href="#which-llm">Which LLM does it use?</a></li>
+</ul>
+<p><strong>Talking to the team and watching it</strong></p>
+<ul>
+<li><a href="#chat">How do I chat with my representative?</a></li>
+<li><a href="#orgctl-path">Why did <code>go install</code> not make <code>orgctl</code> available?</a></li>
+<li><a href="#watch">How do I see the organisation working?</a></li>
+<li><a href="#lease">What does “lease held” mean?</a></li>
+<li><a href="#run">What is a run?</a></li>
+</ul>
+<p><strong>Representatives and memory</strong></p>
+<ul>
+<li><a href="#representative">What does the representative do, and how is it different?</a></li>
+<li><a href="#context">Does each agent keep its context between messages?</a></li>
+</ul>
+<p><strong>GitHub and the sandbox</strong></p>
+<ul>
+<li><a href="#filesystem-github">Do agents have filesystems, and how do they use GitHub?</a></li>
+<li><a href="#repo-discovery">Where is the repository configured, and how do agents find it?</a></li>
+</ul>
+<p><strong>Data and teardown</strong></p>
+<ul>
+<li><a href="#data">Where is the data stored, and can destroy remove Postgres?</a></li>
+<li><a href="#teardown">How do I take it down, and is <code>terraform destroy</code> immediate?</a></li>
+<li><a href="#destroy-prompt">Why does <code>terraform destroy</code> ask me for a variable?</a></li>
+<li><a href="#clean-cluster">How do I know whether my kind cluster is clean before starting?</a></li>
+</ul>
+</nav>
+
+<section id="setup" aria-labelledby="setup-h">
+<h2 id="setup-h">Setup and models</h2>
+
+<h3 id="two-stages">Why are there two Terraform stages?</h3>
+<p>The platform stage installs Steadmesh itself: its namespaces, Postgres, the Helm chart and the Kubernetes custom resource definitions (CRDs). The organisation stage declares a <code>steadmesh_organization</code>, whose resource types only exist once the platform is installed. Terraform has to be able to plan a resource before it can create it, so the two can't share one apply.</p>
+<p>How the two stages talk to each other depends on the route you follow. The repository <a href="quickstart.html">quickstart</a> reads the platform stage's outputs through a <code>terraform_remote_state</code> data source on local state. Other setups pass the same values to both roots, for example from one environment file, with no remote-state wiring. Follow the wiring of the route you are using.</p>
+<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/quickstart/organisation/main.tf">quickstart/organisation/main.tf</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/quickstart/platform/main.tf">quickstart/platform/main.tf</a>.</p>
+
+<h3 id="modules">Should I write everything out or use the modules?</h3>
+<p>Either works. Steadmesh ships reusable modules for the platform install (<code>modules/platform</code>), Postgres (<code>modules/postgres</code>), instruction bundles (<code>modules/instruction-bundle</code>), team templates (<code>modules/team-base</code>, <code>modules/team-engineering</code>, <code>modules/team-accounting</code>) and representatives (<code>modules/representative</code>). Writing the same resources out by hand makes every setting visible while you learn. Using the modules is shorter and easier to upgrade. Neither changes how the product works.</p>
+<p>In both cases, pin the module <code>?ref=</code>, chart, image and provider versions to the same release. The <a href="tutorial.html">tutorial</a> builds a declaration step by step, and the <a href="configuration.html">configuration reference</a> lists every field. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/modules/README.md">modules/README.md</a>.</p>
+
+<h3 id="api-keys">Where do API keys go, and which stage creates them?</h3>
+<p>A model connection refers to a Kubernetes Secret in the platform namespace, or to a supported external secret-store reference. The platform's model proxy uses the real key. The seat talks to the proxy and doesn't need the provider key.</p>
+<p>Which Terraform stage creates the Secret is a choice made by each setup. The repository quickstart creates the Slack, terminal, model and Linear Secrets in the <strong>platform</strong> stage, from <code>model_api_keys</code> and related variables. Another setup might create them in the organisation stage instead. You can also create the Secrets yourself and pass <code>existing_secret_refs</code>.</p>
+<div class="callout warn"><p><strong>Terraform state holds secrets that Terraform creates.</strong> Secrets created by Terraform are stored in that stage's state, even when the variables are marked sensitive. Keep state private, and keep key values out of instructions, screenshots and source control.</p></div>
+<p>Not every credential stays behind the proxy. With GitHub <em>sandbox</em> delivery, the seat receives a credential it can read, and browser-session delivery has its own boundary (see <a href="#filesystem-github">below</a> and <a href="sandbox.html">Sandbox access</a>). Changing the value behind a supported secret reference makes the platform refresh the credential without a Terraform run (<a href="operations.html#credential-rotation">credential rotation</a>). The recorded real-services demo skipped its key-rotation step, so that run doesn't prove rotation with real providers.</p>
+
+<h3 id="pi-key">Where is the Pi key?</h3>
+<p>There isn't one. Pi is an agent <em>harness</em>: the program that reads files, runs tools and edits code. It isn't a model provider. You pick Pi as a seat's harness and then give the seat a model connection to use. Steadmesh's Pi adapter points Pi at the seat's local model proxy with a placeholder key, and the platform adds the real provider credential. A setup where every seat runs Pi still needs the credentials of whichever model provider those seats use.</p>
+<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/CONTRACT.md">harnesses/pi/CONTRACT.md</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/pi.go">harnesses/pi/pi.go</a>.</p>
+
+<h3 id="which-llm">Which LLM does it use?</h3>
+<p>The one you configure. Each seat has a model: a connection, a model ID and an API, and the harness must support that API. The Pi adapter speaks Anthropic Messages, OpenAI Responses and OpenAI Chat Completions. Claude Code and Codex support narrower sets, listed in the <a href="harnesses.html">harness matrix</a>. The quickstart defaults every seat to Claude Code with <code>claude-sonnet-5-5</code> on Anthropic. You can override this per seat with <code>seat_harnesses</code>.</p>
+<p>Matching the API shape doesn't prove that every provider, model, tool-call format or feature works. Declare the endpoint, model ID, credential reference and API together, and set context-window and other settings to match the real model. Then check readiness, which runs a probe turn through each seat's own harness and model (<a href="harnesses.html#readiness">harness readiness</a>). Changing only the API label isn't a compatibility test.</p>
+</section>
+
+<section id="chat-visibility" aria-labelledby="chat-visibility-h">
+<h2 id="chat-visibility-h">Talking to the team and watching it</h2>
+
+<h3 id="chat">How do I chat with my representative?</h3>
+<p>Through a communication connector with a channel binding that maps your external user ID to your representative seat. The <a href="quickstart.html">quickstart</a> supports Slack, the terminal connector, or both. For the terminal, list your user ID in <code>terminal_users</code>. The platform stage then creates a token for you in a Secret, and you connect with:</p>
+<pre><code>orgctl chat --context &lt;kube-context&gt; --user &lt;your-terminal-user-id&gt;</code></pre>
+<p><span class="tag pending">not yet clean-install tested</span> <code>orgctl</code> always needs an explicit <code>--context</code> and never uses your current one. It reaches the platform through <code>kubectl port-forward</code> and reads your token from the connection's Secret, unless you pass <code>--token</code>. This is a local tool for your own cluster, not a hosted chat service.</p>
+<div class="callout warn"><p><strong>Reconnecting doesn't guarantee delivery.</strong> While you're disconnected, the terminal connector keeps up to 200 replies per user <em>in memory</em>. When that fills, it drops the oldest, and it loses the whole queue if the connector is rebuilt or the platform restarts. A connected stream that falls behind can also drop messages. The organisation's own message history is stored durably in Postgres and is separate from this delivery queue.</p></div>
+<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/connectors/terminal/terminal.go">connectors/terminal/terminal.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/cmd/orgctl/chat.go">cmd/orgctl/chat.go</a>.</p>
+
+<h3 id="orgctl-path">Why did <code>go install</code> not make <code>orgctl</code> available?</h3>
+<p>Releases don't include prebuilt <code>orgctl</code> binaries, so you build it with Go (the module needs Go 1.27 or later):</p>
+<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.5.0</code></pre>
+<p><span class="tag pending">not yet clean-install tested</span> If <code>orgctl</code> still isn't found:</p>
+<ol>
+<li>Check that the install itself succeeded, without errors.</li>
+<li>Find where Go put the binary: <code>go env GOBIN</code>. If that's empty, it's <code>$(go env GOPATH)/bin</code>. Don't assume <code>~/go/bin</code>.</li>
+<li>Make sure that directory is on your <code>PATH</code>.</li>
+<li>If a version manager such as asdf manages Go, regenerate its shims (for asdf, <code>asdf reshim golang</code>).</li>
+<li>Confirm with <code>command -v orgctl</code> in the same terminal.</li>
+</ol>
+<p>From a clone, <code>make orgctl</code> builds it into <code>bin/orgctl</code>. Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/Makefile">Makefile</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/.github/workflows/release.yml">release workflow</a>.</p>
+
+<h3 id="watch">How do I see the organisation working?</h3>
+<p>Turn on the console by setting <code>enable_console = true</code> in the platform stage and applying. Then forward it to your machine:</p>
+<pre><code>orgctl console --context &lt;kube-context&gt;      <span class="c"># http://localhost:8090 until you stop it</span>
+orgctl status  --context &lt;kube-context&gt;
+kubectl --context &lt;kube-context&gt; -n &lt;organisation-namespace&gt; get agentseats</code></pre>
+<p><span class="tag pending">not yet clean-install tested</span> The console is read-only. It shows seats, messages, runs, work items and readiness, and the activity view ties messages to seats. Keep <code>orgctl console</code> running while you use it, and stop it when you're done. Use your deployment's real namespace instead of one copied from another example. This website doesn't embed a live console, and the console can't edit the organisation. See <a href="operations.html#checking-readiness">Checking readiness</a>.</p>
+
+<h3 id="lease">What does “lease held” mean?</h3>
+<p>It means a runner currently holds the right to act for that seat. By default the lease lasts 30 seconds and the runner renews it every 10 seconds. A warm, idle runner also holds a lease, so a held lease doesn't mean the model is thinking or that work is moving. Read it together with the progress time, the current task and any queued messages. A stalled progress timestamp is worth investigating even while the lease looks healthy.</p>
+<p>Lease generations reject stale platform writes when ownership moves to a new runner. That guards platform state, but it doesn't promise that an external side effect can never repeat. With the default <code>warm_then_stop</code> idle policy, a seat with no pending work stops after its idle timeout. That's 15 minutes by default, and the quickstart sets it with <code>seat_idle_timeout</code>. The <code>warm</code> policy keeps the seat running. Stopping idle seats reduces activity, but the platform, database, storage and cluster can still cost money.</p>
+<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/services/store/seats.go">services/store/seats.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/cmd/seat-runner/config.go">cmd/seat-runner/config.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/controller/lifecycle/decide.go">controller/lifecycle/decide.go</a>.</p>
+
+<h3 id="run">What is a run?</h3>
+<p>A run is a recorded execution of a seat handling a delivered message: one turn of work. It isn't the lifetime of the pod or the whole native harness conversation. Retries and recovery can create more than one run for the same original message.</p>
+<p>A run's detail shows the triggering message, seat, configuration revision, harness, lease generation, timing, recorded steps and connector operations. Operations the platform records are separate from shell activity inside the sandbox and from harness-specific telemetry, so treat a run as a strong record, not a complete audit trail of everything the harness did. Redaction helps, but screenshots and exported traces still need a privacy review before you share them. See <a href="architecture.html">Architecture</a>.</p>
+</section>
+
+<section id="representatives-memory" aria-labelledby="representatives-memory-h">
+<h2 id="representatives-memory-h">Representatives and memory</h2>
+
+<h3 id="representative">What does the representative do, and how is it different?</h3>
+<p>A representative is an ordinary seat with a human channel binding. It's not a separate model or harness. The compiler marks the seat as a representative and grants it permission to reply to that bound identity. A seat can represent only one human, so binding it to a different external user ID fails validation, because representatives keep separate private histories. An external identity can also be bound only once.</p>
+<p>The representative is a person's stable point of contact. A typical setup has it clarify requests, remember preferences, brief a lead, follow replies and shared notes, schedule check-ins and report results. Choices such as giving it no GitHub access, read-only shared memory or a route only to the lead are design decisions for each setup, not product rules. You can bind a lead seat directly if that suits you. Delegation still depends on declared routes and grants, and instructions in a prompt never grant access.</p>
+<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/pkg/compile/compile.go">pkg/compile/compile.go</a>, <a href="tools.html">Agent tools</a>.</p>
+
+<h3 id="context">Does each agent keep its context between messages?</h3>
+<p>Partly, and how depends on the harness. Pi, for example, can continue the same native session across runs, and its session files live on the seat's persistent workspace. That lets it resume after the runner stops or the pod is replaced, as long as those files are still there. Compaction summarises older context and isn't perfect recall.</p>
+<p>Native conversation context is separate from what Steadmesh stores durably: private and shared memory, work items, message history and workspace files. Write important decisions to the right store or handoff. When a seat changes harness and the native session can't be converted, the runner starts a new session seeded from a portable handoff. That isn't a full transcript conversion. Test whether data survives a lifecycle operation with your own release, storage and retention settings. See <a href="operations.html">Operating an organisation</a>, and the source in <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/pi.go">harnesses/pi/pi.go</a> and <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/harness.go">harnesses/harness.go</a>.</p>
+</section>
+
+<section id="github-sandbox" aria-labelledby="github-sandbox-h">
+<h2 id="github-sandbox-h">GitHub and the sandbox</h2>
+
+<h3 id="filesystem-github">Do agents have filesystems, and how do they use GitHub?</h3>
+<p>Yes. Each seat has a persistent workspace volume mounted at <code>/seat</code>. Its size is set by <code>workspace_size_gb</code> and defaults to 5 GiB. Working files and harness session data live there.</p>
+<p>There are two ways for a seat to reach GitHub:</p>
+<ul>
+<li><strong>Platform delivery.</strong> The seat calls the connector's defined operations through <code>connections.invoke</code>, such as reading repositories, pull requests and issues, opening a pull request or commenting. The token never enters the sandbox. This isn't a general <code>git clone</code>/<code>push</code> workflow.</li>
+<li><strong>Sandbox delivery.</strong> <code>git</code> and <code>gh</code> run inside the seat through a credential helper, and approved GitHub hosts are reached through the egress gateway. This needs a CNI that enforces NetworkPolicy and an enabled egress gateway. It isn't general internet access.</li>
+</ul>
+<div class="callout warn"><p><strong>A sandbox credential can be read.</strong> With sandbox delivery, the agent and other processes in the pod can read the credential, even though the helpers avoid writing it into configuration files. A fine-grained personal access token (PAT) is passed through as it is and keeps the full scope you gave it at GitHub. Granting one repository in Steadmesh doesn't narrow a broader PAT. A GitHub App instead gets an installation token limited to the granted repositories and permissions, valid for one hour, which Steadmesh can revoke. A PAT must be rotated or revoked at GitHub. Use sandbox delivery only for work that needs it.</p></div>
+<p>See <a href="sandbox.html#github">Sandbox access: GitHub</a> and <a href="sandbox.html#egress-gateway">the egress gateway</a>. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/connectors/github/github.go">connectors/github/github.go</a>.</p>
+
+<h3 id="repo-discovery">Where is the repository configured, and how do agents find it?</h3>
+<p>The repository is a target on a GitHub access grant, usually a team grant to engineering. A seat calls <code>connections.list</code> to see the connections, operations and targets it may use. Tell the engineers in their instructions to discover the granted repository that way and clone it into their workspace. Don't rely on the model to guess the step. Then check that the returned targets are what you expect.</p>
+<p>Leaving the representative without a GitHub grant, so the lead sends it pull request links, is a configuration choice, not a product rule. With sandbox git, what a seat can actually reach also depends on the credential's real GitHub scope (see <a href="#filesystem-github">the PAT caveat above</a>). Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/services/tools/seat.go">services/tools/seat.go</a>, <a href="tutorial.html#grants">Tutorial: grants</a>.</p>
+</section>
+
+<section id="data-teardown" aria-labelledby="data-teardown-h">
+<h2 id="data-teardown-h">Data and teardown</h2>
+
+<h3 id="data">Where is the data stored, and can destroy remove Postgres?</h3>
+<p>Durable organisation records live in Postgres. Seat workspaces and native sessions live on each seat's persistent volume. On a local kind cluster, those volumes sit inside the kind node, which is a Docker container. That's Kubernetes running in Docker, not a separate Docker or SQLite mode of the product.</p>
+<p>Replacing a pod keeps its attached volume, because workspace volumes are retained and have no owner that would delete them. Destroying an organisation with <code>data_retention = "retain"</code> (the default) keeps database records and workspace volumes, while <code>"delete"</code> removes them.</p>
+<div class="callout warn"><p><strong>Retention isn't a backup.</strong> Deleting the namespace, the database or the kind cluster bypasses retention and can destroy the data. In the quickstart, destroying the platform stage deletes its namespaces, and the database with them. A Postgres dump covers the database, but not seat workspace volumes or the configuration and credentials you'd need to recover. Test a restore before you rely on one. Keep Terraform state private too, because it can contain generated passwords and any credential Secrets Terraform creates.</p></div>
+<p>See <a href="operations.html#retiring">Retiring seats and retention</a> and <a href="architecture.html#data">Architecture: data</a>. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/runtime/kube/render.go">runtime/kube/render.go</a>.</p>
+
+<h3 id="teardown">How do I take it down, and is <code>terraform destroy</code> immediate?</h3>
+<p>First choose what you're taking down. Each option has different consequences:</p>
+<ul>
+<li><strong>Stop idle compute.</strong> <code>warm_then_stop</code> stops idle seats on its own. Workspaces and memory are kept.</li>
+<li><strong>Remove a seat.</strong> Delete it from the declaration. It retires over a grace period (10 minutes by default; the chart value <code>retirement.grace</code>). During that time it gets no new messages and has one final turn to save a handoff. Its work items are released and its representatives get a summary.</li>
+<li><strong>Destroy the organisation.</strong> This retires its seats at once at the platform level, and keeps or deletes data according to <code>data_retention</code>.</li>
+<li><strong>Remove the platform or cluster.</strong> This deletes the database and volumes along with everything else.</li>
+</ul>
+<p>Shutdown isn't instant. The runner allows up to 240 seconds to quiesce, and seat pods get a 300-second termination grace period. Those timings are separate from the retirement grace and from Terraform's own timeouts, so a destroy isn't guaranteed to finish in any fixed time.</p>
+<div class="callout warn"><p><strong>Before any destructive command</strong>, check the kube context, namespace, Terraform state, <code>data_retention</code> setting and the storage it affects. Export the backups you need, test that they restore, and revoke GitHub PATs separately at GitHub. Destroying the platform stage or deleting a kind cluster can remove the database and every workspace.</p></div>
+<p>In the quickstart, destroy in reverse order: run <code>terraform destroy</code> in <code>organisation/</code>, then in <code>platform/</code>. Don't delete Terraform state files as routine cleanup after deleting a cluster by hand. Keep a backup of the state and reconcile it for the environment you meant to remove. Sources: <a href="operations.html#retiring">Retiring seats</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/services/store/retire.go">services/store/retire.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/cmd/seat-runner/config.go">cmd/seat-runner/config.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/runtime/kube/render.go">runtime/kube/render.go</a>.</p>
+
+<h3 id="destroy-prompt">Why does <code>terraform destroy</code> ask me for a variable?</h3>
+<p>Terraform still evaluates the configuration during a destroy, so it needs every required input. A common cause is a new terminal where you haven't loaded the file that sets your <code>TF_VAR_…</code> variables, or a <code>terraform.tfvars</code> that's missing from the working directory.</p>
+<ol>
+<li>Cancel the prompt. Don't type a guess, especially not for <code>kube_context</code>.</li>
+<li>Check that you're in the intended working directory and that it points at the intended cluster.</li>
+<li>Load your own trusted variables file. Sourcing a shell file runs it, so never source a file you haven't reviewed.</li>
+<li>Run <code>terraform plan -destroy</code> and read the plan before destroying.</li>
+</ol>
+
+<h3 id="clean-cluster">How do I know whether my kind cluster is clean before starting?</h3>
+<p>Look before you install, with an explicit context:</p>
+<pre><code>kind get clusters
+kubectl --context kind-&lt;name&gt; get namespaces
+helm --kube-context kind-&lt;name&gt; list --all-namespaces
+kubectl --context kind-&lt;name&gt; get crds | grep steadmesh
+kubectl --context kind-&lt;name&gt; get agentorganizations --all-namespaces</code></pre>
+<p><span class="tag pending">not yet clean-install tested</span> Finding existing Steadmesh namespaces, Helm releases, CRDs or organisations means an earlier install is there. Check who owns them, which version they are and what data they hold. That isn't a reason to delete the cluster automatically. Reusing an existing install needs its upgrade path. For a clean test, the simplest route is a fresh, disposable kind cluster with a new name.</p>
+<div class="callout warn"><p><strong>Deleting a kind cluster deletes its local database and workspace storage.</strong> Decide what to back up before you run <code>kind delete cluster</code>. The from-source route's <code>make e2e-reset</code> deletes its <code>steadmesh</code> kind cluster this way.</p></div>
+<p>Run this check before the first <code>terraform apply</code>, so resource-name or CRD conflicts don't turn into a confusing failure halfway through. See <a href="from-source.html">Run from source</a>.</p>
+</section>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="tutorial.html" rel="prev"><small>Previous</small>Tutorial</a><a class="next" href="real-services.html" rel="next"><small>Next</small>Connect real services</a></nav>
+<!-- /shell:pager -->
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/faq.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

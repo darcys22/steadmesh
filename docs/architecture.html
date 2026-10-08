@@ -1,45 +1,80 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Architecture · Steadmesh</title>
 <meta name="description" content="Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/architecture.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Architecture · Steadmesh">
+<meta property="og:description" content="Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.">
+<meta property="og:url" content="https://steadmesh.com/architecture.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
-      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="architecture.html" aria-current="page">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Architecture</h1>
 <p class="lede">Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.</p>
 <p>This page is the binding description of how the components fit together: who owns what, the contract every seat Pod follows, and how messages, tools and readiness work. The design rationale is in <a href="decisions.html">Design decisions</a>.</p>
@@ -78,7 +113,7 @@
 <tr><td>External operation attempts</td><td>Operation ledger</td><td>Gateway</td></tr>
 <tr><td>Credentials</td><td>Kubernetes Secrets or Vault</td><td>Credential owners</td></tr>
 </table>
-<p>Terraform state holds identifiers, declared values and computed outputs. It never holds conversations, memory or credentials, and runtime activity never causes drift.</p>
+<p>The organisation stage's Terraform state holds identifiers, declared values, secret <em>references</em> and computed outputs. It never holds conversations or memory, and runtime activity never causes drift. A stage that creates credential Secrets from Terraform variables, such as the quickstart's <code>platform/</code> or the example <code>foundation/</code>, does store those values in its own state; keep such state private, or create the Secrets outside Terraform and reference them.</p>
 
 <h2 id="namespaces">Namespaces and services</h2>
 <ul>
@@ -91,7 +126,8 @@
 <ul>
 <li><code>k8s:&lt;name&gt;</code> refers to a Secret in the <strong>control-plane</strong> namespace, readable only by the platform ServiceAccount.</li>
 <li><code>vault:&lt;path&gt;</code> refers to Vault KV v2. The platform logs in with Kubernetes auth, using its own ServiceAccount token.</li>
-<li>Seats never receive external credentials. They use tools through the gateway and the model through the proxy, which a loopback forwarder in the seat runner reaches with the seat's current token. The proxy allows only the seat's configured model. Credential values never appear in prompts, logs, manifests or tool configuration.</li>
+<li>By default seats receive no external credentials. They use tools through the gateway and the model through the proxy, which a loopback forwarder in the seat runner reaches with the seat's current token. The proxy allows only the seat's configured model, and model credentials stay in the platform. Credential values are not written into prompts, manifests or tool configuration.</li>
+<li>The exception is explicit <a href="sandbox.html">sandbox delivery</a>: a GitHub access profile with sandbox delivery, or a browser plugin with stored session state, puts a credential inside the seat's sandbox, where the agent and any process in the Pod can read it. A personal access token keeps the full scope it has at GitHub. See <a href="faq.html#filesystem-github">Do agents have filesystems, and how do they use GitHub?</a></li>
 <li>The resolvers are in <code>connectors/secretref</code>.</li>
 </ul>
 
@@ -210,10 +246,26 @@
 <li>wake schedules and connection checks</li>
 </ul>
 <p>Uniqueness and optimistic concurrency are enforced by database constraints, not only by application code.</p>
-<div class="pager"><a href="tools.html"><small>Previous</small>Agent tools</a><a href="decisions.html" style="text-align:right"><small>Next</small>Design decisions</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="tools.html" rel="prev"><small>Previous</small>Agent tools</a><a class="next" href="decisions.html" rel="next"><small>Next</small>Design decisions</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/architecture.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

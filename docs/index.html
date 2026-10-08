@@ -1,101 +1,289 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Overview · Steadmesh</title>
-<meta name="description" content="Run a persistent organisation of AI agents on Kubernetes, declared in Terraform and reachable over Slack.">
+<title>Steadmesh — Persistent AI teams declared in Terraform</title>
+<meta name="description" content="Declare persistent AI teams in Terraform. Run Claude Code, Codex and Pi seats on Kubernetes with explicit routes and access, and reach the team through a representative in Slack.">
 <link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/landing.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Steadmesh — Persistent AI teams declared in Terraform">
+<meta property="og:description" content="Declare persistent AI teams in Terraform. Run Claude Code, Codex and Pi seats on Kubernetes with explicit routes and access, and reach the team through a representative in Slack.">
+<meta property="og:url" content="https://steadmesh.com/">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
-<body>
-<div class="layout">
-<aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
-    <ul>
-      <li><a href="index.html">Overview</a></li>
-      <li><a href="quickstart.html">Quickstart</a></li>
-      <li><a href="from-source.html">Run from source</a></li>
-      <li><a href="tutorial.html">Tutorial</a></li>
-    </ul>
-    <div class="nav-group">Guides</div>
-    <ul>
-      <li><a href="real-services.html">Connect real services</a></li>
-      <li><a href="operations.html">Operating an organisation</a></li>
-    </ul>
-    <div class="nav-group">Reference</div>
-    <ul>
-      <li><a href="configuration.html">Configuration</a></li>
-      <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
-      <li><a href="tools.html">Agent tools</a></li>
-      <li><a href="architecture.html">Architecture</a></li>
-      <li><a href="decisions.html">Design decisions</a></li>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
-    </ul>
+<body class="landing">
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <nav class="topnav" aria-label="Site">
+    <a href="#how-it-works">How it works</a>
+    <a href="#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
   </nav>
-</aside>
-<main>
-<h1>Overview</h1>
-<p class="lede">Run a persistent organisation of AI agents on Kubernetes, declared in Terraform and reachable over Slack.</p>
-<p>You describe an organisation in an infrastructure repository: its culture, teams, seats, harnesses, memory, tools, communication routes and external connections. Running <code>terraform apply</code> provisions it on Kubernetes. When the apply reports ready, each person can message their own <strong>representative</strong> over Slack. The representative uses persistent context, delegates to other seats and reports back. Work the agents produce, such as projects and tasks, appears in a connected tracker like Linear.</p>
+</header>
+<!-- /shell:header -->
+<main id="content">
 
-<div class="cards">
-  <a class="card" href="quickstart.html"><strong>Quickstart →</strong><span>Install a release into your cluster with Terraform and talk to your representative in Slack. No clone needed.</span></a>
-  <a class="card" href="from-source.html"><strong>Run from source →</strong><span>Build from the repository and run everything locally on kind with deterministic fakes. No accounts needed.</span></a>
-  <a class="card" href="tutorial.html"><strong>Tutorial →</strong><span>Build an organisation declaration step by step and follow a request end to end.</span></a>
-  <a class="card" href="real-services.html"><strong>Connect real services →</strong><span>Slack, Linear and the Claude Code harness.</span></a>
-  <a class="card" href="configuration.html"><strong>Configuration reference →</strong><span>Every field, default and validation rule.</span></a>
-</div>
+<section class="hero" aria-labelledby="hero-title">
+  <div class="wrap hero-grid">
+    <div class="hero-copy">
+      <p class="eyebrow">Open-source infrastructure for persistent agents</p>
+      <h1 id="hero-title">Declare a persistent AI team in Terraform.</h1>
+      <p class="hero-lede">Define roles, memory, communication routes and access in code. Run Claude Code, Codex and Pi together on Kubernetes, with a persistent representative you can reach in Slack.</p>
+      <div class="actions">
+        <a class="btn" href="quickstart.html">Get started</a>
+        <a class="btn btn-ghost" href="#demo">See the demo results</a>
+      </div>
+      <p class="requirements">Self-hosted on Kubernetes · Bring your own model credentials · Apache 2.0</p>
+    </div>
 
-<h2>How it fits together</h2>
-<svg class="diagram" viewBox="0 0 880 300" role="img" aria-label="Infrastructure repository applies Terraform, which writes the organisation; the controller runs seats; humans reach representatives through Slack via the platform service">
-  <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker></defs>
-  <rect class="box" x="10" y="20" width="180" height="56" rx="8"/><text x="24" y="44">Infrastructure repo</text><text class="sub" x="24" y="62">Terraform roots + modules</text>
-  <rect class="box hl" x="240" y="20" width="190" height="56" rx="8"/><text x="254" y="44">steadmesh provider</text><text class="sub" x="254" y="62">validates, plans, waits for ready</text>
-  <rect class="box" x="480" y="20" width="180" height="56" rx="8"/><text x="494" y="44">AgentOrganization</text><text class="sub" x="494" y="62">Kubernetes custom resource</text>
-  <rect class="box hl" x="700" y="20" width="170" height="56" rx="8"/><text x="714" y="44">Controller</text><text class="sub" x="714" y="62">seats, lifecycle, readiness</text>
-  <rect class="box" x="700" y="130" width="170" height="64" rx="8"/><text x="714" y="154">Seat Pods</text><text class="sub" x="714" y="172">harness + seat-runner,</text><text class="sub" x="714" y="186">persistent workspace</text>
-  <rect class="box hl" x="400" y="130" width="230" height="64" rx="8"/><text x="414" y="154">Platform service</text><text class="sub" x="414" y="172">inbox, memory, tools gateway,</text><text class="sub" x="414" y="186">operation ledger, model proxy</text>
-  <rect class="box" x="140" y="130" width="190" height="64" rx="8"/><text x="154" y="154">Slack</text><text class="sub" x="154" y="172">people message their</text><text class="sub" x="154" y="186">representatives</text>
-  <rect class="box" x="140" y="230" width="190" height="56" rx="8"/><text x="154" y="254">Linear</text><text class="sub" x="154" y="272">projects and tasks</text>
-  <rect class="box" x="400" y="230" width="230" height="56" rx="8"/><text x="414" y="254">Postgres + Secrets</text><text class="sub" x="414" y="272">durable state; credentials stay here</text>
-  <path class="edge" d="M190,48 H236"/><path class="edge" d="M430,48 H476"/><path class="edge" d="M660,48 H696"/>
-  <path class="edge" d="M785,76 V126"/>
-  <path class="edge" d="M696,162 H634"/><path class="edge" d="M634,170 H696"/>
-  <path class="edge" d="M330,162 H396"/><path class="edge" d="M396,170 H330"/>
-  <path class="edge" d="M440,194 L330,240"/>
-  <path class="edge" d="M515,194 V226"/>
-</svg>
+    <figure class="team-figure">
+      <div class="team" role="img" aria-label="Illustration of the demo team: a lead on Claude Code, an engineer on Codex and a reviewer on Pi, sharing a note and a work item that ended with a pull request opened for review.">
+        <div class="team-head"><span class="dot" aria-hidden="true"></span>engineering team</div>
+        <ol class="seats">
+          <li class="seat"><span class="seat-role">Lead</span><span class="seat-harness">Claude Code</span><span class="seat-model">Anthropic Messages</span></li>
+          <li class="seat"><span class="seat-role">Engineer</span><span class="seat-harness">Codex</span><span class="seat-model">OpenAI Responses</span></li>
+          <li class="seat"><span class="seat-role">Reviewer</span><span class="seat-harness">Pi</span><span class="seat-model">OpenAI Chat Completions</span></li>
+        </ol>
+        <div class="shared">
+          <span><code>notes/demo-login.md</code> written by all three</span>
+          <span><code>engineering/W-1</code> claimed by the engineer</span>
+        </div>
+        <div class="result"><span class="result-mark" aria-hidden="true">✓</span> Pull request opened · work item in review</div>
+      </div>
+      <figcaption>Illustration of the recorded demo run on 8 October 2026, not a live view.</figcaption>
+    </figure>
+  </div>
+</section>
 
-<p>Terraform is the desired-state interface. The controller keeps running after Terraform exits: it wakes sleeping seats when messages arrive, stops idle ones, recovers crashed ones and reports readiness. Agents never hold external credentials. They call tools on the platform service, which checks each call against the grants you declared before acting.</p>
+<section id="demo" class="band" aria-labelledby="demo-title">
+  <div class="wrap">
+    <h2 id="demo-title">One request. Three harnesses. Shared work.</h2>
+    <p class="section-lede">A lead, an engineer and a reviewer, each on a different harness and model, coordinate through messages and a shared note, create a work item and open a pull request. The run record also shows internal work continuing through a work-tracker outage.</p>
 
-<h2>Core concepts</h2>
-<table>
-<tr><th>Concept</th><th>What it means</th></tr>
-<tr><td><strong>Organisation</strong></td><td>One <code>steadmesh_organization</code> resource, which becomes one <code>AgentOrganization</code> object in its own namespace.</td></tr>
-<tr><td><strong>Seat</strong></td><td>A continuing agent identity with durable state: a workspace volume, memory, conversation history and an inbox. Starting a process <em>activates</em> a seat. Replacing its container does not create a new colleague.</td></tr>
-<tr><td><strong>Representative</strong></td><td>A seat bound to one human through a channel binding. Normal human input goes through representatives, and each has a private conversation history.</td></tr>
-<tr><td><strong>Team</strong> and <strong>template</strong></td><td>A team groups seats and gives them shared instructions and resources. Templates are reusable; for example, <code>engineering</code> extends <code>base</code>. Membership is declared on the seat.</td></tr>
-<tr><td><strong>Instructions</strong></td><td>Culture, team and role guidance, stored as content-addressed bundles. They are applied in order: organisation, then teams, then role, then seat. Instructions shape behaviour but never grant permissions.</td></tr>
-<tr><td><strong>Harness</strong></td><td>The agent engine that runs inside a seat: <code>claude-code</code>, or the deterministic <code>fake</code> used in tests. It can be replaced without losing the seat's identity or memory.</td></tr>
-<tr><td><strong>Memory store</strong></td><td>A searchable, revisioned record store scoped as personal, team or organisation. Agents decide what to write; the platform enforces who can read what.</td></tr>
-<tr><td><strong>Connection</strong> and <strong>grant</strong></td><td>A connection describes an external service (Slack, Linear, a model API) by reference. A grant lets a seat or team perform specific operations on a connection, memory store or workspace.</td></tr>
-<tr><td><strong>Message route</strong></td><td>Which seats may message which other seats, and whether replies are allowed.</td></tr>
-</table>
+    <div class="demo-grid">
+      <ol class="run-steps">
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Bring up the mixed organisation</strong><span>Passed. Each seat answered a readiness probe through its own harness and model.</span></div></li>
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Collaborate through messages and a shared note</strong><span>Passed. The three seats wrote one plan together, with no work items and no tracker.</span></div></li>
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Repeat with a work item and a pull request</strong><span>Passed. The engineer claimed <code>W-1</code> and opened a pull request; the work item was <em>in review</em> when the run ended.</span></div></li>
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Keep working through a tracker outage</strong><span>Passed. With the (fake) Linear down the organisation stayed ready and created <code>W-2</code> internally; after recovery it was published once, with nothing duplicated.</span></div></li>
+        <li class="skipped"><span class="mark" aria-hidden="true">–</span><div><strong>Rotate the Anthropic key mid-session</strong><span>Skipped in this run. Not claimed as proven with real services.</span></div></li>
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Record the model endpoints actually used</strong><span>Passed. The platform logged every model request each seat made.</span></div></li>
+      </ol>
 
-<h2>What the platform deliberately does not decide</h2>
-<p>The platform provides participants, context, execution environments and capabilities. It does not impose a CEO, a project owner, an approval chain or a definition of "done". The agents decide how projects are formed, coordinated, reviewed and completed, guided by their instructions. Projects and tasks are business records in your tracker, never Terraform resources.</p>
+      <aside class="run-facts" aria-label="About this run">
+        <h3>About this run</h3>
+        <dl>
+          <dt>Recorded</dt><dd>2026-10-08 00:15 UTC, real-services mode</dd>
+          <dt>Real</dt><dd>Model endpoints for all three seats, and a GitHub repository</dd>
+          <dt>Fakes</dt><dd>Slack, Linear, and the representative that sent the request. The end-to-end test drives the run.</dd>
+          <dt>Model requests</dt><dd>Lead 25 · Engineer 41 · Reviewer 24</dd>
+          <dt>Harness versions</dt><dd>Claude Code 2.1.289, Codex 0.160.1, Pi 1.0.4 (pinned for this run)</dd>
+        </dl>
+        <p>Step times are one run's observations, not a benchmark.</p>
+        <p><a class="arrow-link" href="demo-results.html">Read the full run results</a></p>
+      </aside>
+    </div>
+  </div>
+</section>
 
-<div class="callout"><p><strong>Status.</strong> The first release covers the design's Milestones 1–4. The full flow from apply to conversation passes end to end on a local kind cluster with deterministic fakes. A run against real Slack, Linear and a real model is still pending; see <a href="status.html">Acceptance status</a>.</p></div>
-<div class="pager"><span></span><a href="quickstart.html" style="text-align:right"><small>Next</small>Quickstart</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<section id="how-it-works" class="band alt" aria-labelledby="how-title">
+  <div class="wrap">
+    <h2 id="how-title">The team stays. Processes can change.</h2>
+    <ol class="mechanism">
+      <li><strong>Declare the organisation.</strong> Terraform specifies the seats, their roles, memory, message routes, harness profiles and grants. The provider validates the declaration and waits until the organisation is ready.</li>
+      <li><strong>Keep the seats running.</strong> A Kubernetes controller manages each seat's lifecycle. A seat keeps its identity, workspace and stored memory when its process stops, sleeps or is replaced, within the documented retention rules.</li>
+      <li><strong>Send work through a representative.</strong> A person talks to their representative. The team coordinates through the routes and tools you granted, and decides for itself how the work gets done.</li>
+    </ol>
+
+    <figure class="mech-figure">
+      <svg class="mech" viewBox="0 0 960 330" role="img" aria-labelledby="mech-title mech-desc">
+        <title id="mech-title">How Steadmesh fits together</title>
+        <desc id="mech-desc">Terraform applies an organisation declaration; the controller keeps persistent seats running. A person in Slack messages a representative seat, which routes work to the lead, who coordinates with the engineer and reviewer. Seats reach external services only through platform tools and the model proxy, which check the declared grants.</desc>
+        <defs><marker id="mech-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <g class="lane"><text class="lane-label" x="16" y="28">Declared once</text></g>
+        <rect class="node" x="16" y="42" width="176" height="58" rx="10"/><text x="32" y="67">Terraform</text><text class="sub" x="32" y="86">organisation declaration</text>
+        <rect class="node accent" x="252" y="42" width="176" height="58" rx="10"/><text x="268" y="67">Controller</text><text class="sub" x="268" y="86">lifecycle and readiness</text>
+        <path class="edge" d="M192,71 H246"/>
+        <path class="edge" d="M428,71 H520 V128"/>
+
+        <g class="lane"><text class="lane-label" x="16" y="160">Day to day</text></g>
+        <rect class="node" x="16" y="176" width="150" height="58" rx="10"/><text x="32" y="201">Person</text><text class="sub" x="32" y="220">in Slack</text>
+        <rect class="node" x="214" y="176" width="176" height="58" rx="10"/><text x="230" y="201">Representative</text><text class="sub" x="230" y="220">their persistent seat</text>
+        <path class="edge both" d="M166,205 H208"/>
+        <rect class="team-box" x="440" y="134" width="300" height="140" rx="12"/>
+        <text class="lane-label" x="456" y="156">Persistent seats</text>
+        <rect class="node accent" x="456" y="168" width="268" height="40" rx="8"/><text x="472" y="193">Lead · Claude Code</text>
+        <rect class="node" x="456" y="220" width="128" height="40" rx="8"/><text x="470" y="245">Engineer · Codex</text>
+        <rect class="node" x="596" y="220" width="128" height="40" rx="8"/><text x="610" y="245">Reviewer · Pi</text>
+        <path class="edge both" d="M390,205 H434"/>
+
+        <rect class="node" x="790" y="134" width="154" height="62" rx="10"/><text x="806" y="160">Platform tools</text><text class="sub" x="806" y="180">and model proxy</text>
+        <rect class="node" x="790" y="222" width="154" height="62" rx="10"/><text x="806" y="248">Permitted</text><text class="sub" x="806" y="268">services and models</text>
+        <path class="edge" d="M740,165 H784"/>
+        <path class="edge" d="M867,196 V216"/>
+        <text class="sub" x="440" y="302">Routes and grants decide who may message whom and which tools each seat can use.</text>
+      </svg>
+      <figcaption>Explanatory diagram. Terraform declares the organisation; it does not schedule tasks. The controller runs seats; it does not decide who owns a project or when work is done.</figcaption>
+    </figure>
+    <p class="links"><a class="arrow-link" href="architecture.html">Explore the architecture</a> <a class="arrow-link" href="configuration.html">Read the configuration reference</a></p>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="hcl-title">
+  <div class="wrap hcl-grid">
+    <div>
+      <h2 id="hcl-title">Seats are Terraform values</h2>
+      <p>This excerpt is from the quickstart's organisation stage. Each seat joins the engineering team, keeps a persistent workspace and personal memory, and gets its own harness profile when you set one for it in <code>seat_harnesses</code>.</p>
+      <p>The demo used the same mechanism to put the lead on <code>claude-code</code>, the engineer on <code>codex</code> and the reviewer on <code>pi</code> (<a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/examples/mixed-harness/live.json.example">mixed-harness values</a>).</p>
+      <p><a class="arrow-link" href="https://github.com/darcys22/steadmesh/blob/v0.5.0/quickstart/organisation/main.tf#L106-L128">Open the complete example</a></p>
+    </div>
+    <figure class="excerpt">
+      <figcaption><strong>Excerpt</strong>, does not run alone · <code>quickstart/organisation/main.tf</code>, lines 106–128, <span class="ver">v0.5.0</span></figcaption>
+<pre data-excerpt data-source="quickstart/organisation/main.tf" data-lines="106-128"><code>locals {
+  engineering = {
+    eng_lead = { role = "engineering_lead", display_name = "Engineering lead" }
+    engineer = { role = "engineer", display_name = "Engineer" }
+  }
+  team_seats = {
+    for k, s in local.engineering : k =&gt; {
+      role_ref          = "role:${s.role}"
+      display_name      = s.display_name
+      teams             = ["engineering"]
+      harness_profile   = contains(keys(var.seat_harnesses), k) ? "seat_${k}" : "primary"
+      execution_profile = "interactive"
+      sandbox_profile   = "standard"
+      personal_memory   = k
+      workspace         = { persistent = true }
+    }
+  }
+
+  default_model = var.harness == "fake" ? null : var.model
+  harness_profiles = merge(
+    { primary = { adapter = var.harness, image_digest = local.platform.seat_images[var.harness], model = local.default_model } },
+    { for k, h in var.seat_harnesses : "seat_${k}" =&gt; { adapter = h.adapter, image_digest = local.platform.seat_images[h.adapter], model = h.model } },
+  )</code></pre>
+    </figure>
+  </div>
+</section>
+
+<section class="band alt" aria-labelledby="why-title">
+  <div class="wrap">
+    <h2 id="why-title">Why run a team instead of another session</h2>
+    <div class="reasons">
+      <div class="reason">
+        <h3>Persistent seats</h3>
+        <p>Identity, workspace and stored memory carry across the documented seat lifecycle: idle stops, crashes and pod replacement.</p>
+        <a class="arrow-link" href="operations.html">Seat lifecycle</a>
+      </div>
+      <div class="reason">
+        <h3>Mix the supported harnesses</h3>
+        <p>Choose Claude Code, Codex or Pi per seat, each on a model API it supports. API compatibility is not a promise that every model works.</p>
+        <a class="arrow-link" href="harnesses.html">Harness support matrix</a>
+      </div>
+      <div class="reason">
+        <h3>Declare access explicitly</h3>
+        <p>Message routes, tool grants and sandbox access are configuration. Instructions shape behaviour; they never grant permissions.</p>
+        <a class="arrow-link" href="sandbox.html">Sandbox access and credential boundaries</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="start" class="band" aria-labelledby="start-title">
+  <div class="wrap">
+    <h2 id="start-title">Start with the route that fits</h2>
+    <div class="routes">
+      <div class="route primary">
+        <h3>Install a release</h3>
+        <p>For your own Kubernetes cluster, with a NetworkPolicy-enforcing CNI, a default StorageClass, Terraform 1.5+ and kubectl. Connect Slack (or chat from a terminal) and the model credentials the seats use. Model usage is billed by your provider.</p>
+        <a class="btn" href="quickstart.html">Install Steadmesh</a>
+      </div>
+      <div class="route">
+        <h3>Explore locally from source</h3>
+        <p>Build the repository and run it on a local kind cluster with deterministic fakes. Needs Go, Docker, kind, kubectl, Helm and Terraform, and no accounts. Good for learning how the pieces fit.</p>
+        <a class="btn btn-outline" href="from-source.html">Run from source</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="band alt" aria-labelledby="status-title">
+  <div class="wrap narrow">
+    <h2 id="status-title">Current status and limits</h2>
+    <p>Steadmesh is an early-stage project; the current release is <span class="ver">v0.5.0</span>. The mixed-harness demo has a recorded run with real model endpoints and a real GitHub repository, with Slack and Linear as fakes. The acceptance page tracks what is proven, partial and still pending. Review the deployment and security requirements before connecting real services: in particular, a sandbox-delivered GitHub credential is readable inside the seat, and Terraform state can contain the secrets the quickstart creates.</p>
+    <p class="links"><a class="arrow-link" href="status.html">Acceptance status</a> <a class="arrow-link" href="demo-results.html">Demo results</a> <a class="arrow-link" href="sandbox.html">Sandbox access</a></p>
+  </div>
+</section>
+
+<section class="band" aria-labelledby="faq-title">
+  <div class="wrap narrow">
+    <h2 id="faq-title">Common questions</h2>
+    <div class="faq-preview">
+      <details>
+        <summary>Do I need Kubernetes?</summary>
+        <p>Yes. Every documented deployment runs on Kubernetes, including the local route, which uses kind. Install the platform first, then declare the organisation in a second Terraform stage.</p>
+        <p><a href="faq.html#two-stages">Why there are two stages</a> · <a href="quickstart.html">Quickstart</a></p>
+      </details>
+      <details>
+        <summary>Is Pi the model?</summary>
+        <p>No. Pi is an agent harness, like Claude Code and Codex. You choose a compatible model endpoint for each seat and supply that provider's credentials. Each harness supports different model APIs.</p>
+        <p><a href="faq.html#pi-key">Where the Pi key goes</a> · <a href="faq.html#which-llm">Which model it uses</a> · <a href="harnesses.html">Harness matrix</a></p>
+      </details>
+      <details>
+        <summary>What persists between messages?</summary>
+        <p>Each seat has durable memory stores, message history and a workspace volume, and supported harnesses can resume their native session. Compaction summarises old context rather than recalling it perfectly, and losing the storage loses what was on it.</p>
+        <p><a href="faq.html#context">Context between messages</a> · <a href="faq.html#data">Where data is stored</a></p>
+      </details>
+      <details>
+        <summary>Can agents read my credentials?</summary>
+        <p>Model credentials stay with the platform's model proxy. But GitHub sandbox delivery deliberately gives the seat a credential it can read, and a personal access token keeps whatever scope it has at GitHub. Terraform state can also contain secrets that Terraform creates.</p>
+        <p><a href="faq.html#api-keys">Where API keys go</a> · <a href="faq.html#filesystem-github">GitHub and the sandbox</a></p>
+      </details>
+      <details>
+        <summary>What happens when I stop or delete it?</summary>
+        <p>Idle stopping, retiring a seat, deleting the organisation and deleting the cluster are different actions. Retention can keep data when an organisation is deleted, but deleting the namespace, database or cluster can remove it. Retention is not a backup.</p>
+        <p><a href="faq.html#teardown">How to take it down</a> · <a href="faq.html#data">Can destroy remove Postgres?</a></p>
+      </details>
+    </div>
+    <p><a class="arrow-link" href="faq.html">Read the full FAQ</a></p>
+    <p class="legacy-note">Looking for the original overview and core concepts? They moved to the <a href="docs/">documentation overview</a>.</p>
+  </div>
+</section>
+
 </main>
-</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/index.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

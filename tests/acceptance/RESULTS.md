@@ -5,7 +5,7 @@ Recorded 5 October 2026 at commit `HEAD`. Status values:
 - **pass**: proven end to end on kind (`make e2e`, fake harness and fake Slack/Linear) and by the integration suites.
 - **pass (integration)**: proven by integration tests against real Postgres, envtest or Terraform, but not by the kind e2e.
 - **partial**: the mechanism is implemented and partly tested; the gap is stated.
-- **pending-live**: needs the real-credential run (`make live`, see `tests/live/README.md`). §17 does not allow the platform to be called usable on mocked connectors alone.
+- **pending-live**: needs the real-credential run (`make live`, see `tests/live/README.md`). §17 does not allow the platform to be called usable on mocked connectors alone. No `make live` run has been recorded yet.
 - **deferred**: Milestone 5 or 6 work.
 
 | ID | Scenario | Status | Evidence |
@@ -37,6 +37,20 @@ Recorded 5 October 2026 at commit `HEAD`. Status values:
 | A25 | No-change apply still verifies | pass | e2e `A25`: with the fakes scaled to zero, `orgctl verify` fails; after recovery it passes |
 | A26 | Restore from backup | deferred (M5) | ADR-0006 |
 | A27 | Background vs interactive load | deferred (M6) | ADR-0006; no DSec features are claimed |
+| A28 | Retire a busy seat (added with seat retirement; not in the design's original 27) | pass | e2e `A28` (`tests/e2e/retirement_test.go`): the running turn finishes, the seat saves a handoff on its retirement notice, its work item is released, a queued message goes back to its sender, both representatives get a summary, and the workspace is kept |
+
+Real-services evidence outside `make live`:
+
+- The completion demo (`make demo DEMO_MODE=live`, `examples/mixed-harness`)
+  recorded a run on 8 October 2026 with real model endpoints (Claude Code on
+  Anthropic Messages, Codex on OpenAI Responses, Pi on an OpenAI Chat
+  Completions endpoint) and a real GitHub repository; Slack and Linear were the
+  in-cluster fakes. Readiness, collaboration, work items with a pull request
+  (left `in_review`) and publishing through a Linear outage passed; the key
+  rotation step was skipped. Record: `docs/demo/live-results.json`, rendered
+  at `docs/demo-results.html`. It does not change any scenario above to a
+  real-services pass, because the scenarios marked pending-live need real
+  Slack and Linear.
 
 Commands and results:
 

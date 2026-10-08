@@ -1,45 +1,80 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart · Steadmesh</title>
 <meta name="description" content="Install Steadmesh into your Kubernetes cluster with Terraform from a published release, and talk to your representative in Slack.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/quickstart.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Quickstart · Steadmesh">
+<meta property="og:description" content="Install Steadmesh into your Kubernetes cluster with Terraform from a published release, and talk to your representative in Slack.">
+<meta property="og:url" content="https://steadmesh.com/quickstart.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
-      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html" aria-current="page">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Quickstart</h1>
 <p class="lede">Install Steadmesh into your Kubernetes cluster from a published release, declare a small organisation, and talk to your representative in Slack. No clone needed.</p>
 <p>Terraform downloads everything:</p>
@@ -48,7 +83,8 @@
 <li>the platform chart and images from <code>ghcr.io/darcys22/steadmesh</code>;</li>
 <li>the modules from GitHub.</li>
 </ul>
-<p>You get one personal representative per person, plus an engineering lead and an engineer that representatives can delegate to. Agents run Claude Code.</p>
+<p>You get one personal representative per person, plus an engineering lead and an engineer that representatives can delegate to. Seats run Claude Code on an Anthropic model by default. You can choose Codex or Pi for any seat with <code>harness</code> and <code>seat_harnesses</code> in <code>organisation/terraform.tfvars</code>; see <a href="harnesses.html">Harnesses and models</a> for the API each one supports.</p>
+<p>This page documents release <strong>v0.5.0</strong>. Steadmesh is early-stage software: check <a href="status.html">Acceptance status</a> for what has been proven, and read the security notes below before connecting real accounts.</p>
 
 <h2>What you need</h2>
 <table>
@@ -56,19 +92,23 @@
 <tr><td>A Kubernetes cluster and a kubeconfig context for it</td><td>A CNI that enforces NetworkPolicy, because seats start only once their sandbox is verified. kind's default CNI, Calico and Cilium all qualify. You also need a default StorageClass, and about 4 CPUs and 8 GB of memory free.</td></tr>
 <tr><td>Terraform 1.5+ and kubectl</td><td></td></tr>
 <tr><td>A Slack app</td><td>Go to <a href="https://api.slack.com/apps">api.slack.com/apps</a>, choose Create New App → From a manifest, and paste <a href="assets/slack-app-manifest.yaml">slack-app-manifest.yaml</a>. Create an app-level token with <code>connections:write</code> (<code>xapp-…</code>), install the app and copy the bot token (<code>xoxb-…</code>). Note the workspace ID (<code>T…</code>) and each person's member ID (<code>U…</code>; profile → ⋮ → Copy member ID). See <a href="real-services.html">Connect real services</a> for details.</td></tr>
-<tr><td>An Anthropic API key</td><td>For the Claude Code harness.</td></tr>
-<tr><td>Optional: a Linear API key and team ID</td><td>Lets agents create projects and issues.</td></tr>
+<tr><td>A model API key</td><td>An Anthropic key for the default Claude Code seats. Codex needs an OpenAI Responses endpoint; Pi can use Anthropic, OpenAI Responses or an OpenAI Chat Completions-compatible endpoint. See <a href="faq.html#which-llm">Which LLM does it use?</a></td></tr>
+<tr><td>Optional: a Linear API key and team ID</td><td>Lets agents create projects and issues. Linear is optional: the organisation stays ready and keeps working when it is missing or down.</td></tr>
 </table>
+
+<div class="callout"><p><strong>Model usage costs money.</strong> Your model provider bills every request a seat makes: the readiness probe each seat runs when it starts or its configuration changes, and every turn of work. Set spending limits with your provider before you start. Idle seats stop, but the cluster, database and volumes keep running until you remove them.</p></div>
+
+<div class="callout warn" id="state-secrets"><p><strong>Credentials in Terraform state.</strong> If you put tokens in <code>platform/terraform.tfvars</code>, the platform stage writes them into Kubernetes Secrets <em>and</em> into its Terraform state, even though the variables are marked sensitive. Keep <code>terraform.tfvars</code> and the state files private and out of version control. To keep the values out of Terraform entirely, create the Secrets yourself and set <code>existing_secret_refs</code> instead (see the comments in <code>terraform.tfvars.example</code>). See <a href="faq.html#api-keys">Where do API keys go?</a></p></div>
 
 <h2>Install</h2>
 <ol class="steps">
 <li>
-<p><strong>Get the quickstart.</strong> This copies two small Terraform roots into a new directory. <code>platform/</code> installs Steadmesh, and <code>organisation/</code> declares your agents. They are separate stages because the organisation's provider needs the platform's CRDs to exist before it can plan.</p>
+<p><strong>Get the quickstart.</strong> This copies two small Terraform roots into a new directory. <code>platform/</code> installs Steadmesh, and <code>organisation/</code> declares your agents. They are separate stages because the organisation's provider needs the platform's CRDs to exist before it can plan (<a href="faq.html#two-stages">why two stages?</a>).</p>
 <pre><code>mkdir steadmesh &amp;&amp; cd steadmesh
-terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.1.0"</code></pre>
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.5.0"</code></pre>
 </li>
 <li>
-<p><strong>Install the platform.</strong> Set <code>kube_context</code> and your tokens in <code>terraform.tfvars</code>.</p>
+<p><strong>Install the platform.</strong> Set <code>kube_context</code> and your tokens (or <code>existing_secret_refs</code>) in <code>terraform.tfvars</code>. Read the state warning above first.</p>
 <pre><code>cd platform
 cp terraform.tfvars.example terraform.tfvars
 terraform init
@@ -80,7 +120,7 @@ terraform apply</code></pre>
 <li>the platform chart, which holds the CRDs, the controller and the platform service;</li>
 <li>the credential Secrets.</li>
 </ul>
-<p>Terraform only ever uses the context you name, never your current one. The tokens are stored in this stage's Terraform state, so keep the state private.</p>
+<p>Terraform only ever uses the context you name, never your current one. Tokens given as variables are stored in this stage's Terraform state, so keep the state private. The apply finishes with <code>Apply complete!</code> once the platform's pods are running.</p>
 </li>
 <li>
 <p><strong>Declare your organisation.</strong> Set your Slack workspace ID and the people who get a representative.</p>
@@ -88,7 +128,7 @@ terraform apply</code></pre>
 cp terraform.tfvars.example terraform.tfvars
 terraform init
 terraform apply</code></pre>
-<p>This stage reads the cluster, namespace, images and secret references from the platform stage's state. <code>terraform apply</code> returns once every seat has passed its readiness checks. The first time, that takes a few minutes while the seat images are pulled. If a check fails, the error names the condition. See <a href="operations.html#checking-readiness">Checking readiness</a>.</p>
+<p>This stage reads the cluster, namespace, images and secret references from the platform stage's state, so keep both directories together. <code>terraform apply</code> returns once every seat has passed its readiness checks, including a probe turn through its own harness and model. The first time, that takes a few minutes while the seat images are pulled. If a check fails, the error names the condition. See <a href="operations.html#checking-readiness">Checking readiness</a>; a seat stuck on its sandbox check usually means the cluster's CNI does not enforce NetworkPolicy.</p>
 </li>
 <li>
 <p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM. Try:</p>
@@ -97,6 +137,7 @@ terraform apply</code></pre>
 <li>asking it to have engineering look into something;</li>
 <li>with Linear connected, asking for a project for a small task.</li>
 </ul>
+<p>The representative answers in the DM, usually within a minute; delegated work takes longer and the representative reports back when the team replies. If nothing arrives, check <code>kubectl --context &lt;your-context&gt; get agentseats -A</code> and the console below. To chat from a terminal instead, see <a href="faq.html#chat">How do I chat with my representative?</a></p>
 </li>
 </ol>
 
@@ -104,6 +145,7 @@ terraform apply</code></pre>
 <p>Set <code>enable_console = true</code> in <code>platform/terraform.tfvars</code> and apply that stage. Then open the read-only <a href="operations.html">console</a>:</p>
 <pre><code>kubectl --context &lt;your-context&gt; -n steadmesh-system port-forward deploy/steadmesh-console 8090
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
+<p>With <code>orgctl</code> installed, <code>orgctl console --context &lt;your-context&gt;</code> does the same. The console is read-only: it shows seats, messages, runs, work items and readiness. See <a href="faq.html#watch">How do I see the organisation working?</a> and <a href="faq.html#lease">What does lease held mean?</a></p>
 
 <h2>Shape your organisation</h2>
 <p>Everything about your organisation lives in <code>organisation/</code>:</p>
@@ -117,11 +159,15 @@ terraform apply</code></pre>
 </table>
 <p><code>terraform plan</code> lists the seats each change affects. Seats keep their identity, workspace and memory across applies. The <a href="tutorial.html">tutorial</a> explains every part of the declaration.</p>
 
-<h2>Upgrade or remove</h2>
-<ul>
-<li><strong>Upgrade:</strong> in your copy, change every <code>?ref=v…</code>, <code>steadmesh_version</code> and the <code>darcys22/steadmesh</code> provider <code>version</code> to the new release. Apply <code>platform/</code>, then <code>organisation/</code>.</li>
-<li><strong>Remove:</strong> run <code>terraform destroy</code> in <code>organisation/</code>, then in <code>platform/</code>. Destroying the platform deletes its namespaces, and with them the database.</li>
-</ul>
+<h2 id="upgrade">Upgrade</h2>
+<p>In your copy, change every <code>?ref=v…</code>, <code>steadmesh_version</code> and the <code>darcys22/steadmesh</code> provider <code>version</code> to the new release. Apply <code>platform/</code>, then <code>organisation/</code>.</p>
+
+<h2 id="remove">Remove</h2>
+<div class="callout warn"><p><strong>Destroying the platform deletes the database.</strong> The organisation is declared with <code>data_retention = "retain"</code>, so destroying <code>organisation/</code> keeps its database records and workspace volumes. Destroying <code>platform/</code> deletes its namespaces, and with them Postgres and everything retained in it. Deleting the cluster removes the volumes too. Retention is not a backup: Steadmesh has no built-in backup or restore yet, so take your own (a Postgres dump does not include seat workspace volumes) before destroying anything you want to keep. GitHub personal access tokens you gave agents must be revoked at GitHub separately. See <a href="faq.html#teardown">How do I take it down?</a> and <a href="faq.html#data">Where is the data stored?</a></p></div>
+<p>Check the context and directory first, then destroy the organisation, then the platform:</p>
+<pre><code>cd organisation &amp;&amp; terraform destroy   <span class="c"># retires the seats; data retained</span>
+cd ../platform &amp;&amp; terraform destroy    <span class="c"># deletes namespaces and the database</span></code></pre>
+<p>Keep a copy of both stages' state files until the destroy has finished. Do not delete state files to clean up after removing a cluster by hand.</p>
 
 <h2>Next steps</h2>
 <ul>
@@ -129,10 +175,26 @@ terraform apply</code></pre>
 <li>Read <a href="operations.html">Operating an organisation</a> for readiness, seat lifecycle and troubleshooting.</li>
 <li>Work on Steadmesh itself: <a href="from-source.html">Run from source</a>.</li>
 </ul>
-<div class="pager"><a href="index.html"><small>Previous</small>Overview</a><a href="from-source.html" style="text-align:right"><small>Next</small>Run from source</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="docs/" rel="prev"><small>Previous</small>Overview</a><a class="next" href="from-source.html" rel="next"><small>Next</small>Run from source</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/quickstart.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

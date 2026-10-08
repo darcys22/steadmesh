@@ -1,47 +1,83 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sandbox access · Steadmesh</title>
 <meta name="description" content="Give seats practical access from their sandbox through plugins: tools, hostname egress, IP ranges, GitHub credentials and a browser, with live revocation and a stated credential boundary.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/sandbox.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Sandbox access · Steadmesh">
+<meta property="og:description" content="Give seats practical access from their sandbox through plugins: tools, hostname egress, IP ranges, GitHub credentials and a browser, with live revocation and a stated credential boundary.">
+<meta property="og:url" content="https://steadmesh.com/sandbox.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html" aria-current="page">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Sandbox access</h1>
 <p>By default a seat's sandbox reaches only the platform: no internet, no cluster services, no credentials. <strong>Access profiles</strong> grant practical access: binaries, hosts, IP ranges, GitHub repositories and a browser. Each part of a profile is a <strong>plugin</strong> with its own enforcement, and a seat gets the union of the profiles named on the seat and on its teams.</p>
+<p>Access is granted only by these declarations, never by instructions or by asking in natural language. Hostname access needs a cluster whose CNI enforces NetworkPolicy and the egress gateway enabled. For a plain-English summary, see <a href="faq.html#filesystem-github">Do agents have filesystems, and how do they use GitHub?</a></p>
 <pre><code>access_profiles = {
   github_engineer = {
     tools  = { binaries = ["git", "gh"] }
@@ -88,9 +124,9 @@ teams = {
 <p>With <code>delivery = "sandbox"</code>, <code>git</code> and <code>gh</code> in the sandbox work with GitHub directly. GitHub's hosts are allowed through the egress gateway, or the connection's own endpoint for GitHub Enterprise. The seat runner sets git's credential helper to <code>steadmesh-tools credential git</code>, and <code>gh</code> runs through a wrapper that fetches a token for each invocation. Every fetch is recorded as a <code>credential_issued</code> event, with the repositories and permissions but never the token.</p>
 <ul>
 <li>With a GitHub App, each credential is an installation token limited to the granted repositories and permissions, valid for one hour.</li>
-<li>With a personal access token, the token itself is delivered. It is only as narrow as you made it.</li>
+<li>With a personal access token, the token itself is delivered. It keeps the scope you gave it at GitHub: listing one repository in the access profile limits what Steadmesh issues it for, not what the token can do.</li>
 </ul>
-<div class="callout warn"><p><strong>The credential boundary.</strong> A credential delivered to the sandbox can be read by the agent and by any process in the seat's Pod. Until it expires or is revoked, it can be used against any destination the seat's egress allows. Steadmesh keeps credentials out of Terraform plans and state, CRDs, manifests, Pod specs, images, instruction text and logs, and records every delivery. Prefer platform delivery when the seat does not need <code>git</code> or <code>gh</code> itself.</p></div>
+<div class="callout warn"><p><strong>The credential boundary.</strong> A credential delivered to the sandbox can be read by the agent and by any process in the seat's Pod. Until it expires or is revoked, it can be used against any destination the seat's egress allows. Steadmesh keeps credentials out of the organisation's Terraform plans and state, CRDs, manifests, Pod specs, images, instruction text and logs, and records every delivery. (Secrets you create from Terraform variables are in that stage's state; see <a href="quickstart.html#state-secrets">Credentials in Terraform state</a>.) Prefer platform delivery when the seat does not need <code>git</code> or <code>gh</code> itself.</p></div>
 <h3>Revocation</h3>
 <ul>
 <li><strong>Through Steadmesh, immediately:</strong> removing the grant stops new credentials (<code>credential_denied</code> events), platform operations on those repositories are refused, and the egress gateway closes open connections to GitHub hosts that are no longer allowed.</li>
@@ -117,10 +153,26 @@ teams = {
 <li>Enforce it where it acts: the Pod or NetworkPolicy (<code>runtime/kube</code>), the seat runner (<code>cmd/seat-runner/access.go</code>), the platform (<code>/v1/access</code>, <code>/v1/credentials</code>) or the gateway. If it cannot be enforced on a cluster, fail validation with a clear reason rather than claim it.</li>
 <li>Record denials and deliveries as events, document the revocation behaviour and credential boundary, and add unit and e2e tests.</li>
 </ol>
-<div class="pager"><a href="harnesses.html"><small>Previous</small>Harnesses and models</a><a href="tools.html" style="text-align:right"><small>Next</small>Agent tools</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="operations.html" rel="prev"><small>Previous</small>Operating an organisation</a><a class="next" href="configuration.html" rel="next"><small>Next</small>Configuration</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/sandbox.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

@@ -1,61 +1,102 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Acceptance status · Steadmesh</title>
 <meta name="description" content="Which acceptance scenarios from the design are proven, partially proven or still pending.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/status.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Acceptance status · Steadmesh">
+<meta property="og:description" content="Which acceptance scenarios from the design are proven, partially proven or still pending.">
+<meta property="og:url" content="https://steadmesh.com/status.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
-      <li><a href="status.html">Acceptance status</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
+      <li><a href="status.html" aria-current="page">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Acceptance status</h1>
 <p class="lede">Which acceptance scenarios from the design are proven, partially proven or still pending.</p>
-<p>The design defines 27 acceptance scenarios. This page shows where each one stands. The detailed record, with test names, is <code>tests/acceptance/RESULTS.md</code>.</p>
+<p>The design defines 27 acceptance scenarios (A01–A27); A28, retiring a busy seat, was added with seat retirement, so 28 are tracked. This page shows where each one stands, as of release v0.5.0. The detailed record, with test names, is <a href="https://github.com/darcys22/steadmesh/blob/main/tests/acceptance/RESULTS.md"><code>tests/acceptance/RESULTS.md</code></a>.</p>
 
-<div class="callout warn"><p><strong>Not yet proven with real services.</strong> The design does not allow the platform to be called usable on mocked connectors alone. Everything marked <span class="tag pass">pass</span> has been proven on a local kind cluster with the deterministic harness and fake Slack/Linear servers, plus integration suites against real Postgres, a Kubernetes API server, Terraform and the real Claude Code binary. The scenarios marked <span class="tag pending">live</span> also need a run with real Slack, Linear and a model (<code>make live</code>).</p></div>
+<div class="callout warn"><p><strong>What has been proven, and how.</strong> The design does not allow the platform to be called usable on mocked connectors alone, so evidence is kept separate by source:</p>
+<ul>
+<li><span class="tag pass">pass</span> means proven on a local kind cluster with the deterministic harness and fake Slack, Linear and GitHub servers, or by integration suites against real Postgres, a Kubernetes API server, Terraform and the real harness binaries against a scripted model.</li>
+<li>Real model endpoints and real GitHub: the <a href="demo-results.html">completion demo</a> has a recorded real-services run (8 October 2026) in which a Claude Code lead, a Codex engineer and a Pi reviewer passed readiness through their own models, collaborated, and opened a pull request that reached review. Slack and Linear were the in-cluster fakes in that run, and its key-rotation step was skipped.</li>
+<li>Real Slack and Linear: no run of <code>make live</code> has been recorded yet. The scenarios marked <span class="tag pending">live</span> still need one.</li>
+</ul></div>
 
 <h2>How to reproduce</h2>
 <pre><code>make test               <span class="c"># unit tests</span>
 make test-integration   <span class="c"># Postgres via testcontainers, envtest, Terraform acceptance, Claude Code feasibility</span>
 make e2e                <span class="c"># the full apply-to-conversation suite on a fresh kind cluster</span>
+make demo               <span class="c"># the mixed-harness completion demo; DEMO_MODE=live for real models and GitHub</span>
 make live               <span class="c"># real Slack, Linear and Claude (credentials required)</span></code></pre>
 
 <h2>Scenarios</h2>
 <table>
 <tr><th>ID</th><th>Scenario</th><th>Status</th><th>Evidence</th></tr>
-<tr><td>A01</td><td>Apply a prepared organisation</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: <code>make -C examples apply</code> ends with a fresh verify of OperationalReady and representative details</td></tr>
+<tr><td>A01</td><td>Apply a prepared organisation</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: <code>make -C examples apply</code> ends with a fresh verify of OperationalReady and representative details. The real-services demo also reached readiness with real model endpoints, but with fake Slack and Linear</td></tr>
 <tr><td>A02</td><td>Connector lacks authorisation</td><td><span class="tag pass">pass</span></td><td>Provider and controller integration: the blocking condition names the connection</td></tr>
 <tr><td>A03</td><td>Repeat the same apply</td><td><span class="tag pass">pass</span></td><td>e2e: plan exit code 0, still five seats</td></tr>
 <tr><td>A04</td><td>First human message</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: Slack DM, then a reply from the representative</td></tr>
@@ -77,7 +118,7 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 <tr><td>A20</td><td>Restart control-plane services</td><td><span class="tag pass">pass</span></td><td>e2e: no duplicates, messages still answered</td></tr>
 <tr><td>A21</td><td>An agent creates a project</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e with the fake tracker; no Terraform record</td></tr>
 <tr><td>A22</td><td>Request authority in natural language</td><td><span class="tag partial">partial</span></td><td>Enforced structurally on the server; not yet exercised with a real model</td></tr>
-<tr><td>A23</td><td>No raw credentials in plans or configuration</td><td><span class="tag pass">pass</span></td><td>e2e: organisation and platform plans, state and runtime objects are clean</td></tr>
+<tr><td>A23</td><td>No raw credentials in plans or configuration</td><td><span class="tag pass">pass</span></td><td>e2e: organisation and platform plans, the organisation state and runtime objects are clean. A stage that creates Secrets from variables (the example foundation, the quickstart platform) holds them in its own state</td></tr>
 <tr><td>A24</td><td>Configuration change through CI</td><td><span class="tag deferred">not run</span></td><td>The same <code>make apply</code> path; no CI is wired up</td></tr>
 <tr><td>A25</td><td>No-change deploy still detects failures</td><td><span class="tag pass">pass</span></td><td>e2e: verify fails while the connections are down and passes after they recover</td></tr>
 <tr><td>A26</td><td>Restore from backup</td><td><span class="tag deferred">Milestone 5</span></td><td></td></tr>
@@ -91,12 +132,30 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 <li>Artifact storage and backup/restore are not implemented.</li>
 <li>Deleting an organisation waits for the platform to revoke its capabilities. If the platform is permanently unavailable, deletion is blocked, and there is no admin override yet.</li>
 <li>A readiness timeout on the first create taints the Terraform resource; untaint it after fixing the cause.</li>
-<li>The example foundation stage keeps credential values in its own Terraform state.</li>
+<li>The example foundation stage, and the quickstart platform stage when tokens are given as variables, keep credential values in their own Terraform state.</li>
+<li>Terminal chat queues replies for a disconnected user in memory only: at most 200, lost if the platform restarts.</li>
+<li>Model key rotation has been tested with fakes, not yet against a real provider.</li>
 </ul>
-<div class="pager"><a href="decisions.html"><small>Previous</small>Design decisions</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="decisions.html" rel="prev"><small>Previous</small>Design decisions</a><a class="next" href="demo-results.html" rel="next"><small>Next</small>Demo results</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/status.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

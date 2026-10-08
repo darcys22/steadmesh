@@ -1,50 +1,85 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tutorial: build an organisation · Steadmesh</title>
 <meta name="description" content="Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/tutorial.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Tutorial: build an organisation · Steadmesh">
+<meta property="og:description" content="Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.">
+<meta property="og:url" content="https://steadmesh.com/tutorial.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
-      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="tutorial.html" aria-current="page">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Tutorial: build an organisation</h1>
 <p class="lede">Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.</p>
 <p>This tutorial builds an organisation declaration from scratch: a culture, a representative for one person, and an engineering team that can create work in Linear. Each section adds one kind of record and explains what the platform does with it. The finished file is close to the quickstart's <code>organisation/main.tf</code>, which uses the reusable modules to say the same thing more compactly.</p>
 
-<div class="callout"><p>Complete the <a href="quickstart.html">Quickstart</a> first, so the platform is installed. Work in a copy of its <code>organisation/</code> directory, which already reads the cluster, namespace and secret references from the platform stage. The examples below use literal values to keep them readable. If you <a href="from-source.html">run from source</a> instead, work in <code>examples/organisation/</code>, where module sources are local paths such as <code>../../modules/instruction-bundle</code>.</p></div>
+<div class="callout"><p>Complete the <a href="quickstart.html">Quickstart</a> first, so the platform is installed. Work in a copy of its <code>organisation/</code> directory, which already reads the cluster, namespace and secret references from the platform stage. The examples below use literal values to keep them readable. If you <a href="from-source.html">run from source</a> instead, work in <code>examples/organisation/</code>, where module sources are local paths such as <code>../../modules/instruction-bundle</code>. Why the platform and organisation are separate stages: <a href="faq.html#two-stages">Why are there two Terraform stages?</a></p></div>
 
 <h2>1. The provider and the organisation resource</h2>
 <p>The provider writes a single <code>AgentOrganization</code> object and then watches it converge. <code>kube_context</code> is required on purpose: the provider never falls back to whatever context happens to be current.</p>
@@ -82,14 +117,14 @@ resource "steadmesh_organization" "this" {
 <h2>2. Culture and instructions</h2>
 <p>Instructions are versioned text, stored outside the organisation object and referenced by content digest. That way a change is always a visible, reviewable diff. The <code>instruction-bundle</code> module publishes a markdown file as a ConfigMap and outputs a reference such as <code>configmap:steadmesh-culture/culture.md#sha256:9f2c…</code>.</p>
 <pre><code>module "culture" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.1.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "steadmesh-culture"
   namespace   = "steadmesh"
   source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.1.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "steadmesh-role-representative"
   namespace   = "steadmesh"
   source_path = "${path.module}/instructions/representative.md"
@@ -103,7 +138,7 @@ module "representative_role" {
 <p>Three independent profiles describe how a seat runs. A seat can switch harness without changing its memory, or change resources without changing its role.</p>
 <pre><code>    harness_profiles = {
       primary = {
-        adapter      = "fake"                   <span class="c"># or "claude-code"</span>
+        adapter      = "fake"                   <span class="c"># or "claude-code", "codex", "pi"</span>
         image_digest = "steadmesh/seat-fake:dev" <span class="c"># pin image@sha256:… in production</span>
       }
     }
@@ -244,7 +279,7 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
       }
     }
   }   <span class="c"># end of spec</span></code></pre>
-<p>Several people can share one Slack app installation. Each person gets their own representative and a private history that other representatives cannot read.</p>
+<p>Several people can share one Slack app installation. Each person gets their own representative and a private history that other representatives cannot read. A representative is an ordinary seat with a binding; what it may do still comes from its grants and routes, not from its instructions. See <a href="faq.html#chat">How do I chat with my representative?</a> for the terminal alternative to Slack.</p>
 
 <h2>10. Plan</h2>
 <pre><code>terraform plan    <span class="c"># from source: make -C examples plan-organisation</span></code></pre>
@@ -290,10 +325,26 @@ already the personal memory of seat "representative_sean"</code></pre>
 <tr><td>Seat removed from the declaration</td><td>Its data, retained by default. Capabilities are revoked. Reuse needs explicit <code>adopt_from</code>.</td></tr>
 <tr><td>Organisation destroyed with <code>data_retention = "retain"</code></td><td>Database records and workspace volumes. External Slack workspaces and Linear projects are never deleted.</td></tr>
 </table>
-<div class="pager"><a href="from-source.html"><small>Previous</small>Run from source</a><a href="real-services.html" style="text-align:right"><small>Next</small>Connect Slack, Linear and Claude</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="from-source.html" rel="prev"><small>Previous</small>Run from source</a><a class="next" href="faq.html" rel="next"><small>Next</small>FAQ</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/tutorial.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

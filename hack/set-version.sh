@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Points quickstart/ and the provider documentation sources (provider/docs-examples,
 # provider/docs-templates) at a release: module ?ref= tags, the platform version
-# and the provider constraint. Usage: hack/set-version.sh 0.2.0, then
+# and the provider constraint. Also pins the ?ref= tags in the website
+# (docs/*.html, except the generated demo record) and README.md.
+# Usage: hack/set-version.sh 0.2.0, then
 # `make provider-docs` to re-render provider/docs.
 # With --check, changes nothing and fails unless they already pin it.
 set -euo pipefail
@@ -22,6 +24,15 @@ pin() { # directory
 
 dirs=(quickstart provider/docs-examples provider/docs-templates)
 
+# Documentation pages that show install commands. The demo record keeps the
+# versions of the run it records.
+pin_docs() { # root
+  find "$1/docs" -maxdepth 2 -name '*.html' ! -name 'demo-results.html' -exec perl -pi -e "
+    s#(github\.com/darcys22/steadmesh//[a-z/-]+)\?ref=v[0-9.]+#\$1?ref=v$v#g;
+  " {} +
+  perl -pi -e "s#(github\.com/darcys22/steadmesh//[a-z/-]+)\?ref=v[0-9.]+#\$1?ref=v$v#g;" "$1/README.md"
+}
+
 if $check; then
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
@@ -34,7 +45,16 @@ if $check; then
       exit 1
     fi
   done
-  echo "${dirs[*]} pin $v"
+  mkdir -p "$tmp/site"
+  cp -R "$root/docs" "$tmp/site/docs"
+  cp "$root/README.md" "$tmp/site/README.md"
+  pin_docs "$tmp/site"
+  if ! diff -ru "$root/docs" "$tmp/site/docs" >&2 || ! diff -u "$root/README.md" "$tmp/site/README.md" >&2; then
+    echo "docs/ or README.md does not pin $v; run hack/set-version.sh $v" >&2
+    exit 1
+  fi
+  echo "${dirs[*]} docs README.md pin $v"
 else
   for d in "${dirs[@]}"; do pin "$root/$d"; done
+  pin_docs "$root"
 fi

@@ -1,45 +1,80 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Harnesses and models · Steadmesh</title>
 <meta name="description" content="Choose a harness (Claude Code, Codex or Pi) and a model endpoint per seat, how model access and credentials work, readiness checks, and how to add a harness.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/harnesses.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Harnesses and models · Steadmesh">
+<meta property="og:description" content="Choose a harness (Claude Code, Codex or Pi) and a model endpoint per seat, how model access and credentials work, readiness checks, and how to add a harness.">
+<meta property="og:url" content="https://steadmesh.com/harnesses.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
-      <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
+      <li><a href="harnesses.html" aria-current="page">Harnesses and models</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
       <li><a href="demo-results.html">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Harnesses and models</h1>
 <p>Each seat runs a <strong>harness</strong>: the agent program that reasons, edits files and calls tools. You choose a harness and a <strong>model</strong> per harness profile, and a seat uses its profile. Different seats in one organisation can use different harnesses and different model endpoints. They keep the same identity, workspace, memory, permissions and durable messaging whatever harness they run.</p>
 
@@ -53,6 +88,7 @@
 <tr><td><code>fake</code> (deterministic, tests)</td><td colspan="3">no model</td><td></td></tr>
 </table>
 <p>Each row was verified against the pinned release, with the evidence checked in under <code>harnesses/&lt;name&gt;/CONTRACT.md</code>, and every harness passes the same conformance suite against all its APIs (see <a href="#verifying">Verifying</a>).</p>
+<p>API compatibility does not mean every model or provider has been tested. The conformance suite uses a scripted model; real endpoints are exercised by <code>make live-harnesses</code> and the completion demo for the models they name. Check tool calling, context window and output limits for the model you choose, and set <code>context_window</code> and <code>max_tokens</code> to its real values. A harness is not a model provider: Pi, for example, still needs a model connection and its credential (<a href="faq.html#pi-key">Where is the Pi key?</a>, <a href="faq.html#which-llm">Which LLM does it use?</a>).</p>
 
 <h2>Declaring models</h2>
 <p>A model connection is declared once, with the APIs it serves and optionally its models. A harness profile then selects a connection and a model.</p>
@@ -119,7 +155,7 @@ harness_profiles = {
 </ul>
 
 <h2>Changing a seat's harness or model</h2>
-<p>Changing a profile's adapter, model, API or settings changes the seat's configuration revision. The seat finishes its turn, and its Pod is replaced. The seat ID, volume, memory, inbox and handoff are kept. With the same harness, the native session resumes. With a different harness, the seat starts a new session seeded from its portable handoff; the first turn reports that recovery and the console shows it.</p>
+<p>Changing a profile's adapter, model, API or settings changes the seat's configuration revision. The seat finishes its turn, and its Pod is replaced. The seat ID, volume, memory, inbox and handoff are kept. With the same harness, the native session resumes. With a different harness, the seat starts a new session seeded from its portable handoff; the first turn reports that recovery and the console shows it. The native transcript is not converted between harnesses; record important decisions in memory, work items or the handoff (<a href="faq.html#context">Does each agent keep its context?</a>).</p>
 
 <h2 id="verifying">Verifying</h2>
 <table>
@@ -141,10 +177,26 @@ harness_profiles = {
 <li><strong>Build an image.</strong> <code>build/seat-&lt;name&gt;.Dockerfile</code>, pinning the version (the pins test checks it matches the adapter) and asserting it at build time.</li>
 <li><strong>Pass conformance.</strong> Add a <code>conformance.RunModel</code> test for each API it speaks, and a fetch rule to <code>build/harness-bins.sh</code>.</li>
 </ol>
-<div class="pager"><a href="configuration.html"><small>Previous</small>Configuration</a><a href="sandbox.html" style="text-align:right"><small>Next</small>Sandbox access</a></div>
-<p class="footer">Steadmesh documentation. Source: <code>docs/</code> in the repository.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="configuration.html" rel="prev"><small>Previous</small>Configuration</a><a class="next" href="tools.html" rel="next"><small>Next</small>Agent tools</a></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/harnesses.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>

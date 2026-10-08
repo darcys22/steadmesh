@@ -452,9 +452,25 @@ func (d *demo) write() {
 	_ = os.MkdirAll(dir, 0o755)
 	b, _ := json.MarshalIndent(d.res, "", "  ")
 	_ = os.WriteFile(filepath.Join(dir, d.mode+"-results.json"), append(b, '\n'), 0o644)
+	if err := renderDemoPage(); err != nil {
+		d.t.Log(err)
+	}
+}
+
+// renderDemoPage writes docs/demo-results.html from every recorded run in
+// docs/demo.
+func renderDemoPage() error {
+	var buf strings.Builder
+	if err := demoPage.Execute(&buf, map[string]any{"Runs": recordedRuns(), "Live": hasMode(recordedRuns(), "live")}); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(root, "docs", "demo-results.html"), []byte(buf.String()), 0o644)
+}
+
+func recordedRuns() []demoResult {
 	var runs []demoResult
 	for _, m := range []string{"fakes", "live"} {
-		raw, err := os.ReadFile(filepath.Join(dir, m+"-results.json"))
+		raw, err := os.ReadFile(filepath.Join(root, "docs", "demo", m+"-results.json"))
 		if err != nil {
 			continue
 		}
@@ -463,14 +479,15 @@ func (d *demo) write() {
 			runs = append(runs, r)
 		}
 	}
-	f, err := os.Create(filepath.Join(root, "docs", "demo-results.html"))
-	if err != nil {
-		d.t.Log(err)
-		return
-	}
-	defer f.Close()
-	if err := demoPage.Execute(f, map[string]any{"Runs": runs, "Live": hasMode(runs, "live")}); err != nil {
-		d.t.Log(err)
+	return runs
+}
+
+// TestDemoPage re-renders docs/demo-results.html from the recorded runs
+// without running the demo, e.g. after the site's shared blocks change
+// (hack/site.py sync updates the template below). It needs no cluster.
+func TestDemoPage(t *testing.T) {
+	if err := renderDemoPage(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -483,7 +500,17 @@ func hasMode(runs []demoResult, mode string) bool {
 	return false
 }
 
+// html/template drops HTML comments, but hack/site.py finds the shared site
+// blocks it keeps in sync by their <!-- shell:NAME --> markers, so the
+// markers are emitted through a function instead.
+var shellMarker = regexp.MustCompile(`<!-- (/?shell:\w+) -->`)
+
+func keepShellMarkers(page string) string {
+	return shellMarker.ReplaceAllString(page, `{{marker "$1"}}`)
+}
+
 var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
+	"marker": func(s string) template.HTML { return template.HTML("<!-- " + s + " -->") },
 	"stamp": func(t time.Time) string { return t.Format("2006-01-02 15:04 UTC") },
 	"pretty": func(b json.RawMessage) string {
 		var v any
@@ -493,51 +520,87 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
 		out, _ := json.MarshalIndent(v, "", "  ")
 		return string(out)
 	},
-}).Parse(`<!doctype html>
-<html lang="en">
+}).Parse(keepShellMarkers(`<!doctype html>
+<html lang="en" class="no-js">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Demo results · Steadmesh</title>
 <meta name="description" content="Results of the mixed-harness completion demo: what ran, the models and endpoints each seat actually used, and the outcome of each step.">
 <link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/demo-results.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Demo results · Steadmesh">
+<meta property="og:description" content="Results of the mixed-harness completion demo: what ran, the models and endpoints each seat actually used, and the outcome of each step.">
+<meta property="og:url" content="https://steadmesh.com/demo-results.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
 </head>
 <body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#demo">Demo</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
 <div class="layout">
+<!-- shell:sidebar -->
 <aside class="sidebar">
-  <button class="menu-toggle" type="button" aria-label="Toggle navigation">Menu</button>
-  <a class="brand" href="index.html">Steadmesh</a>
-  <div class="brand-sub">Platform documentation · v0.1</div>
-  <nav>
-    <div class="nav-group">Get started</div>
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
     <ul>
-      <li><a href="index.html">Overview</a></li>
+      <li><a href="docs/">Overview</a></li>
       <li><a href="quickstart.html">Quickstart</a></li>
       <li><a href="from-source.html">Run from source</a></li>
       <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
     </ul>
-    <div class="nav-group">Guides</div>
+    <div class="nav-group">Operate</div>
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
     <ul>
       <li><a href="configuration.html">Configuration</a></li>
       <li><a href="harnesses.html">Harnesses and models</a></li>
-      <li><a href="sandbox.html">Sandbox access</a></li>
       <li><a href="tools.html">Agent tools</a></li>
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Evidence</div>
+    <ul>
       <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="demo-results.html" aria-current="page">Demo results</a></li>
     </ul>
   </nav>
 </aside>
-<main>
+<!-- /shell:sidebar -->
+<main id="content">
 <h1>Demo results</h1>
 <p>The completion demo (<code>examples/mixed-harness</code>, <code>make demo</code>) runs an organisation whose engineering team uses three harnesses on three model endpoints: Claude Code on Anthropic Messages (lead), Codex on OpenAI Responses (engineer, the only seat with GitHub access) and Pi on an OpenAI Chat Completions endpoint (reviewer). The team collaborates without Linear, then with work items and a pull request; work is then published to Linear through an outage; finally the Anthropic key is rotated mid-session. This page is generated by the run.</p>
-<p>Runs against fakes and against real services are recorded separately. A fakes run uses a scripted model endpoint, so it proves the wiring (harness, model routing, tools, permissions, recovery), not model quality.</p>
+<p>Runs against fakes and against real services are recorded separately. A fakes run uses a scripted model endpoint and a fake GitHub, so it proves the wiring (harness, model routing, tools, permissions, recovery), not model quality. A real-services run uses the real model endpoints and a real GitHub repository. In both modes Slack and Linear are the in-cluster fakes, so the Linear outage is simulated and no Slack conversation is involved; the team is driven through the representatives' fake harness.</p>
+{{if .Live}}<p>The pull request from the real-services run is in a private demo repository, so its link in the evidence below needs access. A <a href="demo/pr-1.html">sanitized summary of the pull request (the demo repository is private)</a> is public.</p>{{end}}
 {{if not .Live}}<div class="callout"><p><strong>Real services:</strong> not recorded yet. Run <code>make demo DEMO_MODE=live</code> with the credentials listed in <code>examples/mixed-harness/README.md</code>; this page then shows both runs.</p></div>{{end}}
 {{range .Runs}}
 <h2>{{if eq .Mode "live"}}Real services{{else}}Fakes{{end}} run, {{stamp .StartedAt}}</h2>
@@ -556,10 +619,27 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
 </table>
 <details><summary>Configuration (examples/mixed-harness)</summary><pre><code>{{pretty .Config}}</code></pre></details>
 {{end}}
-<p class="footer">Steadmesh documentation. Generated by <code>tests/e2e/demo_test.go</code>.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="status.html" rel="prev"><small>Previous</small>Acceptance status</a><span></span></nav>
+<!-- /shell:pager -->
 </main>
 </div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Acceptance status</a>
+    <a href="demo-results.html">Demo results</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/tests/e2e/demo_test.go">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+</footer>
+<!-- /shell:footer -->
 <script src="assets/site.js"></script>
 </body>
 </html>
-`))
+`)))
