@@ -11,7 +11,7 @@ terraform {
   required_providers {
     steadmesh = {
       source  = "darcys22/steadmesh"
-      version = "~> 0.3.0"
+      version = "~> 0.4.0"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -65,26 +65,26 @@ provider "kubernetes" {
 # ---------------------------------------------------------------- instructions
 
 module "culture" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.3.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.4.0"
   name        = "steadmesh-culture"
   namespace   = local.namespace
   source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.3.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.4.0"
   name        = "steadmesh-role-representative"
   namespace   = local.namespace
   source_path = "${path.module}/instructions/representative.md"
 }
 
 module "team_base" {
-  source    = "github.com/darcys22/steadmesh//modules/team-base?ref=v0.3.0"
+  source    = "github.com/darcys22/steadmesh//modules/team-base?ref=v0.4.0"
   namespace = local.namespace
 }
 
 module "team_engineering" {
-  source    = "github.com/darcys22/steadmesh//modules/team-engineering?ref=v0.3.0"
+  source    = "github.com/darcys22/steadmesh//modules/team-engineering?ref=v0.4.0"
   namespace = local.namespace
   extends   = module.team_base.template_key
 }
@@ -92,7 +92,7 @@ module "team_engineering" {
 # ---------------------------------------------------------------- people
 
 module "representative" {
-  source           = "github.com/darcys22/steadmesh//modules/representative?ref=v0.3.0"
+  source           = "github.com/darcys22/steadmesh//modules/representative?ref=v0.4.0"
   for_each         = var.humans
   human            = each.key
   display_name     = each.value.display_name
