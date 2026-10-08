@@ -12,7 +12,9 @@ output "seat_images" {
     "claude-code" = "${local.images.seat_claudecode}:${local.tag}"
     "codex"       = "${local.images.seat_codex}:${local.tag}"
     "pi"          = "${local.images.seat_pi}:${local.tag}"
-    "fake"        = "${local.images.seat_fake}:${local.tag}"
+    # Pi with Chromium and Playwright MCP, for the browser access plugin.
+    "pi-browser" = "${local.images.seat_pi_browser}:${local.tag}"
+    "fake"       = "${local.images.seat_fake}:${local.tag}"
   }
 }
 

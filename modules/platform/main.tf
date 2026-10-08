@@ -28,6 +28,7 @@ locals {
     seat_claudecode = "${var.image_registry}/seat-claudecode"
     seat_codex      = "${var.image_registry}/seat-codex"
     seat_pi         = "${var.image_registry}/seat-pi"
+    seat_pi_browser = "${var.image_registry}/seat-pi-browser"
   }
 }
 
