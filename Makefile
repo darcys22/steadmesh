@@ -12,7 +12,7 @@ ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e demo e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e demo release e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -117,6 +117,14 @@ demo: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
 	$(LOADENV) DEMO_MODE=$(DEMO_MODE) KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestDemo -v -timeout 60m ./tests/e2e/...
+
+# Cut a release: bump the minor version from the latest tag (BUMP=patch|major,
+# or VERSION=X.Y.Z), pin the quickstart and provider docs, commit, tag and
+# push main and the tag, which starts the release workflow. Asks before
+# pushing unless YES=1; DRY_RUN=1 only shows what would change. See
+# hack/release.sh.
+release:
+	hack/release.sh
 
 # quickstart/ as a user runs it (terraform init -from-module, two stages), on a
 # fresh kind cluster, with local builds standing in for the published release.

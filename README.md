@@ -174,13 +174,18 @@ which publishes:
   which the Terraform Registry serves as `darcys22/steadmesh`;
 - **a GitHub release** in this repository.
 
-To cut a release:
+To cut a release, run `make release` on a clean, up-to-date `main`. It bumps the
+minor version from the latest tag (`BUMP=patch` or `BUMP=major`, or
+`VERSION=X.Y.Z`), runs `make lint test`, then does what you could do by hand:
 
 ```sh
 hack/set-version.sh X.Y.Z    # point quickstart/ and the provider doc examples at the new tag
 make provider-docs           # re-render provider/docs
 git commit -am "Release vX.Y.Z" && git tag vX.Y.Z && git push origin main vX.Y.Z
 ```
+
+It asks before pushing (`YES=1` skips the question); answering no leaves the
+release commit and tag local, with the commands to push or undo them.
 
 The workflow refuses a tag that `quickstart/` doesn't pin, and fails if
 `provider/docs` is out of date. The provider documentation is rendered by
