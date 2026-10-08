@@ -73,6 +73,22 @@ resource "kubernetes_secret_v1" "linear" {
   }
 }
 
+# Terminal chat (orgctl chat): one generated token per user in terminal_users.
+resource "random_password" "terminal" {
+  for_each = toset(var.terminal_users)
+  length   = 40
+  special  = false
+}
+
+resource "kubernetes_secret_v1" "terminal" {
+  count = length(var.terminal_users) > 0 ? 1 : 0
+  metadata {
+    name      = "terminal-credentials"
+    namespace = kubernetes_namespace_v1.system.metadata[0].name
+  }
+  data = { for u, p in random_password.terminal : u => p.result }
+}
+
 # One Secret per model endpoint: <key>-credentials with key api_key.
 resource "kubernetes_secret_v1" "model" {
   for_each = nonsensitive(toset(keys(var.model_api_keys)))

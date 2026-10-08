@@ -1,5 +1,6 @@
 // Command orgctl reports organisation status, runs a fresh readiness
-// verification (design §5.4) and opens the optional Steadmesh Console. It is
+// verification (design §5.4), opens the optional Steadmesh Console and chats
+// with a representative over a terminal connection. It is
 // used by the deployment workflow after every apply, including applies with
 // no Terraform changes (A25).
 package main
@@ -16,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,7 +42,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: orgctl status|verify|console [--context ctx] [--namespace ns] [--name org]")
+		return errors.New("usage: orgctl status|verify|console|chat [--context ctx] [--namespace ns] [--name org] [--user id]")
 	}
 	cmd := args[0]
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -49,8 +51,11 @@ func run(args []string) error {
 	ns := fs.String("namespace", "", "organisation namespace (default: all)")
 	name := fs.String("name", "", "organisation name (default: all in namespace)")
 	timeout := fs.Duration("timeout", 10*time.Minute, "verify timeout")
-	systemNS := fs.String("system-namespace", "steadmesh-system", "control-plane namespace (console)")
+	systemNS := fs.String("system-namespace", "steadmesh-system", "control-plane namespace (console, chat)")
 	port := fs.Int("port", 8090, "local port for the console")
+	user := fs.String("user", "", "chat: your external user ID on the terminal connection")
+	connection := fs.String("connection", "", "chat: terminal connection key (default: the one binding --user)")
+	token := fs.String("token", os.Getenv("STEADMESH_TERMINAL_TOKEN"), "chat: terminal token (default: read from the connection's Kubernetes Secret)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -73,6 +78,9 @@ func run(args []string) error {
 		return errors.New("no AgentOrganization found")
 	}
 	switch cmd {
+	case "chat":
+		return chat(ctx, c, orgs, chatOptions{kubeconfig: *kubeconfig, kctx: *kctx, systemNS: *systemNS,
+			user: *user, connection: *connection, token: *token})
 	case "status":
 		for i := range orgs {
 			printStatus(&orgs[i])
@@ -111,6 +119,9 @@ func newClient(kubeconfig, kctx string) (client.Client, error) {
 		return nil, err
 	}
 	if err := appsv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := corev1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return client.New(cfg, client.Options{Scheme: scheme})

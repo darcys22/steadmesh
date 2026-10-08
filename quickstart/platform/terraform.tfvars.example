@@ -6,6 +6,8 @@ kube_context = "my-cluster" # kubectl config get-contexts
 # Either give the credentials here (they are stored in this stage's state)...
 slack_bot_token = "xoxb-..."
 slack_app_token = "xapp-..."
+# Humans who chat from a terminal instead (orgctl chat); tokens are generated.
+# terminal_users = ["bob"]
 # One key per model endpoint your agents use (see ../organisation).
 model_api_keys = {
   anthropic = "sk-ant-..."

@@ -20,14 +20,19 @@ variable "display_name" {
 }
 
 variable "humans" {
-  description = "People with a personal representative: key => Slack user ID and display name. The defaults match the in-repo fake Slack server."
+  description = "People with a personal representative: key => channel (slack, or terminal for orgctl chat --user <key>), Slack user ID and display name. The defaults match the in-repo fake Slack server."
   type = map(object({
-    slack_user_id = string
+    channel       = optional(string, "slack")
+    slack_user_id = optional(string)
     display_name  = optional(string)
   }))
   default = {
     sean = { slack_user_id = "U0SEAN", display_name = "Sean's representative" }
     alex = { slack_user_id = "U0ALEX", display_name = "Alex's representative" }
+  }
+  validation {
+    condition     = alltrue([for h in var.humans : h.channel == "terminal" || (h.channel == "slack" && h.slack_user_id != null)])
+    error_message = "channel must be slack (with slack_user_id) or terminal."
   }
   validation {
     condition     = length(var.humans) >= 2
@@ -132,8 +137,9 @@ variable "linear_endpoint_ref" {
 variable "secret_refs" {
   description = "secret_ref per connection (foundation output secret_refs). References only; values stay in the control plane."
   type = object({
-    slack  = string
-    linear = string
+    slack    = string
+    terminal = optional(string, "k8s:terminal-credentials")
+    linear   = string
   })
   default = {
     slack  = "k8s:slack-credentials"

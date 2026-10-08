@@ -42,14 +42,16 @@ module "representative" {
   for_each         = var.humans
   human            = each.key
   display_name     = each.value.display_name
-  external_user_id = each.value.slack_user_id
-  connection       = "slack"
+  external_user_id = each.value.channel == "slack" ? each.value.slack_user_id : each.key
+  connection       = each.value.channel
   role_ref         = module.representative_role.ref
   harness_profile  = contains(keys(var.seat_harnesses), "representative_${each.key}") ? "seat_representative_${each.key}" : "primary"
 }
 
 locals {
   rep_seats = { for k, m in module.representative : k => m.seat_key }
+  # Communication connections, declared only when some human uses them.
+  channels = toset([for h in var.humans : h.channel])
 
   engineering_seats = merge({
     eng_lead = { role = "engineering_lead", display_name = "Engineering lead" }
@@ -131,20 +133,26 @@ resource "steadmesh_organization" "this" {
 
     access_profiles = length(var.access_profiles) > 0 ? var.access_profiles : null
 
-    connections = merge({
+    connections = merge({ for k, v in {
       slack = {
         adapter      = "slack"
         account_id   = var.slack_workspace_id
         endpoint_ref = var.slack_endpoint_ref == "" ? null : var.slack_endpoint_ref
         secret_ref   = var.secret_refs.slack
       }
-      }, { for k, v in {
-        linear = {
-          adapter      = "linear"
-          endpoint_ref = var.linear_endpoint_ref == "" ? null : var.linear_endpoint_ref
-          secret_ref   = var.secret_refs.linear
-          config       = { team_id = var.linear_team_id }
-        }
+      terminal = {
+        adapter      = "terminal"
+        account_id   = null
+        endpoint_ref = null
+        secret_ref   = var.secret_refs.terminal
+      }
+      } : k => v if contains(local.channels, k) }, { for k, v in {
+      linear = {
+        adapter      = "linear"
+        endpoint_ref = var.linear_endpoint_ref == "" ? null : var.linear_endpoint_ref
+        secret_ref   = var.secret_refs.linear
+        config       = { team_id = var.linear_team_id }
+      }
     } : k => v if var.enable_linear }, local.model_connections, var.extra_connections)
 
     # Representatives' access comes from seat_access too.

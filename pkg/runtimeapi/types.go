@@ -39,6 +39,7 @@ const (
 	PathModelProxy   = "/v1/model/"       // /v1/model/{connection}/... (Anthropic-compatible)
 	PathAccess       = "/v1/access"       // GET: the seat's current sandbox access (egress gateway, runner)
 	PathCredentials  = "/v1/credentials/" // POST /v1/credentials/{connection}: a sandbox-delivered credential
+	PathChannels     = "/v1/channels/"    // /v1/channels/{organization}/{connection}/...: humans reaching a dial-in communication adapter
 
 	// Controller-facing paths.
 	PathInternalSync  = "/internal/v1/organizations:sync" // POST

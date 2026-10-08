@@ -166,7 +166,7 @@ func specAttributes() map[string]schema.Attribute {
 			},
 		}),
 		"connections": keyed("Connections to external services. Secrets are references only.", map[string]schema.Attribute{
-			"adapter":      reqStr("Connector adapter: slack, linear, anthropic, openai or model (any compatible model endpoint)."),
+			"adapter":      reqStr("Connector adapter: slack, terminal, linear, anthropic, openai or model (any compatible model endpoint)."),
 			"account_id":   optStr("Authorised account or workspace identity."),
 			"endpoint_ref": optStr("Base URL override (fakes, self-hosted). For model connections, the API base, usually ending in /v1."),
 			"model": schema.SingleNestedAttribute{

@@ -179,3 +179,25 @@ func TestInstructionChangeChangesOnlyAffectedSeats(t *testing.T) {
 		t.Fatal("representative revision should not change")
 	}
 }
+
+func TestTerminalChannelBinding(t *testing.T) {
+	s, _ := load(t, filepath.Join(fixtures, "valid", "representative_and_worker.yaml"))
+	s.Connections["terminal"] = spec.Connection{Adapter: "terminal", SecretRef: "k8s:steadmesh-terminal"}
+	b := s.ChannelBindings["sean"]
+	b.Connection, b.ExternalUserID = "terminal", "sean"
+	s.ChannelBindings["sean"] = b
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatalf("terminal binding rejected: %v", err)
+	}
+	rep := m.Seats["representative_sean"]
+	if !rep.IsRepresentative {
+		t.Fatal("terminal-bound seat is not a representative")
+	}
+	for _, c := range rep.Capabilities {
+		if c.Resource == "connection:terminal" && slices.Equal(c.Operations, []string{"channel.reply"}) && slices.Equal(c.Targets, []string{"sean"}) {
+			return
+		}
+	}
+	t.Fatalf("terminal reply capability missing: %+v", rep.Capabilities)
+}

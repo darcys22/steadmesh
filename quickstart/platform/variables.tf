@@ -32,19 +32,21 @@ variable "existing_secret_refs" {
     Credentials you provision yourself, by reference (k8s:<secret name> in the
     control-plane namespace, or vault:<path>). A connection listed here gets no
     Terraform-managed Secret, so its value never enters Terraform state.
-    Expected keys: slack (bot_token, app_token), linear (api_key), and in
-    models one entry per model connection, e.g. anthropic or openai (api_key).
+    Expected keys: slack (bot_token, app_token), terminal (one token per
+    user, keyed by the user's terminal ID), linear (api_key), and in models
+    one entry per model connection, e.g. anthropic or openai (api_key).
   EOT
   type = object({
-    slack  = optional(string)
-    linear = optional(string)
-    models = optional(map(string), {})
+    slack    = optional(string)
+    terminal = optional(string)
+    linear   = optional(string)
+    models   = optional(map(string), {})
   })
   default = {}
 }
 
 variable "slack_bot_token" {
-  description = "Slack bot token (xoxb-...). Not needed with existing_secret_refs.slack."
+  description = "Slack bot token (xoxb-...). Only for humans who chat over Slack; not needed with existing_secret_refs.slack."
   type        = string
   sensitive   = true
   default     = null
@@ -55,6 +57,12 @@ variable "slack_app_token" {
   type        = string
   sensitive   = true
   default     = null
+}
+
+variable "terminal_users" {
+  description = "Terminal IDs of humans who chat with their representative from a terminal (orgctl chat), e.g. [\"alice\"]. Each gets a generated token in the Secret terminal-credentials."
+  type        = list(string)
+  default     = []
 }
 
 variable "model_api_keys" {

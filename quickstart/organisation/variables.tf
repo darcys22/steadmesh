@@ -10,16 +10,31 @@ variable "display_name" {
 }
 
 variable "humans" {
-  description = "People who get a personal representative: key => Slack member ID (U...) and the representative's display name."
+  description = <<-EOT
+    People who get a personal representative: key => how they chat and the
+    representative's display name. channel is slack (set slack_user_id, the
+    member ID U...) or terminal (chat with orgctl chat --user <key>; list the
+    key in the platform stage's terminal_users).
+  EOT
   type = map(object({
-    slack_user_id = string
+    channel       = optional(string, "slack")
+    slack_user_id = optional(string)
     display_name  = optional(string)
   }))
+  validation {
+    condition     = alltrue([for h in var.humans : contains(["slack", "terminal"], h.channel)])
+    error_message = "channel must be slack or terminal."
+  }
+  validation {
+    condition     = alltrue([for h in var.humans : h.channel != "slack" || h.slack_user_id != null])
+    error_message = "Humans on Slack need slack_user_id."
+  }
 }
 
 variable "slack_workspace_id" {
-  description = "ID of the Slack workspace (team) the app is installed in (T...)."
+  description = "ID of the Slack workspace (team) the app is installed in (T...). Needed when any human chats over Slack."
   type        = string
+  default     = null
 }
 
 variable "linear_team_id" {

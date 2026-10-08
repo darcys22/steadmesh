@@ -65,6 +65,7 @@ func DefaultCatalog() Catalog {
 		},
 		Connectors: map[string]ConnectorInfo{
 			"slack":     {Kind: "communication", Operations: []string{"channel.reply"}},
+			"terminal":  {Kind: "communication", Operations: []string{"channel.reply"}},
 			"linear":    {Kind: "tracker", Operations: []string{"project.read", "project.create", "task.read", "task.write", "comment.read", "comment.write"}},
 			"anthropic": {Kind: "model", Operations: []string{"model.infer"}, ModelAPIs: []string{harnesses.APIAnthropicMessages}, DefaultAuth: "x-api-key"},
 			"openai":    {Kind: "model", Operations: []string{"model.infer"}, ModelAPIs: []string{harnesses.APIOpenAIResponses, harnesses.APIOpenAIChat}, DefaultAuth: "bearer"},

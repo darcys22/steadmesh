@@ -14,7 +14,7 @@ variable "display_name" {
 }
 
 variable "external_user_id" {
-  description = "Verified external user ID on the communication connection, e.g. a Slack user ID."
+  description = "Verified external user ID on the communication connection, e.g. a Slack user ID, or the terminal ID for a terminal connection."
   type        = string
 }
 

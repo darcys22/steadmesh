@@ -27,6 +27,7 @@ import (
 	"github.com/darcys22/steadmesh/connectors/model"
 	"github.com/darcys22/steadmesh/connectors/secretref"
 	"github.com/darcys22/steadmesh/connectors/slack"
+	"github.com/darcys22/steadmesh/connectors/terminal"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
 	"github.com/darcys22/steadmesh/services/platform"
@@ -151,7 +152,7 @@ func run(c config, log *slog.Logger) error {
 		Auth:    auth.NewTokenReview(kube, st, c.controllerUser, c.consoleUser),
 		Console: c.consoleUser != "",
 		Factories: connections.Factories{
-			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": slack.New},
+			Communication: map[string]func(connectors.Config) (connectors.Communication, error){"slack": slack.New, "terminal": terminal.New},
 			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New, "github": github.New, "browser_session": browsersession.New},
 			Model:         map[string]func(connectors.Config) (connectors.Model, error){"anthropic": model.New, "openai": model.New, "model": model.New},
 		},

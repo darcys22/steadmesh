@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/darcys22/steadmesh/connectors"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
@@ -86,6 +87,10 @@ func New(cfg Config) http.Handler {
 	mux.HandleFunc("HEAD "+runtimeapi.PathModelProxy+"{connection}/api/hello", func(w http.ResponseWriter, _ *http.Request) {})
 	mux.Handle(runtimeapi.PathModelProxy+"{connection}/{rest...}", s.seatAuth(s.modelProxy))
 
+	// Dial-in communication adapters (e.g. terminal) authenticate humans
+	// themselves; no seat or controller credential is involved.
+	mux.HandleFunc(runtimeapi.PathChannels+"{org}/{connection}/{rest...}", s.channel)
+
 	internal := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.controllerAuth(h)) }
 	internal("POST "+runtimeapi.PathInternalSync, s.sync)
 	internal("GET "+runtimeapi.PathInternalOrgs+"{id}/runtime", s.runtime)
@@ -103,6 +108,28 @@ func New(cfg Config) http.Handler {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint")
 	})
 	return s.observe(mux)
+}
+
+// channel forwards a human's request to a dial-in communication adapter.
+func (s *server) channel(w http.ResponseWriter, r *http.Request) {
+	org, conn := r.PathValue("org"), r.PathValue("connection")
+	comm, err := s.Connections.Communication(org, conn)
+	if errors.Is(err, connections.ErrNotConfigured) {
+		writeError(w, http.StatusServiceUnavailable, "unavailable", "connection is not available")
+		return
+	}
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	in, ok := comm.(connectors.HTTPIngress)
+	if !ok {
+		writeError(w, http.StatusNotFound, "not_found", "connection does not accept inbound requests")
+		return
+	}
+	annotate(r.Context(), "organization_id", org, "connection", conn)
+	prefix := runtimeapi.PathChannels + org + "/" + conn
+	http.StripPrefix(prefix, in.Handler()).ServeHTTP(w, r)
 }
 
 func (s *server) readyz(w http.ResponseWriter, r *http.Request) {

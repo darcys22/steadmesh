@@ -146,6 +146,14 @@ type Communication interface {
 	Send(ctx context.Context, msg OutboundMessage) (string, error)
 }
 
+// HTTPIngress is implemented by communication adapters whose humans connect
+// to the platform instead of the platform dialling out. The platform mounts
+// the handler under /v1/channels/{organization}/{connection}/ with that prefix
+// removed; the handler authenticates every request itself.
+type HTTPIngress interface {
+	Handler() http.Handler
+}
+
 // Result is the outcome of a tracker operation.
 type Result struct {
 	Receipt string          `json:"receipt"`

@@ -52,8 +52,9 @@ module "steadmesh" {
 
 locals {
   create = {
-    slack  = var.existing_secret_refs.slack == null
-    linear = var.existing_secret_refs.linear == null && var.linear_api_key != null
+    slack    = var.existing_secret_refs.slack == null && var.slack_bot_token != null
+    terminal = var.existing_secret_refs.terminal == null && length(var.terminal_users) > 0
+    linear   = var.existing_secret_refs.linear == null && var.linear_api_key != null
   }
   # Model connections whose key is given here rather than by reference.
   model_keys = toset([for k in nonsensitive(keys(var.model_api_keys)) : k if !contains(keys(var.existing_secret_refs.models), k)])
@@ -62,8 +63,8 @@ locals {
 resource "terraform_data" "credentials" {
   lifecycle {
     precondition {
-      condition     = !local.create.slack || (var.slack_bot_token != null && var.slack_app_token != null)
-      error_message = "Set slack_bot_token and slack_app_token, or existing_secret_refs.slack."
+      condition     = (var.slack_bot_token == null) == (var.slack_app_token == null)
+      error_message = "Set both slack_bot_token and slack_app_token, or neither."
     }
     precondition {
       condition     = length(local.model_keys) + length(var.existing_secret_refs.models) > 0
@@ -82,6 +83,23 @@ resource "kubernetes_secret_v1" "slack" {
     bot_token = var.slack_bot_token
     app_token = var.slack_app_token
   }
+}
+
+# Terminal chat (orgctl chat): one random bearer token per user, keyed by the
+# user's terminal ID. orgctl reads it from this Secret.
+resource "random_password" "terminal" {
+  for_each = local.create.terminal ? toset(var.terminal_users) : toset([])
+  length   = 40
+  special  = false
+}
+
+resource "kubernetes_secret_v1" "terminal" {
+  count = local.create.terminal ? 1 : 0
+  metadata {
+    name      = "terminal-credentials"
+    namespace = module.steadmesh.system_namespace
+  }
+  data = { for u, p in random_password.terminal : u => p.result }
 }
 
 resource "kubernetes_secret_v1" "model" {

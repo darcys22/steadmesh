@@ -174,7 +174,7 @@
 <h3><code>connections</code></h3>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
-<tr><td><code>adapter</code></td><td><code>slack</code> (communication), <code>linear</code> (tracker), <code>github</code> (code host), <code>browser_session</code> (a signed-in browser session), or a model adapter: <code>anthropic</code>, <code>openai</code>, or <code>model</code> for any compatible endpoint</td></tr>
+<tr><td><code>adapter</code></td><td><code>slack</code> or <code>terminal</code> (communication; <code>terminal</code> is chatted with through <code>orgctl chat</code>, and its secret maps each user ID to a token), <code>linear</code> (tracker), <code>github</code> (code host), <code>browser_session</code> (a signed-in browser session), or a model adapter: <code>anthropic</code>, <code>openai</code>, or <code>model</code> for any compatible endpoint</td></tr>
 <tr><td><code>secret_ref</code></td><td>Required. Expected keys: Slack <code>bot_token</code>, <code>app_token</code>; Linear <code>api_key</code>; model connections <code>api_key</code>; GitHub <code>app_id</code>, <code>installation_id</code>, <code>private_key</code> (an App) or <code>token</code> (a PAT); browser_session <code>storage_state</code>.</td></tr>
 <tr><td><code>account_id</code></td><td>The authorised account: the Slack team ID (checked against <code>auth.test</code>), or the Linear organisation ID or URL key.</td></tr>
 <tr><td><code>endpoint_ref</code></td><td>Base URL override, for fakes or self-hosted endpoints. For model connections it is the API base, usually ending in <code>/v1</code>: <code>https://api.openai.com/v1</code>, <code>https://api.anthropic.com/v1</code>. Required for the <code>model</code> adapter.</td></tr>

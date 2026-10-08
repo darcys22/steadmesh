@@ -296,7 +296,7 @@ Optional:
 
 Required:
 
-- `adapter` (String) Connector adapter: slack, linear, anthropic, openai or model (any compatible model endpoint).
+- `adapter` (String) Connector adapter: slack, terminal, linear, anthropic, openai or model (any compatible model endpoint).
 
 Optional:
 

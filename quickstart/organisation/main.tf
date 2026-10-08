@@ -1,7 +1,7 @@
 # Stage 2 of 2: declare your organisation. Apply after ../platform.
 #
 # Each person in `humans` gets a personal representative they message over
-# Slack. Representatives delegate to a small engineering team (a lead and an
+# Slack or from a terminal (orgctl chat). Representatives delegate to a small engineering team (a lead and an
 # engineer). Each seat runs a harness (Claude Code, Codex or Pi) on a model
 # you choose. Edit instructions/*.md to set your culture and how
 # representatives behave; add seats, teams and routes below as you grow.
@@ -33,6 +33,21 @@ locals {
   platform  = data.terraform_remote_state.platform.outputs
   namespace = local.platform.organisation_namespace
   linear    = local.platform.secret_refs.linear != null
+  # Communication connections, declared only when some human uses them.
+  channels = toset([for h in var.humans : h.channel])
+}
+
+resource "terraform_data" "channels" {
+  lifecycle {
+    precondition {
+      condition     = !contains(local.channels, "slack") || (local.platform.secret_refs.slack != null && var.slack_workspace_id != null)
+      error_message = "A human chats over Slack: set slack_workspace_id here and the Slack tokens (or existing_secret_refs.slack) in the platform stage."
+    }
+    precondition {
+      condition     = !contains(local.channels, "terminal") || try(local.platform.secret_refs.terminal, null) != null
+      error_message = "A human chats from a terminal: list them in terminal_users (or set existing_secret_refs.terminal) in the platform stage."
+    }
+  }
 }
 
 provider "steadmesh" {
@@ -81,8 +96,8 @@ module "representative" {
   for_each         = var.humans
   human            = each.key
   display_name     = each.value.display_name
-  external_user_id = each.value.slack_user_id
-  connection       = "slack"
+  external_user_id = each.value.channel == "slack" ? each.value.slack_user_id : each.key
+  connection       = each.value.channel
   role_ref         = module.representative_role.ref
   harness_profile  = contains(keys(var.seat_harnesses), "representative_${each.key}") ? "seat_representative_${each.key}" : "primary"
 }
@@ -152,14 +167,20 @@ resource "steadmesh_organization" "this" {
     sandbox_profiles = { standard = {} }
 
     connections = merge(
-      {
+      { for k, v in {
         slack = {
           adapter      = "slack"
           account_id   = var.slack_workspace_id
           endpoint_ref = var.slack_endpoint_ref
           secret_ref   = local.platform.secret_refs.slack
         }
-      },
+        terminal = {
+          adapter      = "terminal"
+          account_id   = null
+          endpoint_ref = null
+          secret_ref   = try(local.platform.secret_refs.terminal, null)
+        }
+      } : k => v if contains(local.channels, k) },
       local.model_connections,
       { for k, v in {
         linear = {

@@ -110,6 +110,19 @@ curl -s localhost:8090/_test/posted | jq -r '.[] | "\(.channel): \(.text)"'</cod
 <p>That reply went from the message, through the platform's durable inbox, to Sean's representative seat, which woke up, ran a turn and replied through the outbox to Slack. No manual command was involved.</p>
 </li>
 <li>
+<p><strong>Or chat from a terminal.</strong> A human can reach their representative from a terminal instead of Slack. Put Sean on the terminal connection, which generates his token in the Secret <code>terminal-credentials</code>, and re-apply:</p>
+<pre><code>export TF_VAR_terminal_users='["sean"]'
+export TF_VAR_humans='{"sean":{"channel":"terminal","display_name":"Sean'"'"'s representative"},"alex":{"slack_user_id":"U0ALEX"}}'
+make -C examples apply
+
+bin/orgctl chat --context kind-steadmesh --user sean</code></pre>
+<pre><code>Chatting with sean's representative over terminal. Ctrl-D or Ctrl-C to leave.
+you&gt; hello from sean
+representative&gt; ack: hello from sean
+you&gt;</code></pre>
+<p><code>orgctl chat</code> port-forwards to the platform and reads the token from the connection's Secret; pass <code>--token</code> for a Vault reference. The representative can message you at any time with <code>messages.reply</code>. Anything it sends while no terminal is open waits in the platform's memory, up to 200 messages, and appears when you next connect. Those queued messages are lost if the platform restarts.</p>
+</li>
+<li>
 <p><strong>Delegate work and create a tracker project.</strong> The fake harness runs lines that start with <code>/</code> as commands (see <a href="tools.html#fake-harness">the script language</a>). This message asks the representative to delegate to the engineering lead. The lead creates a Linear project and the result comes back to Sean:</p>
 <pre><code>curl -s localhost:8090/_test/dm -d @- &lt;&lt;'JSON'
 {"user":"U0SEAN","text":"/delegate eng_lead /task\n/tool connections.invoke {\"connection\":\"linear\",\"operation\":\"project.create\",\"params\":{\"name\":\"Onboarding checklist\"}}"}

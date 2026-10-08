@@ -111,7 +111,7 @@ terraform apply</code></pre>
 <tr><th>To change</th><th>Edit</th></tr>
 <tr><td>How everyone works</td><td><code>instructions/culture.md</code></td></tr>
 <tr><td>How representatives behave</td><td><code>instructions/representative.md</code></td></tr>
-<tr><td>Who has a representative</td><td><code>humans</code> in <code>terraform.tfvars</code>. One Slack app serves them all.</td></tr>
+<tr><td>Who has a representative</td><td><code>humans</code> in <code>terraform.tfvars</code>. One Slack app serves them all. To chat from a terminal instead, set <code>channel = "terminal"</code> for that person, add their key to <code>terminal_users</code> in <code>platform/terraform.tfvars</code>, and run <code>orgctl chat --context &lt;your-context&gt; --user &lt;key&gt;</code>.</td></tr>
 <tr><td>The team</td><td><code>local.engineering</code> in <code>main.tf</code>, for example <code>reviewer = { role = "reviewer", display_name = "Reviewer" }</code>. Then add a route under <code>message_routes</code>: seats can only message along declared routes.</td></tr>
 <tr><td>What agents may do</td><td><code>grants</code>: a connection is usable only through a grant.</td></tr>
 </table>

@@ -70,6 +70,12 @@ variable "slack_app_token" {
   sensitive   = true
 }
 
+variable "terminal_users" {
+  description = "Terminal IDs of humans who chat from a terminal (orgctl chat); each gets a generated token in the Secret terminal-credentials. Match the keys of the organisation's humans with channel = \"terminal\"."
+  type        = list(string)
+  default     = []
+}
+
 variable "linear_api_key" {
   description = "Linear API key."
   type        = string
