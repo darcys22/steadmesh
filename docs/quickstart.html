@@ -131,7 +131,7 @@ set -a; source .env; set +a</code></pre>
 <pre><code>cd platform
 terraform init
 terraform apply</code></pre>
-<p>This creates the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces, Postgres, and the Steadmesh chart (the CRDs, the controller, the platform service, the egress gateway and the read-only console). It finishes with <code>Apply complete!</code> once the platform is running. There are two stages because the organisation is a custom resource that only exists once the platform is installed (<a href="faq.html#two-stages">why two stages?</a>).</p>
+<p>This creates the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces, Postgres, and the Steadmesh chart (the CRDs, the controller, the platform service, the egress gateway and the read-only console). It finishes with <code>Apply complete!</code> once the platform is running. There are two stages because the organisation is a custom resource that only exists once the platform is installed.</p>
 </li>
 <li>
 <p><strong>Create the organisation.</strong></p>

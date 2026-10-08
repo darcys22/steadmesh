@@ -83,8 +83,6 @@
 <nav class="toc" aria-label="Questions on this page">
 <p><strong>Setup and models</strong></p>
 <ul>
-<li><a href="#two-stages">Why are there two Terraform stages?</a></li>
-<li><a href="#modules">Should I write everything out or use the modules?</a></li>
 <li><a href="#api-keys">Where do API keys go, and which stage creates them?</a></li>
 <li><a href="#pi-key">Where is the Pi key?</a></li>
 <li><a href="#which-llm">Which LLM does it use?</a></li>
@@ -92,7 +90,6 @@
 <p><strong>Talking to the team and watching it</strong></p>
 <ul>
 <li><a href="#chat">How do I chat with my representative?</a></li>
-<li><a href="#orgctl-path">Why did <code>go install</code> not make <code>orgctl</code> available?</a></li>
 <li><a href="#watch">How do I see the organisation working?</a></li>
 <li><a href="#lease">What does “lease held” mean?</a></li>
 <li><a href="#run">What is a run?</a></li>
@@ -119,15 +116,6 @@
 <section id="setup" aria-labelledby="setup-h">
 <h2 id="setup-h">Setup and models</h2>
 
-<h3 id="two-stages">Why are there two Terraform stages?</h3>
-<p>The platform stage installs Steadmesh itself: its namespaces, Postgres, the Helm chart and the Kubernetes custom resource definitions (CRDs). The organisation stage declares a <code>steadmesh_organization</code>, whose resource types only exist once the platform is installed. Terraform has to be able to plan a resource before it can create it, so the two can't share one apply.</p>
-<p>How the two stages talk to each other depends on the route you follow. The repository <a href="quickstart.html">quickstart</a> reads the platform stage's outputs through a <code>terraform_remote_state</code> data source on local state. Other setups pass the same values to both roots, for example from one environment file, with no remote-state wiring. Follow the wiring of the route you are using.</p>
-<p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/quickstart/organisation/main.tf">quickstart/organisation/main.tf</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/quickstart/platform/main.tf">quickstart/platform/main.tf</a>.</p>
-
-<h3 id="modules">Should I write everything out or use the modules?</h3>
-<p>Either works. Steadmesh ships reusable modules for the platform install (<code>modules/platform</code>), Postgres (<code>modules/postgres</code>), instruction bundles (<code>modules/instruction-bundle</code>), team templates (<code>modules/team-base</code>, <code>modules/team-engineering</code>, <code>modules/team-accounting</code>) and representatives (<code>modules/representative</code>). Writing the same resources out by hand makes every setting visible while you learn. Using the modules is shorter and easier to upgrade. Neither changes how the product works.</p>
-<p>In both cases, pin the module <code>?ref=</code>, chart, image and provider versions to the same release. The <a href="tutorial.html">tutorial</a> builds a declaration step by step, and the <a href="configuration.html">configuration reference</a> lists every field. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/modules/README.md">modules/README.md</a>.</p>
-
 <h3 id="api-keys">Where do API keys go, and which stage creates them?</h3>
 <p>A model connection refers to a Kubernetes Secret in the platform namespace, or to a supported external secret-store reference. The platform's model proxy uses the real key. The seat talks to the proxy and doesn't need the provider key.</p>
 <p>Which Terraform stage creates the Secret is a choice made by each setup. The <a href="https://github.com/darcys22/steadmesh-example">example organisation</a> creates its model, GitHub and terminal Secrets in the <strong>organisation</strong> stage, from <code>TF_VAR_</code> variables in <code>.env</code>. The repository's quickstart modules create the Slack, terminal, model and Linear Secrets in the <strong>platform</strong> stage, from <code>model_api_keys</code> and related variables. You can also create the Secrets yourself and pass <code>existing_secret_refs</code>.</p>
@@ -152,19 +140,6 @@
 <p><span class="tag pending">not yet clean-install tested</span> <code>orgctl</code> always needs an explicit <code>--context</code> and never uses your current one. It reaches the platform through <code>kubectl port-forward</code> and reads your token from the connection's Secret, unless you pass <code>--token</code>. This is a local tool for your own cluster, not a hosted chat service.</p>
 <div class="callout warn"><p><strong>Reconnecting doesn't guarantee delivery.</strong> While you're disconnected, the terminal connector keeps up to 200 replies per user <em>in memory</em>. When that fills, it drops the oldest, and it loses the whole queue if the connector is rebuilt or the platform restarts. A connected stream that falls behind can also drop messages. The organisation's own message history is stored durably in Postgres and is separate from this delivery queue.</p></div>
 <p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/connectors/terminal/terminal.go">connectors/terminal/terminal.go</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/cmd/orgctl/chat.go">cmd/orgctl/chat.go</a>.</p>
-
-<h3 id="orgctl-path">Why did <code>go install</code> not make <code>orgctl</code> available?</h3>
-<p>Releases don't include prebuilt <code>orgctl</code> binaries, so you build it with Go (the module needs Go 1.27 or later):</p>
-<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.5.0</code></pre>
-<p><span class="tag pending">not yet clean-install tested</span> If <code>orgctl</code> still isn't found:</p>
-<ol>
-<li>Check that the install itself succeeded, without errors.</li>
-<li>Find where Go put the binary: <code>go env GOBIN</code>. If that's empty, it's <code>$(go env GOPATH)/bin</code>. Don't assume <code>~/go/bin</code>.</li>
-<li>Make sure that directory is on your <code>PATH</code>.</li>
-<li>If a version manager such as asdf manages Go, regenerate its shims (for asdf, <code>asdf reshim golang</code>).</li>
-<li>Confirm with <code>command -v orgctl</code> in the same terminal.</li>
-</ol>
-<p>From a clone, <code>make orgctl</code> builds it into <code>bin/orgctl</code>. Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/Makefile">Makefile</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/.github/workflows/release.yml">release workflow</a>.</p>
 
 <h3 id="watch">How do I see the organisation working?</h3>
 <p>Turn on the console by setting <code>enable_console = true</code> in the platform stage and applying. Then forward it to your machine:</p>

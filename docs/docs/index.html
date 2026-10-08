@@ -93,7 +93,7 @@
 
 <h2 id="what-it-is">What Steadmesh is and what it needs</h2>
 <p>You describe an organisation in an infrastructure repository: its culture, teams, seats, harnesses, memory, tools, communication routes and external connections. Running <code>terraform apply</code> provisions it on Kubernetes. When the apply reports ready, each person can message their own <strong>representative</strong>. The representative keeps persistent context, delegates to other seats through the routes you declared, and reports back. Work items the agents create can be mirrored to a tracker such as Linear, but the organisation does not depend on it.</p>
-<p>To run it you need a Kubernetes cluster whose CNI enforces NetworkPolicy, a default StorageClass, Terraform 1.5 or later and kubectl. For real work you also need credentials for the model providers your seats use, and a Slack app or terminal access for the people who talk to it. Model usage is billed by your provider. See <a href="../faq.html#two-stages">why there are two Terraform stages</a>.</p>
+<p>To run it you need a Kubernetes cluster whose CNI enforces NetworkPolicy, a default StorageClass, Terraform 1.5 or later and kubectl. For real work you also need credentials for the model providers your seats use, and a Slack app or terminal access for the people who talk to it. Model usage is billed by your provider.</p>
 
 <h2 id="choose-a-route">Choose a route</h2>
 <div class="cards">
@@ -149,9 +149,9 @@
 
 <h2 id="common-questions">Common questions</h2>
 <ul>
-<li>Prerequisites and layout: <a href="../faq.html#two-stages">Why are there two Terraform stages?</a> · <a href="../faq.html#clean-cluster">Is my kind cluster clean?</a></li>
+<li>Prerequisites and layout: <a href="../faq.html#clean-cluster">Is my kind cluster clean?</a></li>
 <li>Models: <a href="../faq.html#pi-key">Where is the Pi key?</a> · <a href="../faq.html#which-llm">Which LLM does it use?</a></li>
-<li>Talking to it: <a href="../faq.html#chat">How do I chat with my representative?</a> · <a href="../faq.html#orgctl-path">orgctl is not on my PATH</a></li>
+<li>Talking to it: <a href="../faq.html#chat">How do I chat with my representative?</a></li>
 <li>Watching it: <a href="../faq.html#watch">How do I see the organisation working?</a> · <a href="../faq.html#lease">What does “lease held” mean?</a></li>
 <li>Credentials: <a href="../faq.html#api-keys">Where do API keys go?</a> · <a href="../faq.html#filesystem-github">How do agents use GitHub?</a></li>
 <li>Persistence: <a href="../faq.html#context">Does each agent keep its context?</a> · <a href="../faq.html#data">Where is the data stored?</a></li>
