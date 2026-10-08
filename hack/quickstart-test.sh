@@ -11,7 +11,9 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 out="$root/out/quickstart"
 kctx="kind-steadmesh"
 kubectl=(kubectl --context "$kctx")
-version="0.1.0"
+# The local provider build stands in for the release the quickstart pins.
+version="$(perl -0ne 'print $1 if m{source\s+= "darcys22/steadmesh"\s+version\s+= "~> ([0-9.]+)"}' "$root/quickstart/organisation/main.tf")"
+[[ -n "$version" ]] || { echo "cannot read the provider version the quickstart pins" >&2; exit 1; }
 
 rm -rf "$out"
 mkdir -p "$out/qs"
