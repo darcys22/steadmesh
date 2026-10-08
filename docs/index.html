@@ -78,17 +78,35 @@
     <h2 id="demo-title">One request. Three harnesses. Shared work.</h2>
     <p class="section-lede">A lead, an engineer and a reviewer, each on a different harness and model, coordinate through messages and a shared note, create a work item and open a pull request. The run record also shows internal work continuing through a work-tracker outage.</p>
 
+    <!-- Demo video slot. When the recording is published, replace the
+         .video-placeholder div with the player (a <video controls> element
+         with a poster and captions, or an embed iframe with a title), and
+         update the hero's "See the demo results" button to "Watch the demo". -->
+    <figure class="video-slot" id="video" aria-labelledby="video-title">
+      <div class="video-placeholder">
+        <p class="video-badge">Coming soon</p>
+        <p class="video-title" id="video-title">Demo video</p>
+        <ol class="video-beats" aria-label="What the video will show">
+          <li>Request</li>
+          <li>Delegation</li>
+          <li>Review</li>
+          <li>Result</li>
+        </ol>
+        <p class="video-note">A screen recording of a team taking one request through to a pull request. It isn't published yet; until then, the recorded run below is the evidence.</p>
+      </div>
+    </figure>
+
     <div class="demo-grid">
       <ol class="run-steps">
         <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Bring up the mixed organisation</strong><span>Passed. Each seat answered a readiness probe through its own harness and model.</span></div></li>
         <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Collaborate through messages and a shared note</strong><span>Passed. The three seats wrote one plan together, with no work items and no tracker.</span></div></li>
-        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Repeat with a work item and a pull request</strong><span>Passed. The engineer claimed <code>W-1</code> and opened a pull request; the work item was <em>in review</em> when the run ended.</span></div></li>
+        <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Repeat with a work item and a pull request</strong><span>Passed. The engineer claimed <code>W-1</code> and opened a pull request adding signup documentation; the work item was <em>in review</em> when the run ended.</span></div></li>
         <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Keep working through a tracker outage</strong><span>Passed. With the (fake) Linear down the organisation stayed ready and created <code>W-2</code> internally; after recovery it was published once, with nothing duplicated.</span></div></li>
         <li class="skipped"><span class="mark" aria-hidden="true">–</span><div><strong>Rotate the Anthropic key mid-session</strong><span>Skipped in this run. Not claimed as proven with real services.</span></div></li>
         <li class="ok"><span class="mark" aria-hidden="true">✓</span><div><strong>Record the model endpoints actually used</strong><span>Passed. The platform logged every model request each seat made.</span></div></li>
       </ol>
 
-      <aside class="run-facts" aria-label="About this run">
+      <div class="run-facts">
         <h3>About this run</h3>
         <dl>
           <dt>Recorded</dt><dd>2026-10-08 00:15 UTC, real-services mode</dd>
@@ -98,8 +116,9 @@
           <dt>Harness versions</dt><dd>Claude Code 2.1.289, Codex 0.160.1, Pi 1.0.4 (pinned for this run)</dd>
         </dl>
         <p>Step times are one run's observations, not a benchmark.</p>
-        <p><a class="arrow-link" href="demo-results.html">Read the full run results</a></p>
-      </aside>
+        <p class="patch-note"><strong>The result:</strong> a pull request that adds a 21-line documentation file, <code>docs/signup.md</code>, describing a planned signup page. It documents the page; it does not implement it.</p>
+        <p class="links"><a class="arrow-link" href="demo/pr-1.html">View the recorded patch</a> <a class="arrow-link" href="demo-results.html">Read the full run results</a></p>
+      </div>
     </div>
   </div>
 </section>
@@ -212,9 +231,9 @@
     <h2 id="start-title">Start with the route that fits</h2>
     <div class="routes">
       <div class="route primary">
-        <h3>Install a release</h3>
-        <p>For your own Kubernetes cluster, with a NetworkPolicy-enforcing CNI, a default StorageClass, Terraform 1.5+ and kubectl. Connect Slack (or chat from a terminal) and the model credentials the seats use. Model usage is billed by your provider.</p>
-        <a class="btn" href="quickstart.html">Install Steadmesh</a>
+        <h3>Clone the example organisation</h3>
+        <p>Clone <code>steadmesh-example</code>, add an OpenAI-compatible model endpoint and a GitHub token for one test repository, and apply two Terraform stages to a kind cluster. You chat with your representative from the terminal; Slack is optional. Model usage is billed by your provider.</p>
+        <a class="btn" href="quickstart.html">Follow the quickstart</a>
       </div>
       <div class="route">
         <h3>Explore locally from source</h3>

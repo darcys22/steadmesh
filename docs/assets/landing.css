@@ -116,3 +116,18 @@
   .run-facts dd { margin-bottom: 8px; }
   .actions .btn { flex: 1 1 100%; }
 }
+
+/* Demo video slot: a 16:9 frame that holds the placeholder now and the player later. */
+.video-slot { max-width: 900px; margin: 0 auto 36px; }
+.video-slot video, .video-slot iframe { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 14px; background: var(--ink); }
+.video-placeholder { aspect-ratio: 16 / 9; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 10px; padding: 24px; border-radius: 14px; background: var(--ink); color: var(--on-ink); border: 1px solid var(--ink-line); }
+.video-badge { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--green); }
+.video-title { margin: 0; font-size: clamp(22px, 3vw, 30px); font-weight: 700; }
+.video-beats { list-style: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 0; margin: 6px 0; }
+.video-beats li { font: 600 14px var(--sans); padding: 6px 12px; border-radius: 999px; background: #1d2739; border: 1px solid var(--ink-line); }
+.video-beats li + li::before { content: "→ "; color: var(--on-ink-muted); }
+.video-note { margin: 0; max-width: 52ch !important; color: var(--on-ink-muted); font-size: 15.5px; }
+.patch-note { color: var(--text) !important; }
+@media (max-width: 600px) {
+  .video-placeholder { aspect-ratio: auto; min-height: 260px; }
+}

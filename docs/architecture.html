@@ -113,7 +113,7 @@
 <tr><td>External operation attempts</td><td>Operation ledger</td><td>Gateway</td></tr>
 <tr><td>Credentials</td><td>Kubernetes Secrets or Vault</td><td>Credential owners</td></tr>
 </table>
-<p>The organisation stage's Terraform state holds identifiers, declared values, secret <em>references</em> and computed outputs. It never holds conversations or memory, and runtime activity never causes drift. A stage that creates credential Secrets from Terraform variables, such as the quickstart's <code>platform/</code> or the example <code>foundation/</code>, does store those values in its own state; keep such state private, or create the Secrets outside Terraform and reference them.</p>
+<p>The <code>steadmesh_organization</code> resource's Terraform state holds identifiers, declared values, secret <em>references</em> and computed outputs. It never holds conversations or memory, and runtime activity never causes drift. A stage that creates credential Secrets from Terraform variables, such as the quickstart's <code>platform/</code>, the example repository's <code>organisation/</code> or the source tree's <code>examples/foundation/</code>, does store those values in its own state; keep such state private, or create the Secrets outside Terraform and reference them.</p>
 
 <h2 id="namespaces">Namespaces and services</h2>
 <ul>
@@ -145,12 +145,12 @@
 <h2 id="seat-pod">Seat Pod contract</h2>
 <ul>
 <li><strong>Workload.</strong> A StatefulSet with 0 or 1 replicas and one container running <code>/usr/local/bin/seat-runner</code>. It runs as uid 1000 and non-root, with a read-only root filesystem, all capabilities dropped and the <code>RuntimeDefault</code> seccomp profile. <code>automountServiceAccountToken</code> is false.</li>
-<li><strong>Identity.</strong> A projected token at <code>/var/run/steadmesh/token</code> with audience <code>steadmesh-gateway</code>, valid for 3600s and rotated by the kubelet. This is the seat's only credential, and the Kubernetes API rejects it.</li>
+<li><strong>Identity.</strong> A projected token at <code>/var/run/steadmesh/token</code> with audience <code>steadmesh-gateway</code>, valid for 3600s and rotated by the kubelet. By default this is the seat's only credential, and the Kubernetes API rejects it. A seat holds other credentials only when you grant them explicitly: a GitHub credential with <a href="sandbox.html#github">sandbox delivery</a>, or a signed-in <a href="sandbox.html#browser">browser session</a>. Those are readable inside the seat; see the credential boundary on that page.</li>
 <li><strong>Volumes.</strong> <code>/seat</code> is the persistent workspace: <code>workspace/</code> is the harness's working directory, <code>home/</code> is <code>HOME</code> and holds harness sessions, and <code>runner/</code> holds runner state. <code>/etc/steadmesh/manifest</code> is read-only and contains <code>manifest.json</code> (the resolved seat manifest) and <code>instructions.md</code> (the rendered instructions, in order). <code>/tmp</code> is an emptyDir. The runner creates the seat directories itself and fails clearly if they are not writable.</li>
 <li><strong>Environment.</strong> <code>STEADMESH_PLATFORM_URL</code>, <code>STEADMESH_TOKEN_FILE</code>, <code>STEADMESH_ORG_ID</code>, <code>STEADMESH_SEAT_ID</code>, <code>STEADMESH_SEAT_KEY</code>, <code>STEADMESH_CONFIG_REVISION</code>, <code>STEADMESH_HARNESS</code>, <code>STEADMESH_MANIFEST_DIR</code>, and <code>POD_UID</code> from the downward API.</li>
 <li><strong>Probes.</strong> <code>:8081/healthz</code>; <code>:8081/readyz</code> reports ready once the runner holds the lease and has loaded its bootstrap.</li>
 <li><strong>Termination.</strong> Grace period 300s. On SIGTERM the runner enters Quiescing: it lets the turn finish (interrupting it after 240s), checkpoints, reports Stopped and releases the lease.</li>
-<li><strong>Network.</strong> Ingress is denied. Egress is allowed only to the platform Pods on TCP 8080 and to DNS. The controller proves this with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
+<li><strong>Network.</strong> Ingress is denied. By default, egress is allowed only to the platform Pods on TCP 8080 and to DNS. A seat whose access profiles name hosts, such as GitHub for sandbox delivery or sites for the browser, can also reach the <a href="sandbox.html#egress-gateway">egress gateway</a>, which allows only those hosts. The controller proves the isolation with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
 <li><strong>Restarts.</strong> The StatefulSet uses the <code>OnDelete</code> update strategy, so only the controller decides when a Pod restarts.</li>
 </ul>
 

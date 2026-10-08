@@ -18,7 +18,16 @@ and the [acceptance status](https://steadmesh.com/status.html). The design is in
 and acceptance status is tracked in
 [`tests/acceptance/RESULTS.md`](tests/acceptance/RESULTS.md).
 
-## Quickstart: run agents in your cluster
+## Fastest start: the example organisation
+
+[darcys22/steadmesh-example](https://github.com/darcys22/steadmesh-example) is a
+four-seat organisation (representative, tech lead, senior engineer, reviewer) on
+Pi, with any OpenAI-compatible model endpoint and one GitHub repository. Clone it,
+fill in `.env`, apply `platform/` then `organisation/`, and chat from the terminal
+with `orgctl`. No Slack needed. Its README and the
+[quickstart](https://steadmesh.com/quickstart.html) walk through every step.
+
+## Quickstart: run agents in your cluster with Slack
 
 You don't need to clone this repository. Terraform downloads everything: the
 provider from the Terraform Registry, the platform chart and images from

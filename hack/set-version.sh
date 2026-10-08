@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Points quickstart/ and the provider documentation sources (provider/docs-examples,
 # provider/docs-templates) at a release: module ?ref= tags, the platform version
-# and the provider constraint. Also pins the ?ref= tags in the website
-# (docs/*.html, except the generated demo record) and README.md.
+# and the provider constraint. Also pins the ?ref= tags, orgctl installs and
+# release checkouts in the website (docs/*.html, except the generated demo
+# record), and the ?ref= tags in README.md.
 # Usage: hack/set-version.sh 0.2.0, then
 # `make provider-docs` to re-render provider/docs.
 # With --check, changes nothing and fails unless they already pin it.
@@ -29,6 +30,8 @@ dirs=(quickstart provider/docs-examples provider/docs-templates)
 pin_docs() { # root
   find "$1/docs" -maxdepth 2 -name '*.html' ! -name 'demo-results.html' -exec perl -pi -e "
     s#(github\.com/darcys22/steadmesh//[a-z/-]+)\?ref=v[0-9.]+#\$1?ref=v$v#g;
+    s#(darcys22/steadmesh/cmd/orgctl\@)v[0-9.]+#\$1v$v#g;
+    s#(git checkout )v[0-9.]+#\$1v$v#g;
   " {} +
   perl -pi -e "s#(github\.com/darcys22/steadmesh//[a-z/-]+)\?ref=v[0-9.]+#\$1?ref=v$v#g;" "$1/README.md"
 }

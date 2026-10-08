@@ -95,6 +95,13 @@
 <h2>Run it</h2>
 <ol class="steps">
 <li>
+<p><strong>Get the source.</strong> Clone the repository and check out the release this page documents. Every later command runs from the repository root.</p>
+<pre><code>git clone https://github.com/darcys22/steadmesh
+cd steadmesh
+git checkout v0.5.0</code></pre>
+<p>To work on unreleased changes, stay on <code>main</code> instead.</p>
+</li>
+<li>
 <p><strong>Build the tools and binaries.</strong> This installs <code>controller-gen</code> and <code>setup-envtest</code> into <code>./bin</code>, then builds every command, including the Terraform provider and <code>orgctl</code>.</p>
 <pre><code>make tools build</code></pre>
 </li>
