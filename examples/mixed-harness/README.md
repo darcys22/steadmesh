@@ -51,7 +51,7 @@ proves the wiring, not model quality.
 
 ## Credentials for the live demo
 
-Export these in your shell; never commit them.
+Export these in your shell, or put them in `.env` at the repository root (ignored by git; the make targets source it). Never commit them.
 
 | Variable | Use |
 | --- | --- |

@@ -97,6 +97,11 @@ kind-down:
 # ledger, messages) would not match the freshly started fakes. The example
 # Terraform state describes the deleted cluster, so it goes too. The cluster
 # is left running afterwards for inspection.
+# Credentials for the live targets and the live demo come from the
+# environment, or from .env in the repository root (ignored by git), which is
+# sourced by the shell so quoted values work: KEY=value or export KEY=value.
+LOADENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
+
 e2e: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
@@ -111,7 +116,7 @@ DEMO_MODE ?= fakes
 demo: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
-	DEMO_MODE=$(DEMO_MODE) KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestDemo -v -timeout 60m ./tests/e2e/...
+	$(LOADENV) DEMO_MODE=$(DEMO_MODE) KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestDemo -v -timeout 60m ./tests/e2e/...
 
 # quickstart/ as a user runs it (terraform init -from-module, two stages), on a
 # fresh kind cluster, with local builds standing in for the published release.
@@ -126,15 +131,15 @@ e2e-reset:
 
 # Live tests against real Slack, Linear and Anthropic. Requires credentials (see tests/live/README.md).
 live: kind-up kind-load provider orgctl
-	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags live -timeout 60m ./tests/live/...
+	$(LOADENV) KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags live -timeout 60m ./tests/live/...
 
-# Each real harness CLI on its real model endpoint, without a cluster:
-# ANTHROPIC_API_KEY, OPENAI_API_KEY and/or I14_API_KEY (see tests/live/README.md).
 # The github connector and sandbox credential flow on a real repository:
 # GITHUB_TOKEN and GITHUB_TEST_REPO (see tests/live/README.md).
 live-github:
-	$(GO) test -count=1 -tags live -run LiveGitHub -v -timeout 10m ./tests/live/...
+	$(LOADENV) $(GO) test -count=1 -tags live -run LiveGitHub -v -timeout 10m ./tests/live/...
 
+# Each real harness CLI on its real model endpoint, without a cluster:
+# ANTHROPIC_API_KEY, OPENAI_API_KEY and/or I14_API_KEY (see tests/live/README.md).
 live-harnesses:
 	build/harness-bins.sh
-	$(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...
+	$(LOADENV) $(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...

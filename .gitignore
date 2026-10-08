@@ -17,3 +17,6 @@
 /terraform-provider-steadmesh
 /dist/
 /egress
+
+# Local credentials for the live targets (see Makefile LOADENV).
+.env

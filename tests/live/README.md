@@ -10,7 +10,7 @@ from the fake-backed e2e suite are not enough.
 1. Complete the Slack and Linear setup in
    [Connect real services](../../docs/real-services.html),
    including installing the app from `docs/assets/slack-app-manifest.yaml`.
-2. Export the following variables.
+2. Export the following variables, or put them in `.env` at the repository root (ignored by git; the make targets source it).
 
 | Variable | Meaning |
 | --- | --- |
