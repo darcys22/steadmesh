@@ -17,21 +17,21 @@ The provider validates and compiles the declaration during `plan`, as soon as it
 # Instruction text is published as ConfigMaps in the organisation namespace and
 # referenced by content digest, so editing a file shows up as a plan change.
 module "culture" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.4.1"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "acme-culture"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.4.1"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "acme-role-representative"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/representative.md"
 }
 
 module "engineer_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.4.1"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "acme-role-engineer"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/engineer.md"
@@ -56,7 +56,7 @@ resource "steadmesh_organization" "acme" {
     harness_profiles = {
       claude = {
         adapter      = "claude-code"
-        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.4.1"
+        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.5.0"
         model        = { connection = "anthropic", id = "claude-sonnet-5-5" }
       }
       # Another seat could run Codex on OpenAI, or Pi on any compatible endpoint:
@@ -196,6 +196,7 @@ Optional:
 - `shared_workspaces` (Attributes Map) Shared workspaces. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--shared_workspaces))
 - `team_templates` (Attributes Map) Reusable team templates. Resolved by the provider before the object is written. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--team_templates))
 - `teams` (Attributes Map) Concrete teams. Membership is declared on seats. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--teams))
+- `timezone` (String) IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC.
 - `work_publication` (Attributes) Publish the work items of shared memory stores to a tracker so people can follow progress there. Optional: agents coordinate through memory and messages either way, and a failing tracker never blocks them. Personal stores are never published. (see [below for nested schema](#nestedatt--spec--work_publication))
 
 <a id="nestedatt--spec--access_profiles"></a>
@@ -289,6 +290,7 @@ Required:
 Optional:
 
 - `mode` (String) direct_message.
+- `timezone` (String) The human's IANA time zone; their representative reads and schedules times of day in it. Defaults to the organisation's.
 
 
 <a id="nestedatt--spec--connections"></a>
