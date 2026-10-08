@@ -1,0 +1,179 @@
+{
+  "mode": "live",
+  "started_at": "2026-10-08T00:15:27.50116Z",
+  "finished_at": "2026-10-08T00:23:58.476169Z",
+  "versions": {
+    "claude-code": "2.1.289",
+    "codex": "0.160.1",
+    "pi": "1.0.4"
+  },
+  "config": {
+    "enable_egress": true,
+    "enable_console": true,
+    "harness": "fake",
+    "seat_harnesses": {
+      "eng_lead": {
+        "adapter": "claude-code",
+        "model": {
+          "connection": "anthropic",
+          "id": "claude-sonnet-5-5"
+        }
+      },
+      "engineer": {
+        "adapter": "codex",
+        "model": {
+          "connection": "openai",
+          "id": "gpt-5.5"
+        }
+      },
+      "reviewer": {
+        "adapter": "pi",
+        "model": {
+          "connection": "i14",
+          "id": "qwen3.8-27b"
+        }
+      }
+    },
+    "model_connections": {
+      "anthropic": {
+        "adapter": "anthropic",
+        "secret_ref": "k8s:anthropic-credentials"
+      },
+      "openai": {
+        "adapter": "openai",
+        "secret_ref": "k8s:openai-credentials"
+      },
+      "i14": {
+        "adapter": "model",
+        "secret_ref": "k8s:i14-credentials",
+        "endpoint_ref": "https://api-dev.i14.ai/v1",
+        "model": {
+          "apis": [
+            "openai_chat"
+          ],
+          "models": [
+            {
+              "id": "qwen3.8-27b"
+            }
+          ]
+        }
+      }
+    },
+    "extra_connections": {
+      "github": {
+        "adapter": "github",
+        "secret_ref": "k8s:github-credentials"
+      }
+    },
+    "access_profiles": {
+      "github_engineer": {
+        "tools": {
+          "binaries": [
+            "git",
+            "gh"
+          ]
+        },
+        "github": {
+          "connection": "github",
+          "repos": [
+            "darcys22/flash-fresh"
+          ],
+          "permissions": {
+            "contents": "write",
+            "pull_requests": "write"
+          },
+          "delivery": "sandbox"
+        }
+      }
+    },
+    "seat_access": {
+      "engineer": [
+        "github_engineer"
+      ]
+    },
+    "enable_linear": false
+  },
+  "steps": [
+    {
+      "name": "bring up the platform and the mixed organisation",
+      "passed": true,
+      "seconds": 80,
+      "evidence": "each seat passed readiness with a probe turn through its own harness and model"
+    },
+    {
+      "name": "1. collaborate through messages and a shared note (no Linear, no work items)",
+      "passed": true,
+      "seconds": 18,
+      "evidence": "shared note notes/demo-login.md written by the lead, the engineer and the reviewer: # Demo: login page plan /  / Requested by: representative_sean. Coordinator: eng_lead. No work items; this note and messages only. /  / ## Goal / A simple login page (username/password form) that validates input and shows clear errors. /  / ## Acceptance criteria / - Form with username, password, su…"
+    },
+    {
+      "name": "2. the same with work items; the engineer opens a pull request",
+      "passed": true,
+      "seconds": 72,
+      "evidence": "engineering/W-1 owned by the engineer, status in_review; pull request https://github.com/darcys22/flash-fresh/pull/1"
+    },
+    {
+      "name": "3. publish work items to Linear; an outage never blocks the organisation",
+      "passed": true,
+      "seconds": 333,
+      "evidence": "W-1 published once; while Linear was down the organisation stayed ready (IntegrationsDegraded) and W-2 was created internally; after reconnecting W-2 was published, nothing twice"
+    },
+    {
+      "name": "4. rotate the Anthropic key mid-session",
+      "passed": true,
+      "skipped": true,
+      "seconds": 0,
+      "evidence": ""
+    },
+    {
+      "name": "record the models and endpoints each seat actually used",
+      "passed": true,
+      "seconds": 6,
+      "evidence": "3 seats; see the table"
+    }
+  ],
+  "seats": [
+    {
+      "key": "eng_lead",
+      "harness": "claude-code",
+      "requests": [
+        {
+          "connection": "anthropic",
+          "api": "anthropic_messages",
+          "model": "claude-sonnet-5-5",
+          "upstream_host": "api.anthropic.com",
+          "count": 25,
+          "ok": 25
+        }
+      ]
+    },
+    {
+      "key": "engineer",
+      "harness": "codex",
+      "requests": [
+        {
+          "connection": "openai",
+          "api": "openai_responses",
+          "model": "gpt-5.5",
+          "upstream_host": "api.openai.com",
+          "count": 41,
+          "ok": 41
+        }
+      ]
+    },
+    {
+      "key": "reviewer",
+      "harness": "pi",
+      "requests": [
+        {
+          "connection": "i14",
+          "api": "openai_chat",
+          "model": "qwen3.8-27b",
+          "upstream_host": "api-dev.i14.ai",
+          "count": 24,
+          "ok": 24
+        }
+      ]
+    }
+  ]
+}
