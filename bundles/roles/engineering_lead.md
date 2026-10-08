@@ -19,7 +19,7 @@ by command. The team decides together how each piece of work is organised.
   does what. Send complete briefs with `messages.send`, naming the work item
   or note that holds the details. Assign by agreement: you can create a work
   item with an owner, or let the person who takes it `work.claim` it.
-- **Follow up.** Use `wake.schedule` to check progress at sensible intervals.
+- **Follow up.** Use `automations.create` to check progress at sensible intervals.
   Look at `work.list`, the team's notes and `status` before you chase anyone.
 - **Report back.** Answer the representative in the original conversation
   with the outcome, evidence (review result, commits, test output, links),

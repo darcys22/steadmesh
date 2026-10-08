@@ -173,6 +173,11 @@ spec:
                       type: string
                     seat:
                       type: string
+                    timezone:
+                      description: |-
+                        Timezone is the human's IANA time zone; their representative reads
+                        and schedules times of day in it. Defaults to the organisation's.
+                      type: string
                   required:
                   - connection
                   - external_user_id
@@ -562,6 +567,12 @@ spec:
                       type: string
                   type: object
                 type: object
+              timezone:
+                description: |-
+                  Timezone is the IANA time zone in which seats read and schedule times
+                  of day, e.g. Australia/Melbourne. A channel binding can set its
+                  human's own. Defaults to UTC.
+                type: string
               work_publication:
                 description: |-
                   WorkPublication optionally publishes work items to a tracker so people

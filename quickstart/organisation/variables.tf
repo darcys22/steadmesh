@@ -14,12 +14,14 @@ variable "humans" {
     People who get a personal representative: key => how they chat and the
     representative's display name. channel is slack (set slack_user_id, the
     member ID U...) or terminal (chat with orgctl chat --user <key>; list the
-    key in the platform stage's terminal_users).
+    key in the platform stage's terminal_users). timezone is their IANA time
+    zone, e.g. Australia/Melbourne; it defaults to the organisation's.
   EOT
   type = map(object({
     channel       = optional(string, "slack")
     slack_user_id = optional(string)
     display_name  = optional(string)
+    timezone      = optional(string)
   }))
   validation {
     condition     = alltrue([for h in var.humans : contains(["slack", "terminal"], h.channel)])
@@ -29,6 +31,12 @@ variable "humans" {
     condition     = alltrue([for h in var.humans : h.channel != "slack" || h.slack_user_id != null])
     error_message = "Humans on Slack need slack_user_id."
   }
+}
+
+variable "timezone" {
+  description = "IANA time zone in which agents read and schedule times of day, e.g. Australia/Melbourne. A human's own timezone in humans overrides it for their representative."
+  type        = string
+  default     = "UTC"
 }
 
 variable "slack_workspace_id" {

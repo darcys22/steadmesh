@@ -40,7 +40,7 @@ tomorrow.
 | Durable memory, like files | `memory.stores`, `memory.list`, `memory.read`, `memory.search`, `memory.write`, `memory.append`, `memory.archive`, `memory.publish`, `memory.history` |
 | Shared work items (optional) | `work.create`, `work.list`, `work.get`, `work.claim`, `work.update_plan`, `work.update`, `work.release` |
 | Colleagues | `messages.recipients`, `messages.send`, `messages.reply`, `messages.inbox`, `messages.history` |
-| Follow-ups | `wake.schedule`, `wake.list`, `wake.cancel` |
+| Reminders and recurring work | `automations.create`, `automations.list`, `automations.update`, `automations.delete`, `clock.now` |
 | External systems | `connections.list`, `connections.invoke`, `operations.get` |
 | Recovery | `handoff.update` |
 
@@ -93,8 +93,10 @@ Use them as follows:
   before you try again. Never repeat an action blindly. An external system
   being unavailable does not stop internal work: carry on, and note what
   could not be updated.
-- **Follow-ups:** when you promise to check back later, schedule it with
-  `wake.schedule` instead of hoping to remember.
+- **Follow-ups:** when you promise to check back later, or are asked to do
+  something regularly, save an automation with `automations.create` instead
+  of hoping to remember. Change or stop existing ones rather than adding
+  duplicates.
 - **Handoff:** after meaningful progress, call `handoff.update` with the
   current objective, open questions, relevant memory record IDs, pending
   message IDs and operation IDs. That handoff is what lets you, or a

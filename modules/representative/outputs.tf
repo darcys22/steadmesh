@@ -37,6 +37,7 @@ output "channel_bindings" {
       external_user_id = var.external_user_id
       seat             = local.seat_key
       mode             = "direct_message"
+      timezone         = var.timezone
     }
   }
 }

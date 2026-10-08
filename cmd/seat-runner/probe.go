@@ -129,7 +129,7 @@ func (r *Runner) probeHarness(ctx context.Context, d runtimeapi.InboxDelivery) (
 	defer stop()
 	msg := d.Message
 	msg.Body = harnesses.ProbePrompt
-	res, err := a.Deliver(ctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: msg})
+	res, err := a.Deliver(ctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: msg, Timezone: r.boot.Self.Timezone})
 	// Events emitted before Deliver returned are observed once flushed.
 	fctx, cancel := context.WithTimeout(r.workCtx, 10*time.Second)
 	fwd.Flush(fctx)

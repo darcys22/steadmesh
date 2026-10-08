@@ -214,6 +214,9 @@ type Delivery struct {
 	// Passive are queued messages (sent with wake=false) handed over with
 	// this turn. They are context, not separate requests to answer.
 	Passive []runtimeapi.Envelope
+	// Timezone is the seat's IANA time zone; the envelope shows the current
+	// time in it.
+	Timezone string
 }
 
 // Turn statuses: technical completion only.

@@ -67,3 +67,9 @@ variable "memory_retention" {
   type        = string
   default     = "retain"
 }
+
+variable "timezone" {
+  description = "The human's IANA time zone, e.g. Australia/Melbourne. Their representative reads and schedules times of day in it. Null uses the organisation's."
+  type        = string
+  default     = null
+}

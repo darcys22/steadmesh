@@ -201,3 +201,38 @@ func TestTerminalChannelBinding(t *testing.T) {
 	}
 	t.Fatalf("terminal reply capability missing: %+v", rep.Capabilities)
 }
+
+func TestTimezones(t *testing.T) {
+	s, _ := load(t, filepath.Join(fixtures, "valid", "representative_and_worker.yaml"))
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Spec.Timezone != "UTC" || m.Seats["reviewer"].Timezone != "UTC" {
+		t.Fatalf("default time zone = %q / %q", m.Spec.Timezone, m.Seats["reviewer"].Timezone)
+	}
+	s.Timezone = "Europe/London"
+	b := s.ChannelBindings["sean"]
+	b.Timezone = "Australia/Melbourne"
+	s.ChannelBindings["sean"] = b
+	if m, err = compile.Compile(s, compile.DefaultCatalog()); err != nil {
+		t.Fatal(err)
+	}
+	if m.Seats["reviewer"].Timezone != "Europe/London" || m.Seats["representative_sean"].Timezone != "Australia/Melbourne" {
+		t.Fatalf("time zones = %q / %q", m.Seats["reviewer"].Timezone, m.Seats["representative_sean"].Timezone)
+	}
+	for path, mutate := range map[string]func(*spec.OrganizationSpec){
+		"timezone": func(o *spec.OrganizationSpec) { o.Timezone = "Melbourne" },
+		"channel_bindings.sean.timezone": func(o *spec.OrganizationSpec) {
+			b := o.ChannelBindings["sean"]
+			b.Timezone = "Local"
+			o.ChannelBindings["sean"] = b
+		},
+	} {
+		bad, _ := load(t, filepath.Join(fixtures, "valid", "representative_and_worker.yaml"))
+		mutate(&bad)
+		if _, err := compile.Compile(bad, compile.DefaultCatalog()); err == nil || !strings.Contains(err.Error(), path) {
+			t.Errorf("%s: err = %v", path, err)
+		}
+	}
+}

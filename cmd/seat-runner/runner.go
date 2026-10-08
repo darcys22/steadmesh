@@ -593,7 +593,8 @@ func (r *Runner) handleDelivery(stop context.Context, d runtimeapi.InboxDelivery
 	tctx, cancel := context.WithTimeout(r.workCtx, r.cfg.TurnTimeout)
 	defer cancel()
 	log.Info("turn started")
-	tr, err := r.adapter.Deliver(tctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive})
+	tr, err := r.adapter.Deliver(tctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive,
+		Timezone: r.boot.Self.Timezone})
 	fctx, fcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	r.fwd.Flush(fctx)
 	fcancel()

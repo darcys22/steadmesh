@@ -14,7 +14,6 @@ import (
 	"github.com/darcys22/steadmesh/services/connections"
 	"github.com/darcys22/steadmesh/services/gateway"
 	"github.com/darcys22/steadmesh/services/policy"
-	"github.com/darcys22/steadmesh/services/scheduler"
 	"github.com/darcys22/steadmesh/services/store"
 )
 
@@ -51,7 +50,10 @@ func Self(seat *store.Seat, org *store.Organization) runtimeapi.Self {
 		ConfigRevision: seat.ConfigRevision, PolicyRevision: seat.PolicyRevision, ChannelBindings: sm.ChannelBindings,
 		Instructions: []runtimeapi.InstructionInfo{}, MemoryStores: []runtimeapi.MemoryStoreInfo{},
 		Recipients: []runtimeapi.RecipientInfo{}, Connections: []runtimeapi.ConnectionInfo{},
-		RetiringUntil: seat.RetireBy,
+		RetiringUntil: seat.RetireBy, Timezone: sm.Timezone,
+	}
+	if out.Timezone == "" {
+		out.Timezone = "UTC"
 	}
 	for _, i := range sm.Instructions {
 		out.Instructions = append(out.Instructions, runtimeapi.InstructionInfo{Ref: i.Ref, Scope: i.Scope, Order: i.Order})
@@ -150,55 +152,6 @@ func (r *Registry) handoff(ctx context.Context, c *Call) (any, error) {
 		return nil, err
 	}
 	return map[string]any{"saved": true}, nil
-}
-
-func (r *Registry) wakeTools() []*tool {
-	return []*tool{
-		{name: "wake.schedule", description: "Schedule a durable future wake of this seat: once (at, RFC 3339) or recurring (every, e.g. \"24h\", at least 1m). The note is delivered with the wake.",
-			schema:   `{"type":"object","properties":{"at":{"type":"string","format":"date-time"},"every":{"type":"string"},"note":{"type":"string","maxLength":2048}},"additionalProperties":false}`,
-			mutating: true, allowed: always, handle: r.wakeSchedule},
-		{name: "wake.list", description: "List this seat's active wake schedules.",
-			schema: `{"type":"object","properties":{},"additionalProperties":false}`, allowed: always,
-			handle: func(ctx context.Context, c *Call) (any, error) {
-				s, err := r.d.Store.Schedules(ctx, c.Seat.ID)
-				return map[string]any{"schedules": nonNilSlice(s)}, err
-			}},
-		{name: "wake.cancel", description: "Cancel one of this seat's wake schedules.",
-			schema:   `{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`,
-			mutating: true, allowed: always, handle: r.wakeCancel},
-	}
-}
-
-func (r *Registry) wakeSchedule(ctx context.Context, c *Call) (any, error) {
-	var a struct {
-		At    string `json:"at"`
-		Every string `json:"every"`
-		Note  string `json:"note"`
-	}
-	if err := decode(c, &a); err != nil {
-		return nil, err
-	}
-	if len(a.Note) > 2048 {
-		return nil, toolErr("invalid", "note exceeds 2048 bytes")
-	}
-	sched, next, err := scheduler.Parse(a.At, a.Every, time.Now())
-	if err != nil {
-		return nil, toolErr("invalid", "%s", err.Error())
-	}
-	return r.d.Store.CreateSchedule(ctx, c.fence(), c.Seat.OrganizationID, sched, next, a.Note)
-}
-
-func (r *Registry) wakeCancel(ctx context.Context, c *Call) (any, error) {
-	var a struct {
-		ID string `json:"id"`
-	}
-	if err := decode(c, &a); err != nil {
-		return nil, err
-	}
-	if err := r.d.Store.CancelSchedule(ctx, c.fence(), a.ID); err != nil {
-		return nil, err
-	}
-	return map[string]any{"cancelled": a.ID}, nil
 }
 
 func hasInvocable(sm *compile.SeatManifest, org *compile.Manifest) bool {

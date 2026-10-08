@@ -1,70 +1,21 @@
-// Package scheduler runs the platform's durable background work: firing wake
-// schedules (§9.3), returning expired delivery leases to the queue,
+// Package scheduler runs the platform's durable background work: running
+// due automations (§9.3), returning expired delivery leases to the queue,
 // recording interrupted connector attempts as unknown, and refreshing the
 // operational gauges (§14).
 package scheduler
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/darcys22/steadmesh/services/metrics"
 	"github.com/darcys22/steadmesh/services/store"
 )
 
-// MinInterval is the shortest recurring wake interval.
-const MinInterval = time.Minute
-
-const everyPrefix = "@every "
-
-// Parse validates a wake request: either a one-off RFC 3339 time or a
-// recurring interval. It returns the stored schedule text and first trigger.
-func Parse(at, every string, now time.Time) (string, time.Time, error) {
-	switch {
-	case at != "" && every != "":
-		return "", time.Time{}, errors.New("give either at or every, not both")
-	case at != "":
-		t, err := time.Parse(time.RFC3339, at)
-		if err != nil {
-			return "", time.Time{}, fmt.Errorf("at must be an RFC 3339 time: %w", err)
-		}
-		return t.UTC().Format(time.RFC3339), t, nil
-	case every != "":
-		d, err := time.ParseDuration(every)
-		if err != nil || d < MinInterval {
-			return "", time.Time{}, fmt.Errorf("every must be a duration of at least %s", MinInterval)
-		}
-		return everyPrefix + d.String(), now.Add(d), nil
-	default:
-		return "", time.Time{}, errors.New("give at or every")
-	}
-}
-
-// Next is the store.NextFunc for schedules produced by Parse. Missed
-// intervals are skipped rather than fired in a burst.
-func Next(schedule string, fired, now time.Time) (time.Time, bool) {
-	rest, ok := strings.CutPrefix(schedule, everyPrefix)
-	if !ok {
-		return time.Time{}, false
-	}
-	d, err := time.ParseDuration(rest)
-	if err != nil || d < MinInterval {
-		return time.Time{}, false
-	}
-	next := fired.Add(d)
-	if !next.After(now) {
-		next = next.Add(now.Sub(next).Truncate(d) + d)
-	}
-	return next, true
-}
-
 // Store is the persistence the loop needs.
 type Store interface {
-	FireDue(ctx context.Context, now time.Time, limit int, next store.NextFunc) (int, error)
+	FireDue(ctx context.Context, now time.Time, limit int) (int, error)
 	RequeueExpired(ctx context.Context) (int, error)
 	ExpireStaleOperations(ctx context.Context, olderThan time.Duration) (int64, error)
 	Gauges(ctx context.Context) (*store.Gauges, error)
@@ -104,9 +55,9 @@ func (l *Loop) Tick(ctx context.Context) {
 		}
 	}
 	for {
-		n, err := l.Store.FireDue(ctx, time.Now(), 100, Next)
-		report("fire wake schedules", err)
-		l.Metrics.SchedulesFired.Add(float64(n))
+		n, err := l.Store.FireDue(ctx, time.Now(), 100)
+		report("run due automations", err)
+		l.Metrics.AutomationRuns.Add(float64(n))
 		if err != nil || n < 100 {
 			break
 		}

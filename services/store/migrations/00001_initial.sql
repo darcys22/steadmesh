@@ -274,20 +274,31 @@ CREATE TABLE connector_operations (
     UNIQUE (organization_id, connection, idempotency_key)
 );
 
-CREATE TABLE wake_schedules (
+-- Named instructions a seat runs for itself on a schedule (§9.3).
+CREATE TABLE automations (
     id              uuid PRIMARY KEY,
     organization_id uuid NOT NULL REFERENCES organizations(id),
     seat_id         uuid NOT NULL REFERENCES seats(id),
-    -- RFC3339 one-off time or interval (e.g. "@every 1h")
-    schedule        text NOT NULL,
-    next_trigger_at timestamptz NOT NULL,
-    note            text NOT NULL DEFAULT '',
-    author_seat_id  uuid NOT NULL REFERENCES seats(id),
-    last_fired_at   timestamptz,
-    active          boolean NOT NULL DEFAULT true,
-    created_at      timestamptz NOT NULL DEFAULT now()
+    name            text NOT NULL,
+    instruction     text NOT NULL,
+    -- pkg/recur Rule: once, interval or calendar, with its time zone
+    rule            jsonb NOT NULL,
+    -- active, paused, completed (no further runs), deleted
+    status          text NOT NULL DEFAULT 'active',
+    next_run_at     timestamptz,
+    last_run_at     timestamptz,
+    -- the message queued by the last run; a run is skipped while it is
+    -- still waiting or in progress
+    last_message_id uuid,
+    runs            int NOT NULL DEFAULT 0,
+    skipped_runs    int NOT NULL DEFAULT 0,
+    max_runs        int,
+    run_until       timestamptz,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    updated_at      timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX wake_schedules_due ON wake_schedules (next_trigger_at) WHERE active;
+CREATE INDEX automations_due ON automations (next_run_at) WHERE status = 'active';
+CREATE UNIQUE INDEX automations_name ON automations (seat_id, lower(name)) WHERE status IN ('active', 'paused');
 
 CREATE TABLE artifacts (
     id              uuid PRIMARY KEY,
@@ -367,7 +378,7 @@ CREATE INDEX work_publications_due ON work_publications (next_attempt_at) WHERE 
 -- +goose Down
 DROP TRIGGER deliveries_notify ON deliveries;
 DROP FUNCTION notify_delivery();
-DROP TABLE work_publications, connection_checks, artifacts, wake_schedules, connector_operations, handoffs, sessions,
+DROP TABLE work_publications, connection_checks, artifacts, automations, connector_operations, handoffs, sessions,
     execution_events, executions, memory_revisions, memory_records, memory_stores, outbox,
     deliveries, messages, conversations, execution_leases, seats, organizations;
 DROP FUNCTION memory_tags_text(text[]);

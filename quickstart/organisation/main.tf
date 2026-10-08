@@ -98,6 +98,7 @@ module "representative" {
   display_name     = each.value.display_name
   external_user_id = each.value.channel == "slack" ? each.value.slack_user_id : each.key
   connection       = each.value.channel
+  timezone         = each.value.timezone
   role_ref         = module.representative_role.ref
   harness_profile  = contains(keys(var.seat_harnesses), "representative_${each.key}") ? "seat_representative_${each.key}" : "primary"
 }
@@ -143,6 +144,7 @@ resource "steadmesh_organization" "this" {
   wait_for_ready = true
 
   spec = {
+    timezone       = var.timezone
     culture_refs   = [module.culture.ref]
     team_templates = merge(module.team_base.team_templates, module.team_engineering.team_templates)
     teams          = { engineering = { template = module.team_engineering.template_key } }

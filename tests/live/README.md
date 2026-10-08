@@ -41,6 +41,20 @@ Each case first checks the endpoint as readiness does (a minimal request for
 the API and model), then the turn. The log names the model, API and host
 each request went to.
 
+## Do models use the automation tools well?
+
+`make live-automations` measures the scheduling interface with real models.
+Each harness (claude-code and pi with `ANTHROPIC_API_KEY`, codex with
+`OPENAI_API_KEY`) plays a representative whose human, in Melbourne, asks in
+turn: remind me in 20 minutes; every weekday at 9am check the team and only
+tell me if something needs attention; move that check to 10am; pause it;
+resume it; cancel the reminder. It runs against a real platform (tools,
+store and scheduler, with Postgres from testcontainers; needs Docker) and
+fails when the automations left behind are wrong: a duplicate, a lost
+weekday, the wrong time zone or a missed pause. The log shows each turn's
+tool calls, reply and automations, and how many turns answered through
+`messages.reply`.
+
 The test applies the example stages with `harness=claude-code`. It checks the
 following, then leaves the organisation running for inspection
 (`make -C examples teardown` removes it):

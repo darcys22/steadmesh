@@ -88,8 +88,8 @@ func TestDescriptorsAreFilteredAndValid(t *testing.T) {
 	if rep := names("rep_b"); rep["work.create"] || rep["work.list"] {
 		t.Errorf("seat without a shared store offered work tools: %v", rep)
 	}
-	if len(r.tools) != 30 {
-		t.Errorf("registry has %d tools, want the 30 of docs/tools.html", len(r.tools))
+	if len(r.tools) != 32 {
+		t.Errorf("registry has %d tools, want the 32 of docs/tools.html", len(r.tools))
 	}
 }
 

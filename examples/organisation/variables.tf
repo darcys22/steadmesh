@@ -25,6 +25,7 @@ variable "humans" {
     channel       = optional(string, "slack")
     slack_user_id = optional(string)
     display_name  = optional(string)
+    timezone      = optional(string)
   }))
   default = {
     sean = { slack_user_id = "U0SEAN", display_name = "Sean's representative" }
@@ -108,6 +109,12 @@ variable "harness_images" {
     "pi"          = "steadmesh/seat-pi:dev"
     "fake"        = "steadmesh/seat-fake:dev"
   }
+}
+
+variable "timezone" {
+  description = "IANA time zone in which agents read and schedule times of day. A human's timezone in humans overrides it for their representative."
+  type        = string
+  default     = "UTC"
 }
 
 variable "slack_workspace_id" {

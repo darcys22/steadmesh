@@ -25,6 +25,11 @@ type OrganizationSpec struct {
 	// DataRetention applies to the organisation when it is deleted: retain or delete.
 	// +optional
 	DataRetention string `json:"data_retention,omitempty"`
+	// Timezone is the IANA time zone in which seats read and schedule times
+	// of day, e.g. Australia/Melbourne. A channel binding can set its
+	// human's own. Defaults to UTC.
+	// +optional
+	Timezone string `json:"timezone,omitempty"`
 
 	// +optional
 	CultureRefs []string `json:"culture_refs,omitempty"`
@@ -386,4 +391,8 @@ type ChannelBinding struct {
 	// Mode is direct_message.
 	// +optional
 	Mode string `json:"mode,omitempty"`
+	// Timezone is the human's IANA time zone; their representative reads
+	// and schedules times of day in it. Defaults to the organisation's.
+	// +optional
+	Timezone string `json:"timezone,omitempty"`
 }

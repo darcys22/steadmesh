@@ -100,13 +100,28 @@
 <tr><td><code>messages.history</code></td><td><code>conversation_id?</code>, <code>limit</code>, <code>cursor</code></td><td>Lists conversations, or reads one this seat takes part in. Human conversations are visible only to their representative.</td></tr>
 </table>
 
-<h2>Wake schedules</h2>
+<h2 id="automations">Automations and time</h2>
+<p>An automation is a named instruction a seat carries out for itself on a schedule: a reminder, a follow-up or a recurring check. It is stored by the platform, outside Terraform, and survives restarts. Each run queues a turn for the seat carrying the instruction, waking the seat if it has stopped.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
-<tr><td><code>wake.schedule</code></td><td><code>at</code> (RFC 3339) or <code>every</code> (e.g. <code>24h</code>, at least 1m), <code>note</code></td><td>A durable future trigger, stored outside Terraform. The seat is woken with the note, even if it has stopped.</td></tr>
-<tr><td><code>wake.list</code></td><td>none</td><td>This seat's active schedules.</td></tr>
-<tr><td><code>wake.cancel</code></td><td><code>id</code></td><td>Cancels a schedule.</td></tr>
+<tr><td><code>automations.create</code></td><td><code>name</code>, <code>instruction</code>, and one schedule: <code>in</code> (a delay, e.g. <code>20m</code>), <code>at</code> (local <code>2026-10-09T15:00</code> or RFC 3339), <code>every</code> (an interval, at least 1m) or <code>time</code> (<code>HH:MM</code>) with <code>days?</code> (<code>mon</code>…<code>sun</code>, <code>weekdays</code>, <code>weekends</code>, <code>daily</code>); <code>timezone?</code>, <code>until?</code>, <code>max_runs?</code></td><td>Saves the automation and returns it with a readable schedule and its next three runs in local time with their UTC offsets. A name already used by one of the seat's live automations is a <code>conflict</code> naming its id, so agents update instead of duplicating. At most 50 active or paused automations per seat.</td></tr>
+<tr><td><code>automations.list</code></td><td><code>include_completed?</code></td><td>The seat's automations: schedule, status, next runs, last run and counts.</td></tr>
+<tr><td><code>automations.update</code></td><td><code>id</code>; any of <code>name</code>, <code>instruction</code>, <code>status</code> (<code>active</code>/<code>paused</code>), the schedule fields, <code>until</code>, <code>max_runs</code> (<code>null</code> removes a limit)</td><td>Changes the automation. <code>in</code>, <code>at</code> or <code>every</code> replace the schedule; <code>time</code>, <code>days</code> and <code>timezone</code> adjust a time-of-day schedule and keep what is left out, so moving a weekday check to 10:00 keeps it on weekdays. Resuming does not replay runs that fell due while paused.</td></tr>
+<tr><td><code>automations.delete</code></td><td><code>id</code></td><td>Stops it for good. A run already queued still arrives.</td></tr>
+<tr><td><code>clock.now</code></td><td><code>timezone?</code></td><td>The current time in the seat's time zone or another.</td></tr>
 </table>
+<p>Times of day are read in the seat's time zone: the organisation's <code>timezone</code> (default UTC), or for a representative its human's, set on the channel binding. Every turn's envelope also carries <code>current_time</code> in that zone, since a message may have waited before the turn starts.</p>
+<p>How runs behave:</p>
+<ul>
+<li><strong>Who runs it.</strong> The seat that created it, with its own harness, model and permissions.</li>
+<li><strong>Busy seat.</strong> A run is queued like any message; if the seat is busy it runs afterwards.</li>
+<li><strong>Overlap.</strong> While the previous run is still waiting or in progress, the next occurrence is skipped rather than piled up, and counted in <code>skipped_runs</code>.</li>
+<li><strong>Downtime.</strong> Occurrences missed while the platform was down are not replayed. One catch-up run says how many were missed, then the schedule resumes at its next future occurrence.</li>
+<li><strong>Daylight saving.</strong> <code>time</code> follows the wall clock. A time that happens twice runs once, at the first; a time skipped when clocks go forward runs that much later (02:30 becomes 03:30). <code>every</code> counts elapsed time and ignores the clock.</li>
+<li><strong>Ending.</strong> A one-off completes after its run. <code>max_runs</code> counts runs queued; the automation completes after the last. No runs happen after <code>until</code>.</li>
+<li><strong>Duplicates.</strong> Each occurrence is queued at most once, even if the scheduler retries.</li>
+<li><strong>Retirement.</strong> A retiring seat's automations stop.</li>
+</ul>
 
 <h2>External connections</h2>
 <table>

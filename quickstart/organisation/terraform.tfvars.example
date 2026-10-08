@@ -4,7 +4,7 @@ slack_workspace_id = "T0123456789"
 
 humans = {
   # Slack: click a profile > ⋮ > Copy member ID.
-  alice = { slack_user_id = "U0123456789", display_name = "Alice's representative" }
+  alice = { slack_user_id = "U0123456789", display_name = "Alice's representative", timezone = "Australia/Melbourne" }
   # Or chat from a terminal: orgctl chat --context <ctx> --user bob
   # (add "bob" to terminal_users in ../platform).
   # bob = { channel = "terminal", display_name = "Bob's representative" }

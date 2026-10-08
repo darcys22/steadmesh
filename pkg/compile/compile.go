@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+	// Time zones are validated without relying on the host's zoneinfo.
+	_ "time/tzdata"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -108,6 +110,9 @@ type SeatManifest struct {
 	ChannelBindings  []string              `json:"channel_bindings,omitempty"`
 	AdoptFrom        string                `json:"adopt_from,omitempty"`
 	IsRepresentative bool                  `json:"is_representative"`
+	// Timezone is where the seat reads and schedules times of day: its
+	// human's for a representative, otherwise the organisation's.
+	Timezone string `json:"timezone"`
 	// Access is what the seat may do from its sandbox (access profiles).
 	Access         *access.SeatAccess `json:"access,omitempty"`
 	ConfigRevision string             `json:"config_revision"`
@@ -197,6 +202,7 @@ func (c *compiler) checkOrganization(o *spec.OrganizationSpec) {
 	if o.DataRetention != "" && o.DataRetention != "retain" && o.DataRetention != "delete" {
 		c.errf("data_retention", "must be retain or delete")
 	}
+	c.checkTimezone("timezone", o.Timezone)
 	for i, r := range o.CultureRefs {
 		c.checkInstructionRef(fmt.Sprintf("culture_refs[%d]", i), r)
 	}
@@ -347,9 +353,22 @@ func (c *compiler) resolveTemplates(o *spec.OrganizationSpec) map[string][]strin
 	return lineage
 }
 
+// checkTimezone requires an IANA time zone name, or empty.
+func (c *compiler) checkTimezone(path, tz string) {
+	if tz == "" {
+		return
+	}
+	if _, err := time.LoadLocation(tz); err != nil || tz == "Local" {
+		c.errf(path, "unknown time zone %q; use an IANA name such as Australia/Melbourne or UTC", tz)
+	}
+}
+
 func (c *compiler) applyDefaults(o *spec.OrganizationSpec) {
 	if o.DataRetention == "" {
 		o.DataRetention = "retain"
+	}
+	if o.Timezone == "" {
+		o.Timezone = "UTC"
 	}
 	for k, ms := range o.MemoryStores {
 		if ms.Retention == "" {
@@ -853,6 +872,7 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 		Harness:          o.HarnessProfiles[s.HarnessProfile],
 		Execution:        o.ExecutionProfiles[s.ExecutionProfile],
 		Sandbox:          o.SandboxProfiles[s.SandboxProfile],
+		Timezone:         o.Timezone,
 		PersonalMemory:   s.PersonalMemory,
 		Workspace:        *s.Workspace,
 		AdoptFrom:        s.AdoptFrom,
@@ -1051,6 +1071,7 @@ func (c *compiler) applyRoutes(o *spec.OrganizationSpec, seats map[string]SeatMa
 
 func (c *compiler) applyBindings(o *spec.OrganizationSpec, seats map[string]SeatManifest) {
 	humanOf := map[string]string{}
+	zoneOf := map[string]string{}
 	identity := map[string]string{}
 	for _, bk := range sortedKeys(o.ChannelBindings) {
 		b := o.ChannelBindings[bk]
@@ -1086,7 +1107,16 @@ func (c *compiler) applyBindings(o *spec.OrganizationSpec, seats map[string]Seat
 			continue
 		}
 		humanOf[b.Seat] = b.ExternalUserID
+		c.checkTimezone(path+".timezone", b.Timezone)
+		if prev, ok := zoneOf[b.Seat]; ok && b.Timezone != prev {
+			c.errf(path+".timezone", "seat %q's other binding gives the time zone %q; one human has one time zone", b.Seat, prev)
+			continue
+		}
+		zoneOf[b.Seat] = b.Timezone
 		sm := seats[b.Seat]
+		if b.Timezone != "" {
+			sm.Timezone = b.Timezone
+		}
 		sm.ChannelBindings = append(sm.ChannelBindings, bk)
 		sm.IsRepresentative = true
 		sm.addCapability("connection:"+b.Connection, []string{"channel.reply"}, []string{b.ExternalUserID}, "implicit:channel_binding/"+bk)

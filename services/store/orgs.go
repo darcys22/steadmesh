@@ -232,7 +232,7 @@ func retireSeat(ctx context.Context, tx pgx.Tx, seatID, reason string) error {
 	if _, err := tx.Exec(ctx, `UPDATE seats SET retired_at = now(), updated_at = now() WHERE id = $1`, seatID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE wake_schedules SET active = false WHERE seat_id = $1 AND active`, seatID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE automations SET status = 'deleted', updated_at = now() WHERE seat_id = $1 AND status IN ('active', 'paused')`, seatID); err != nil {
 		return err
 	}
 	for _, q := range []string{
@@ -424,7 +424,7 @@ func purgeOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 		`DELETE FROM execution_leases WHERE ` + seatScoped,
 		`DELETE FROM outbox WHERE organization_id = $1`,
 		`DELETE FROM connector_operations WHERE organization_id = $1`,
-		`DELETE FROM wake_schedules WHERE organization_id = $1`,
+		`DELETE FROM automations WHERE organization_id = $1`,
 		`DELETE FROM artifacts WHERE organization_id = $1`,
 		`DELETE FROM memory_revisions WHERE store_id IN (SELECT id FROM memory_stores WHERE organization_id = $1)`,
 		`DELETE FROM memory_records WHERE organization_id = $1`,

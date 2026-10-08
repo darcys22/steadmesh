@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/darcys22/steadmesh/connectors"
@@ -45,6 +46,7 @@ type env struct {
 	tracker *fakeconn.Tracker
 	org     string
 	seats   map[string]string
+	dbURL   string
 }
 
 func newEnv(t *testing.T) *env { return newEnvWithConsole(t, false) }
@@ -57,12 +59,13 @@ func newEnvWithConsole(t *testing.T, console bool) *env { return newEnvWith(t, c
 func newEnvWith(t *testing.T, console bool, opts func(*platform.Options)) *env {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
-	st, err := store.Open(ctx, pgtest.URL(t))
+	dbURL := pgtest.URL(t)
+	st, err := store.Open(ctx, dbURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	e := &env{t: t, auth: auth.NewFake(controllerToken), comm: fakeconn.NewComm(orgfixture.UserA, orgfixture.UserB),
-		tracker: &fakeconn.Tracker{}}
+		tracker: &fakeconn.Tracker{}, dbURL: dbURL}
 	if console {
 		e.auth.SetConsole(consoleToken)
 	}
@@ -591,27 +594,100 @@ func TestVerifyProbeRuntimeAndBootstrap(t *testing.T) {
 	}
 }
 
-func TestWakeTools(t *testing.T) {
+func TestAutomationTools(t *testing.T) {
 	e := newEnv(t)
-	e.sync(orgfixture.Spec())
+	sp := orgfixture.Spec()
+	sp.Timezone = "Australia/Melbourne"
+	e.sync(sp)
 	eng := e.seat("engineer")
-	at := time.Now().Add(-time.Second).UTC().Format(time.RFC3339)
-	sc := eng.mustTool("wake.schedule", map[string]any{"at": at, "note": "check CI"})
+
+	now := eng.mustTool("clock.now", nil)
+	if now["timezone"] != "Australia/Melbourne" || !strings.Contains(now["now"].(string), "+1") {
+		t.Fatalf("clock.now = %v", now)
+	}
+	check := eng.mustTool("automations.create", map[string]any{"name": "Weekday check", "instruction": "check CI and tell the lead if it is red",
+		"time": "09:00", "days": []string{"weekdays"}})
+	if check["schedule"] != "every weekday at 09:00 (Australia/Melbourne)" || len(check["next_runs"].([]any)) != 3 ||
+		!strings.Contains(check["next_runs"].([]any)[0].(string), " 09:00 AE") {
+		t.Fatalf("created = %v", check)
+	}
+	if out, isErr := eng.tool("automations.create", map[string]any{"name": "weekday check", "instruction": "x", "every": "1h"}); !isErr ||
+		out["error"] != "conflict" || !strings.Contains(fmt.Sprint(out["message"]), check["id"].(string)) {
+		t.Fatalf("duplicate name: %v", out)
+	}
+	moved := eng.mustTool("automations.update", map[string]any{"id": check["id"], "time": "10:00"})
+	if moved["schedule"] != "every weekday at 10:00 (Australia/Melbourne)" {
+		t.Fatalf("moved = %v", moved)
+	}
+	paused := eng.mustTool("automations.update", map[string]any{"id": check["id"], "status": "paused"})
+	daily := eng.mustTool("automations.update", map[string]any{"id": check["id"], "days": []string{"daily"}})
+	if daily["schedule"] != "every day at 10:00 (Australia/Melbourne)" {
+		t.Fatalf("daily = %v", daily)
+	}
+	if paused["status"] != "paused" || paused["next_runs"] != nil {
+		t.Fatalf("paused = %v", paused)
+	}
+	resumed := eng.mustTool("automations.update", map[string]any{"id": check["id"], "status": "active", "max_runs": 3})
+	if resumed["status"] != "active" || resumed["max_runs"] != float64(3) || len(resumed["next_runs"].([]any)) != 3 {
+		t.Fatalf("resumed = %v", resumed)
+	}
+	if out, isErr := eng.tool("automations.create", map[string]any{"name": "bad", "instruction": "x", "at": "2020-01-01T09:00"}); !isErr || out["error"] != "invalid" {
+		t.Fatalf("past time accepted: %v", out)
+	}
+
+	// A reminder runs as a schedule-origin turn carrying its instruction.
+	remind := eng.mustTool("automations.create", map[string]any{"name": "Reminder", "instruction": "remind the lead about the demo", "in": "20m"})
+	db, err := pgx.Connect(context.Background(), e.dbURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close(context.Background())
+	if _, err := db.Exec(context.Background(), `UPDATE automations SET next_run_at = now() - interval '1 second' WHERE id = $1`, remind["id"]); err != nil {
+		t.Fatal(err)
+	}
 	deadline := time.Now().Add(5 * time.Second)
 	var d *runtimeapi.InboxDelivery
 	for d == nil && time.Now().Before(deadline) {
 		d = eng.next()
 	}
-	if d == nil || d.Message.Origin != "schedule" || !strings.Contains(d.Message.Body, "check CI") {
-		t.Fatalf("wake delivery = %+v", d)
+	if d == nil || d.Message.Origin != "schedule" || !strings.Contains(d.Message.Body, "remind the lead about the demo") ||
+		!strings.Contains(d.Message.Body, `"Reminder"`) {
+		t.Fatalf("run delivery = %+v", d)
 	}
-	if list := eng.mustTool("wake.list", nil); len(list["schedules"].([]any)) != 0 {
-		t.Fatalf("one-off schedule still active: %v", list)
+	list := eng.mustTool("automations.list", nil)["automations"].([]any)
+	if len(list) != 1 || list[0].(map[string]any)["id"] != check["id"] {
+		t.Fatalf("after the one-off ran, list = %v", list)
 	}
-	rec := eng.mustTool("wake.schedule", map[string]any{"every": "1h"})
-	eng.mustTool("wake.cancel", map[string]any{"id": rec["id"]})
-	if out, isErr := eng.tool("wake.cancel", map[string]any{"id": sc["id"]}); !isErr || out["error"] != "not_found" {
-		t.Fatalf("cancel fired schedule: %v", out)
+	done := eng.mustTool("automations.list", map[string]any{"include_completed": true})["automations"].([]any)
+	if len(done) != 2 {
+		t.Fatalf("with completed, list = %v", done)
+	}
+	eng.mustTool("automations.delete", map[string]any{"id": check["id"]})
+	if out, isErr := eng.tool("automations.delete", map[string]any{"id": check["id"]}); !isErr || out["error"] != "not_found" {
+		t.Fatalf("second delete: %v", out)
+	}
+	// Seats only see their own automations.
+	if out, isErr := e.seat("lead").tool("automations.update", map[string]any{"id": remind["id"], "status": "active"}); !isErr || out["error"] != "not_found" {
+		t.Fatalf("another seat's automation: %v", out)
+	}
+}
+
+// TestRepresentativeTimezone checks a representative reads times in its
+// human's time zone, and other seats in the organisation's.
+func TestRepresentativeTimezone(t *testing.T) {
+	e := newEnv(t)
+	sp := orgfixture.Spec()
+	sp.Timezone = "Europe/London"
+	b := sp.ChannelBindings["alice"]
+	b.Timezone = "America/New_York"
+	sp.ChannelBindings["alice"] = b
+	e.sync(sp)
+	for seat, want := range map[string]string{"rep_a": "America/New_York", "rep_b": "Europe/London", "lead": "Europe/London"} {
+		code, body := e.seat(seat).do("GET", runtimeapi.PathBootstrap, nil)
+		var boot runtimeapi.Bootstrap
+		if err := json.Unmarshal(body, &boot); code != 200 || err != nil || boot.Self.Timezone != want {
+			t.Errorf("%s time zone = %q (%d %v), want %q", seat, boot.Self.Timezone, code, err, want)
+		}
 	}
 }
 

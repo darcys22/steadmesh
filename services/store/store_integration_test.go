@@ -5,10 +5,14 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/darcys22/steadmesh/pkg/compile"
+	"github.com/darcys22/steadmesh/pkg/recur"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/internal/orgfixture"
 	"github.com/darcys22/steadmesh/services/internal/pgtest"
@@ -466,29 +470,110 @@ func TestInboxCap(t *testing.T) {
 	}
 }
 
-func TestScheduleFiresOncePerTrigger(t *testing.T) {
+func TestAutomationRuns(t *testing.T) {
 	ctx := context.Background()
 	s := open(t)
 	res := syncOrg(t, s, orgfixture.Manifest(t))
 	org, eng := res.OrganizationID, res.Seats["engineer"].SeatID
-	at := time.Now().Add(-time.Minute).UTC().Truncate(time.Microsecond)
-	sc, err := s.CreateSchedule(ctx, lease(t, s, eng), org, "@every 1h", at, "standup")
+	f := lease(t, s, eng)
+	now := time.Now().UTC().Truncate(time.Second)
+	// Hourly since 2.5h ago: the run at -1.5h is due and the one at -0.5h was missed.
+	rule := recur.Rule{Kind: recur.KindInterval, Every: "1h0m0s", Anchor: now.Add(-150 * time.Minute), Timezone: "UTC"}
+	due, two := now.Add(-90*time.Minute), 2
+	a, err := s.CreateAutomation(ctx, f, org, Automation{Name: "Standup", Instruction: "post the standup", Rule: rule,
+		Status: AutomationActive, NextRunAt: &due, MaxRuns: &two})
 	if err != nil {
 		t.Fatal(err)
 	}
-	next := func(_ string, fired, _ time.Time) (time.Time, bool) { return fired.Add(time.Hour), true }
-	if n, err := s.FireDue(ctx, time.Now(), 10, next); err != nil || n != 1 {
-		t.Fatalf("fired %d %v", n, err)
+	if _, err := s.CreateAutomation(ctx, f, org, Automation{Name: "standup", Instruction: "x", Rule: rule, Status: AutomationActive, NextRunAt: &due}); !errors.Is(err, ErrConflict) {
+		t.Fatalf("duplicate name: %v", err)
 	}
-	// Simulate a replay of the same trigger time.
-	if _, err := s.pool.Exec(ctx, `UPDATE wake_schedules SET next_trigger_at = $2 WHERE id = $1`, sc.ID, at); err != nil {
+	bodies := func() []string {
+		rows, err := s.pool.Query(ctx, `SELECT body FROM messages WHERE recipient_seat_id = $1 AND origin = 'schedule' ORDER BY created_at`, eng)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	get := func() Automation {
+		list, err := s.Automations(ctx, eng, true)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("automations = %+v %v", list, err)
+		}
+		return list[0]
+	}
+	setNext := func(at time.Time) {
+		if _, err := s.pool.Exec(ctx, `UPDATE automations SET next_run_at = $2 WHERE id = $1`, a.ID, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if n, err := s.FireDue(ctx, now, 10); err != nil || n != 1 {
+		t.Fatalf("first run queued %d (%v)", n, err)
+	}
+	b := bodies()
+	if len(b) != 1 || !strings.Contains(b[0], `"Standup"`) || !strings.Contains(b[0], "run 1 of 2") ||
+		!strings.Contains(b[0], "1 later occurrence(s) were missed") || !strings.Contains(b[0], "post the standup") {
+		t.Fatalf("run message = %q", b)
+	}
+	got := get()
+	if got.Runs != 1 || got.SkippedRuns != 1 || got.NextRunAt == nil || !got.NextRunAt.Equal(now.Add(30*time.Minute)) {
+		t.Fatalf("after the first run: %+v", got)
+	}
+
+	// The first run is still waiting, so the next occurrence is skipped.
+	setNext(now.Add(-time.Minute))
+	if n, err := s.FireDue(ctx, now, 10); err != nil || n != 0 || len(bodies()) != 1 {
+		t.Fatalf("overlapping run queued %d (%v)", n, err)
+	}
+	if got := get(); got.SkippedRuns != 2 || got.Runs != 1 {
+		t.Fatalf("after the skipped run: %+v", got)
+	}
+
+	// Once the run is handled, replaying its trigger time queues nothing.
+	if _, err := s.pool.Exec(ctx, `UPDATE deliveries SET state = 'done' WHERE seat_id = $1`, eng); err != nil {
 		t.Fatal(err)
 	}
-	if n, err := s.FireDue(ctx, time.Now(), 10, next); err != nil || n != 0 {
-		t.Fatalf("replayed fire queued %d wakes (%v)", n, err)
+	setNext(due)
+	if n, err := s.FireDue(ctx, now, 10); err != nil || n != 0 || len(bodies()) != 1 {
+		t.Fatalf("replayed trigger queued %d (%v)", n, err)
 	}
-	if n, _ := s.PendingDeliveries(ctx, eng); n != 1 {
-		t.Fatalf("pending = %d", n)
+
+	// The second run is the last: max_runs is 2.
+	setNext(now.Add(-time.Minute))
+	if n, err := s.FireDue(ctx, now, 10); err != nil || n != 1 {
+		t.Fatalf("second run queued %d (%v)", n, err)
+	}
+	if b := bodies(); len(b) != 2 || !strings.Contains(b[1], "run 2 of 2") || !strings.Contains(b[1], "This is the last run") {
+		t.Fatalf("last run message = %q", b)
+	}
+	if got := get(); got.Status != AutomationCompleted || got.NextRunAt != nil || got.Runs != 2 {
+		t.Fatalf("after the last run: %+v", got)
+	}
+	if list, _ := s.Automations(ctx, eng, false); len(list) != 0 {
+		t.Fatalf("completed automation listed: %+v", list)
+	}
+
+	// Paused automations do not run; deleted ones are gone.
+	b2, err := s.CreateAutomation(ctx, f, org, Automation{Name: "Standup", Instruction: "again", Rule: rule, Status: AutomationActive, NextRunAt: &due})
+	if err != nil {
+		t.Fatalf("name reused after completion: %v", err)
+	}
+	if _, err := s.UpdateAutomation(ctx, f, b2.ID, func(x *Automation) error { x.Status, x.NextRunAt = AutomationPaused, nil; return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.FireDue(ctx, now, 10); n != 0 {
+		t.Fatalf("paused automation ran")
+	}
+	if err := s.DeleteAutomation(ctx, f, b2.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.DeleteAutomation(ctx, f, b2.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
 	}
 }
 

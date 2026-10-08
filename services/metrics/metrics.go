@@ -25,7 +25,7 @@ type Metrics struct {
 	ToolCalls        *prometheus.CounterVec
 	HTTPRequests     *prometheus.CounterVec
 	HTTPDuration     *prometheus.HistogramVec
-	SchedulesFired   prometheus.Counter
+	AutomationRuns   prometheus.Counter
 	// SeatsRetired counts finished seat retirements by outcome: finished
 	// (the seat wound down in time) or overdue (the grace period ended).
 	SeatsRetired *prometheus.CounterVec
@@ -74,8 +74,8 @@ func New(reg prometheus.Registerer) *Metrics {
 			Name: "steadmesh_http_request_duration_seconds", Help: "HTTP request latency by route pattern.",
 			Buckets: prometheus.DefBuckets,
 		}, []string{"route"}),
-		SchedulesFired: prometheus.NewCounter(prometheus.CounterOpts{
-			Name: "steadmesh_wake_schedules_fired_total", Help: "Scheduled wakes queued.",
+		AutomationRuns: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "steadmesh_automation_runs_total", Help: "Automation runs queued.",
 		}),
 		SeatsRetired: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name: "steadmesh_seats_retired_total", Help: "Seat retirements completed, by outcome (finished or overdue).",
@@ -83,7 +83,7 @@ func New(reg prometheus.Registerer) *Metrics {
 	}
 	reg.MustRegister(m.IngressEvents, m.MessagesAccepted, m.MessagesRejected, m.QueueAge, m.Seats, m.DeadLettered,
 		m.MemoryConflicts, m.ConnectorRetries, m.ConnectorOps, m.ConnectorUnknown, m.ToolCalls, m.HTTPRequests,
-		m.HTTPDuration, m.SchedulesFired, m.SeatsRetired)
+		m.HTTPDuration, m.AutomationRuns, m.SeatsRetired)
 	return m
 }
 

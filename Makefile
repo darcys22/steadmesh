@@ -12,7 +12,7 @@ ENVTEST_K8S ?= 1.37.0
 TFPLUGINDOCS_VERSION := v0.25.0
 export KUBEBUILDER_ASSETS = $(shell $(BIN)/setup-envtest use $(ENVTEST_K8S) -p path --bin-dir $(BIN)/envtest 2>/dev/null)
 
-.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-github e2e demo release e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
+.PHONY: all generate build lint test test-integration conformance conformance-images live-harnesses live-automations live-github e2e demo release e2e-reset quickstart-test images kind-up kind-down kind-load provider provider-docs orgctl live tools
 
 all: generate build test
 
@@ -151,3 +151,11 @@ live-github:
 live-harnesses:
 	build/harness-bins.sh
 	$(LOADENV) $(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...
+
+# Real models, through each harness, as a representative asked to set up,
+# change, pause and cancel reminders and recurring checks, against a real
+# platform (Postgres via testcontainers). Measures whether models use the
+# automation tools correctly; ANTHROPIC_API_KEY and/or OPENAI_API_KEY.
+live-automations:
+	build/harness-bins.sh
+	$(LOADENV) $(GO) test -count=1 -tags 'integration live' -run LiveAutomations -v -timeout 60m ./services/platform/...

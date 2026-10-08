@@ -76,7 +76,7 @@ func New(d Deps) *Registry {
 	r.tools = append(r.tools, r.memoryTools()...)
 	r.tools = append(r.tools, r.workTools()...)
 	r.tools = append(r.tools, r.messageTools()...)
-	r.tools = append(r.tools, r.wakeTools()...)
+	r.tools = append(r.tools, r.automationTools()...)
 	r.tools = append(r.tools, r.connectionTools()...)
 	return r
 }
@@ -173,6 +173,8 @@ func mapError(err error) *Error {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		return toolErr("not_found", "not found or not accessible")
+	case errors.Is(err, store.ErrConflict):
+		return toolErr("conflict", "%s", err.Error())
 	case errors.Is(err, store.ErrStructured):
 		return toolErr("invalid", "that record is a work item; change it with the work tools")
 	case errors.Is(err, store.ErrInboxFull):

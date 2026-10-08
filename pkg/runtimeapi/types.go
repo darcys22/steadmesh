@@ -124,6 +124,9 @@ type Self struct {
 	Recipients       []RecipientInfo   `json:"recipients"`
 	Connections      []ConnectionInfo  `json:"connections"`
 	ChannelBindings  []string          `json:"channel_bindings,omitempty"`
+	// Timezone is the IANA time zone the seat reads and schedules times of
+	// day in: its human's for a representative.
+	Timezone string `json:"timezone"`
 	// RetiringUntil is set while the seat is retiring: it was removed from
 	// the declaration, takes no new messages and stops at this time.
 	RetiringUntil *time.Time `json:"retiring_until,omitempty"`

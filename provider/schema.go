@@ -56,6 +56,7 @@ func keyed(desc string, attrs map[string]schema.Attribute) schema.MapNestedAttri
 // key, display_name and data_retention, which are resource attributes).
 func specAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
+		"timezone":     optStr("IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC."),
 		"culture_refs": strList("Ordered organisation culture instruction references (configmap:<name>/<key>#sha256:<digest>)."),
 		"team_templates": keyed("Reusable team templates. Resolved by the provider before the object is written.", map[string]schema.Attribute{
 			"extends":          optStr("Template this template extends."),
@@ -228,6 +229,7 @@ func specAttributes() map[string]schema.Attribute {
 			"external_user_id": reqStr("Verified external user ID."),
 			"seat":             reqStr("Representative seat key."),
 			"mode":             optStr("direct_message."),
+			"timezone":         optStr("The human's IANA time zone; their representative reads and schedules times of day in it. Defaults to the organisation's."),
 		}),
 		"work_publication": schema.SingleNestedAttribute{
 			Optional:    true,

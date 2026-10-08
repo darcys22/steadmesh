@@ -199,6 +199,11 @@ func RenderBootstrap(env Environment, recoveryNote string) string {
 	if s.IsRepresentative {
 		sb.WriteString("You are the personal representative of the human bound to you. Their messages reach you through your channel binding.\n")
 	}
+	if tz := firstNonEmpty(s.Timezone, "UTC"); s.IsRepresentative {
+		fmt.Fprintf(&sb, "Time zone: %s, your human's. Read and schedule times of day in it unless they say otherwise.\n", tz)
+	} else {
+		fmt.Fprintf(&sb, "Time zone: %s. Read and schedule times of day in it unless told otherwise.\n", tz)
+	}
 	fmt.Fprintf(&sb, "Configuration revision: %s. Policy revision: %d. Execution generation: %d.\n\n", firstNonEmpty(s.ConfigRevision, env.ConfigRevision), s.PolicyRevision, env.Generation)
 
 	// Instruction text comes from the manifest (instructions.md);
@@ -345,6 +350,12 @@ func RenderEnvelope(d Delivery) string {
 	if !m.CreatedAt.IsZero() {
 		fields["created_at"] = m.CreatedAt.UTC().Format(time.RFC3339)
 	}
+	// The message may have waited; current_time is when this turn starts.
+	loc, err := time.LoadLocation(d.Timezone)
+	if err != nil || d.Timezone == "" {
+		loc = time.UTC
+	}
+	fields["current_time"] = fmt.Sprintf("%s (%s)", time.Now().In(loc).Format("Mon 2006-01-02T15:04:05-07:00"), loc)
 	if d.Attempt > 1 {
 		fields["attempt"] = fmt.Sprint(d.Attempt)
 	}
