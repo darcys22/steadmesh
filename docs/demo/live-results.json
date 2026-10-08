@@ -29,7 +29,7 @@
       "reviewer": {
         "adapter": "pi",
         "model": {
-          "connection": "i14",
+          "connection": "selfhosted",
           "id": "qwen3.8-27b"
         }
       }
@@ -43,10 +43,10 @@
         "adapter": "openai",
         "secret_ref": "k8s:openai-credentials"
       },
-      "i14": {
+      "selfhosted": {
         "adapter": "model",
-        "secret_ref": "k8s:i14-credentials",
-        "endpoint_ref": "https://api-dev.i14.ai/v1",
+        "secret_ref": "k8s:selfhosted-credentials",
+        "endpoint_ref": "https://llm.example.com/v1",
         "model": {
           "apis": [
             "openai_chat"
@@ -166,10 +166,10 @@
       "harness": "pi",
       "requests": [
         {
-          "connection": "i14",
+          "connection": "selfhosted",
           "api": "openai_chat",
           "model": "qwen3.8-27b",
-          "upstream_host": "api-dev.i14.ai",
+          "upstream_host": "llm.example.com",
           "count": 24,
           "ok": 24
         }

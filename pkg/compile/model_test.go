@@ -18,7 +18,7 @@ func mixed(t *testing.T, h spec.HarnessProfile) spec.OrganizationSpec {
 	s, _ := load(t, filepath.Join(fixtures, "valid", "representative_and_worker.yaml"))
 	s.Connections["anthropic"] = spec.Connection{Adapter: "anthropic", SecretRef: "k8s:anthropic"}
 	s.Connections["openai"] = spec.Connection{Adapter: "openai", SecretRef: "k8s:openai"}
-	s.Connections["i14"] = spec.Connection{Adapter: "model", EndpointRef: "https://api-dev.i14.ai/v1", SecretRef: "k8s:i14",
+	s.Connections["selfhosted"] = spec.Connection{Adapter: "model", EndpointRef: "https://llm.example.com/v1", SecretRef: "k8s:selfhosted",
 		Model: &spec.ModelEndpoint{APIs: []string{harnesses.APIOpenAIChat}, Models: []spec.ModelEntry{{ID: "qwen3.8-27b"}}}}
 	if h.ImageDigest == "" {
 		h.ImageDigest = "seat:dev"
@@ -39,7 +39,7 @@ func TestModelSelectionResolvesAPI(t *testing.T) {
 	}{
 		{"claude on anthropic", "claude-code", spec.ModelSelection{Connection: "anthropic", ID: "claude-sonnet-4-5"}, harnesses.APIAnthropicMessages},
 		{"codex on openai", "codex", spec.ModelSelection{Connection: "openai", ID: "gpt-5.5", Settings: map[string]string{"reasoning_effort": "high"}}, harnesses.APIOpenAIResponses},
-		{"pi on an openai-chat-only endpoint", "pi", spec.ModelSelection{Connection: "i14", ID: "qwen3.8-27b"}, harnesses.APIOpenAIChat},
+		{"pi on an openai-chat-only endpoint", "pi", spec.ModelSelection{Connection: "selfhosted", ID: "qwen3.8-27b"}, harnesses.APIOpenAIChat},
 		{"pi on openai prefers responses", "pi", spec.ModelSelection{Connection: "openai", ID: "gpt-5.5"}, harnesses.APIOpenAIResponses},
 		{"pi with an explicit api", "pi", spec.ModelSelection{Connection: "openai", ID: "gpt-5.5", API: harnesses.APIOpenAIChat}, harnesses.APIOpenAIChat},
 		{"pi on anthropic", "pi", spec.ModelSelection{Connection: "anthropic", ID: "claude-x", Settings: map[string]string{"thinking": "high"}}, harnesses.APIAnthropicMessages},
@@ -76,9 +76,9 @@ func TestModelConnectionDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	for k, want := range map[string]spec.ModelEndpoint{
-		"anthropic": {APIs: []string{harnesses.APIAnthropicMessages}, Auth: "x-api-key", Verify: "request"},
-		"openai":    {APIs: []string{harnesses.APIOpenAIResponses, harnesses.APIOpenAIChat}, Auth: "bearer", Verify: "request"},
-		"i14":       {APIs: []string{harnesses.APIOpenAIChat}, Auth: "bearer", Verify: "request", Models: []spec.ModelEntry{{ID: "qwen3.8-27b"}}},
+		"anthropic":  {APIs: []string{harnesses.APIAnthropicMessages}, Auth: "x-api-key", Verify: "request"},
+		"openai":     {APIs: []string{harnesses.APIOpenAIResponses, harnesses.APIOpenAIChat}, Auth: "bearer", Verify: "request"},
+		"selfhosted": {APIs: []string{harnesses.APIOpenAIChat}, Auth: "bearer", Verify: "request", Models: []spec.ModelEntry{{ID: "qwen3.8-27b"}}},
 	} {
 		got := m.Spec.Connections[k].Model
 		if got == nil || !slices.Equal(got.APIs, want.APIs) || got.Auth != want.Auth || got.Verify != want.Verify || len(got.Models) != len(want.Models) {
@@ -97,16 +97,16 @@ func TestModelSelectionRejected(t *testing.T) {
 		mut  func(*spec.OrganizationSpec)
 		want []string
 	}{
-		{"codex cannot speak chat", spec.HarnessProfile{Adapter: "codex", Model: &spec.ModelSelection{Connection: "i14", ID: "qwen3.8-27b"}},
-			nil, []string{`harness "codex" speaks openai_responses`, `connection "i14" serves openai_chat`, "harnesses that would work: pi"}},
+		{"codex cannot speak chat", spec.HarnessProfile{Adapter: "codex", Model: &spec.ModelSelection{Connection: "selfhosted", ID: "qwen3.8-27b"}},
+			nil, []string{`harness "codex" speaks openai_responses`, `connection "selfhosted" serves openai_chat`, "harnesses that would work: pi"}},
 		{"claude cannot speak openai", spec.HarnessProfile{Adapter: "claude-code", Model: &spec.ModelSelection{Connection: "openai", ID: "gpt-5.5"}},
 			nil, []string{`harness "claude-code" speaks anthropic_messages`, "harnesses that would work: codex, pi"}},
 		{"explicit api the harness lacks", spec.HarnessProfile{Adapter: "codex", Model: &spec.ModelSelection{Connection: "openai", ID: "gpt-5.5", API: harnesses.APIOpenAIChat}},
 			nil, []string{"harness_profiles.h.model.api", `harness "codex" does not speak openai_chat`}},
-		{"explicit api the connection lacks", spec.HarnessProfile{Adapter: "pi", Model: &spec.ModelSelection{Connection: "i14", ID: "qwen3.8-27b", API: harnesses.APIOpenAIResponses}},
-			nil, []string{`connection "i14" does not serve openai_responses`}},
-		{"undeclared model", spec.HarnessProfile{Adapter: "pi", Model: &spec.ModelSelection{Connection: "i14", ID: "llama"}},
-			nil, []string{`model "llama" is not one of connection "i14"'s models (qwen3.8-27b)`}},
+		{"explicit api the connection lacks", spec.HarnessProfile{Adapter: "pi", Model: &spec.ModelSelection{Connection: "selfhosted", ID: "qwen3.8-27b", API: harnesses.APIOpenAIResponses}},
+			nil, []string{`connection "selfhosted" does not serve openai_responses`}},
+		{"undeclared model", spec.HarnessProfile{Adapter: "pi", Model: &spec.ModelSelection{Connection: "selfhosted", ID: "llama"}},
+			nil, []string{`model "llama" is not one of connection "selfhosted"'s models (qwen3.8-27b)`}},
 		{"missing model", spec.HarnessProfile{Adapter: "codex"}, nil, []string{"harness_profiles.h.model", `adapter "codex" requires a model`}},
 		{"not a model connection", spec.HarnessProfile{Adapter: "pi", Model: &spec.ModelSelection{Connection: "slack", ID: "x"}},
 			nil, []string{`connection "slack" uses adapter "slack", which is not a model adapter`}},
@@ -127,9 +127,9 @@ func TestModelSelectionRejected(t *testing.T) {
 			}, []string{"connections.openai.model.auth", "connections.openai.model.verify"}},
 		{"model api outside the connection's", spec.HarnessProfile{Adapter: "fake"},
 			func(s *spec.OrganizationSpec) {
-				c := s.Connections["i14"]
+				c := s.Connections["selfhosted"]
 				c.Model.Models = []spec.ModelEntry{{ID: "a", APIs: []string{harnesses.APIAnthropicMessages}}, {ID: "a"}}
-				s.Connections["i14"] = c
+				s.Connections["selfhosted"] = c
 			}, []string{"anthropic_messages is not one of the connection's APIs", `duplicate model "a"`}},
 		{"model block on a tracker", spec.HarnessProfile{Adapter: "fake"},
 			func(s *spec.OrganizationSpec) {

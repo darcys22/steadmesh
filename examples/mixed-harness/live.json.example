@@ -20,7 +20,7 @@
     "reviewer": {
       "adapter": "pi",
       "model": {
-        "connection": "i14",
+        "connection": "selfhosted",
         "id": "qwen3.8-27b"
       }
     }
@@ -34,10 +34,10 @@
       "adapter": "openai",
       "secret_ref": "k8s:openai-credentials"
     },
-    "i14": {
+    "selfhosted": {
       "adapter": "model",
-      "secret_ref": "k8s:i14-credentials",
-      "endpoint_ref": "https://api-dev.i14.ai/v1",
+      "secret_ref": "k8s:selfhosted-credentials",
+      "endpoint_ref": "SELFHOSTED-BASE-URL",
       "model": {
         "apis": [
           "openai_chat"

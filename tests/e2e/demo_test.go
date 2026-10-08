@@ -73,7 +73,7 @@ func TestDemo(t *testing.T) {
 		d.gh = portForward(d.t, "svc/steadmesh-fakes", 8093)
 		d.githubSecret(t)
 		if mode == "fakes" {
-			d.f.post(t, d.model+"/_test/keys", map[string]any{"valid": []string{"demo-anthropic-1", "demo-openai", "demo-i14"}})
+			d.f.post(t, d.model+"/_test/keys", map[string]any{"valid": []string{"demo-anthropic-1", "demo-openai", "demo-selfhosted"}})
 		}
 		mustRun(t, d.env, "make", "-C", "examples", "apply")
 		return "each seat passed readiness with a probe turn through its own harness and model"
@@ -132,7 +132,7 @@ func TestDemo(t *testing.T) {
 		}
 		applySecret(t, "anthropic-credentials", map[string]string{"api_key": newKey})
 		if mode == "fakes" {
-			d.f.post(t, d.model+"/_test/keys", map[string]any{"valid": []string{newKey, "demo-openai", "demo-i14"}})
+			d.f.post(t, d.model+"/_test/keys", map[string]any{"valid": []string{newKey, "demo-openai", "demo-selfhosted"}})
 		}
 		d.delegate(t, d.afterRotation())
 		d.waitRead(t, `{"store":"engineering","path":"notes/demo-login.md"}`, 5*time.Minute, func(out string) bool { return strings.Contains(out, "after rotation") })
@@ -216,7 +216,7 @@ func (d *demo) config() []string {
 	file := filepath.Join(root, "examples", "mixed-harness", "fakes.json")
 	if d.mode == "live" {
 		file = filepath.Join(root, "examples", "mixed-harness", "live.json.example")
-		for _, k := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "I14_API_KEY", "GITHUB_TOKEN", "GITHUB_TEST_REPO"} {
+		for _, k := range []string{"ANTHROPIC_API_KEY", "OPENAI_API_KEY", "SELFHOSTED_API_KEY", "SELFHOSTED_BASE_URL", "GITHUB_TOKEN", "GITHUB_TEST_REPO"} {
 			if os.Getenv(k) == "" {
 				t.Skipf("the live demo needs %s (examples/mixed-harness/README.md)", k)
 			}
@@ -227,7 +227,8 @@ func (d *demo) config() []string {
 		t.Fatal(err)
 	}
 	if d.mode == "live" {
-		b = []byte(strings.ReplaceAll(string(b), "OWNER/TEST-REPO", os.Getenv("GITHUB_TEST_REPO")))
+		b = []byte(strings.NewReplacer("OWNER/TEST-REPO", os.Getenv("GITHUB_TEST_REPO"),
+			"SELFHOSTED-BASE-URL", os.Getenv("SELFHOSTED_BASE_URL")).Replace(string(b)))
 	}
 	var vars map[string]json.RawMessage
 	if err := json.Unmarshal(b, &vars); err != nil {
@@ -235,7 +236,7 @@ func (d *demo) config() []string {
 	}
 	d.res.Config = b
 	if d.mode == "live" {
-		keys, _ := json.Marshal(map[string]string{"anthropic": os.Getenv("ANTHROPIC_API_KEY"), "openai": os.Getenv("OPENAI_API_KEY"), "i14": os.Getenv("I14_API_KEY")})
+		keys, _ := json.Marshal(map[string]string{"anthropic": os.Getenv("ANTHROPIC_API_KEY"), "openai": os.Getenv("OPENAI_API_KEY"), "selfhosted": os.Getenv("SELFHOSTED_API_KEY")})
 		vars["model_api_keys"] = keys
 	}
 	var out []string

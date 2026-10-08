@@ -7,7 +7,7 @@ with the example stages (`../foundation`, `../platform`, `../organisation`):
 | --- | --- | --- | --- |
 | `eng_lead` | Claude Code | Anthropic (`claude-sonnet-5-5`) | `anthropic_messages` |
 | `engineer` | Codex | OpenAI (`gpt-5.5`) | `openai_responses` |
-| `reviewer` | Pi | i14 (`qwen3.8-27b`, `https://api-dev.i14.ai/v1`) | `openai_chat`, claimed by the connection and checked at readiness |
+| `reviewer` | Pi | selfhosted (`qwen3.8-27b`, `https://llm.example.com/v1`) | `openai_chat`, claimed by the connection and checked at readiness |
 
 Only the engineer has GitHub access (access profile `github_engineer`). The
 representatives use the deterministic fake harness, so the demo can drive
@@ -18,9 +18,10 @@ The files are Terraform variable values for those stages:
 
 - `fakes.json`: every model endpoint is the in-cluster scripted model fake and
   GitHub is the fake GitHub. Runs anywhere, with no credentials.
-- `live.json.example`: the real Anthropic, OpenAI and i14 endpoints and a real
-  GitHub repository, which the engineer uses with git and gh (sandbox
-  delivery through the egress gateway). Slack and Linear stay fakes.
+- `live.json.example`: the real Anthropic and OpenAI endpoints, a self-hosted
+  OpenAI-compatible endpoint, and a real GitHub repository, which the
+  engineer uses with git and gh (sandbox delivery through the egress
+  gateway). Slack and Linear stay fakes.
 
 ## Run the demo
 
@@ -58,7 +59,8 @@ Export these in your shell, or put them in `.env` at the repository root (ignore
 | `ANTHROPIC_API_KEY` | Anthropic Messages for the lead |
 | `ANTHROPIC_API_KEY_2` | A second Anthropic key; step 4 rotates to it (skipped without it) |
 | `OPENAI_API_KEY` | OpenAI Responses for the engineer |
-| `I14_API_KEY` | The i14 endpoint for the reviewer |
+| `SELFHOSTED_API_KEY` | The self-hosted endpoint for the reviewer |
+| `SELFHOSTED_BASE_URL` | Its OpenAI-compatible API base, e.g. `https://llm.example.com/v1` |
 | `GITHUB_TOKEN` | Fine-grained PAT with contents and pull requests read/write on the test repository |
 | `GITHUB_TEST_REPO` | `owner/name` of a dedicated test repository |
 

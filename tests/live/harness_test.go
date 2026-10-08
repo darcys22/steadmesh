@@ -34,12 +34,12 @@ func envOr(k, def string) string {
 //
 //	ANTHROPIC_API_KEY  claude-code and pi on Anthropic Messages (ANTHROPIC_MODEL)
 //	OPENAI_API_KEY     codex and pi on OpenAI Responses (OPENAI_MODEL)
-//	I14_API_KEY        pi on the i14 endpoint, OpenAI Chat Completions
-//	                   (I14_BASE_URL, I14_MODEL)
+//	SELFHOSTED_API_KEY pi on a self-hosted endpoint, OpenAI Chat Completions
+//	                   (SELFHOSTED_BASE_URL, required; SELFHOSTED_MODEL)
 func TestLiveHarnesses(t *testing.T) {
 	anthropicModel := envOr("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
 	openaiModel := envOr("OPENAI_MODEL", "gpt-5-mini")
-	i14Model := envOr("I14_MODEL", "qwen3.8-27b")
+	selfhostedModel := envOr("SELFHOSTED_MODEL", "qwen3.8-27b")
 	for _, tc := range []struct {
 		name, harness, keyEnv, adapter, endpoint, api, model string
 		newAdapter                                           func() harnesses.Adapter
@@ -48,12 +48,15 @@ func TestLiveHarnesses(t *testing.T) {
 		{"codex on openai responses", "codex", "OPENAI_API_KEY", "openai", "", harnesses.APIOpenAIResponses, openaiModel, func() harnesses.Adapter { return codex.New() }},
 		{"pi on openai responses", "pi", "OPENAI_API_KEY", "openai", "", harnesses.APIOpenAIResponses, openaiModel, func() harnesses.Adapter { return pi.New() }},
 		{"pi on anthropic", "pi", "ANTHROPIC_API_KEY", "anthropic", "", harnesses.APIAnthropicMessages, anthropicModel, func() harnesses.Adapter { return pi.New() }},
-		{"pi on i14 chat completions", "pi", "I14_API_KEY", "model", envOr("I14_BASE_URL", "https://api-dev.i14.ai/v1"), harnesses.APIOpenAIChat, i14Model, func() harnesses.Adapter { return pi.New() }},
+		{"pi on self-hosted chat completions", "pi", "SELFHOSTED_API_KEY", "model", os.Getenv("SELFHOSTED_BASE_URL"), harnesses.APIOpenAIChat, selfhostedModel, func() harnesses.Adapter { return pi.New() }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			key := os.Getenv(tc.keyEnv)
 			if key == "" {
 				t.Skipf("needs %s", tc.keyEnv)
+			}
+			if tc.adapter == "model" && tc.endpoint == "" {
+				t.Skip("needs SELFHOSTED_BASE_URL")
 			}
 			bin := conformance.HarnessBin(t, tc.harness)
 			cfg := connectors.Config{Key: "llm", Adapter: tc.adapter, Endpoint: tc.endpoint, Secret: map[string]string{"api_key": key},

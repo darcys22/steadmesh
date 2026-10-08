@@ -35,7 +35,7 @@ is set:
 | --- | --- |
 | `ANTHROPIC_API_KEY` (`ANTHROPIC_MODEL`) | claude-code and pi on Anthropic Messages |
 | `OPENAI_API_KEY` (`OPENAI_MODEL`, default `gpt-5-mini`) | codex and pi on OpenAI Responses |
-| `I14_API_KEY` (`I14_BASE_URL`, default `https://api-dev.i14.ai/v1`; `I14_MODEL`, default `qwen3.8-27b`) | pi on OpenAI Chat Completions |
+| `SELFHOSTED_API_KEY` (`SELFHOSTED_BASE_URL`, required, e.g. `https://llm.example.com/v1`; `SELFHOSTED_MODEL`, default `qwen3.8-27b`) | pi on OpenAI Chat Completions |
 
 Each case first checks the endpoint as readiness does (a minimal request for
 the API and model), then the turn. The log names the model, API and host

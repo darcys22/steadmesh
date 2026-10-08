@@ -116,11 +116,17 @@ export TF_VAR_humans='{"sean":{"channel":"terminal","display_name":"Sean'"'"'s r
 make -C examples apply
 
 bin/orgctl chat --context kind-steadmesh --user sean</code></pre>
-<pre><code>Chatting with sean's representative over terminal. Ctrl-D or Ctrl-C to leave.
-you&gt; hello from sean
-representative&gt; ack: hello from sean
-you&gt;</code></pre>
-<p><code>orgctl chat</code> port-forwards to the platform and reads the token from the connection's Secret; pass <code>--token</code> for a Vault reference. The representative can message you at any time with <code>messages.reply</code>. Anything it sends while no terminal is open waits in the platform's memory, up to 200 messages, and appears when you next connect. Those queued messages are lost if the platform restarts.</p>
+<pre><code>Chatting with sean's representative over terminal.
+
+you 14:02
+  hello from sean
+
+representative 14:02
+  ack: hello from sean
+
+› Message your representative
+enter send · alt+enter new line · ↑ history · ctrl+c quit</code></pre>
+<p><code>orgctl chat</code> port-forwards to the platform and reads the token from the connection's Secret; pass <code>--token</code> for a Vault reference. The representative's replies are rendered as markdown, in colour matched to a light or dark terminal. When input or output is not a terminal, for example when piping a message in, it falls back to plain lines. The representative can message you at any time with <code>messages.reply</code>. Anything it sends while no terminal is open waits in the platform's memory, up to 200 messages, and appears when you next connect. Those queued messages are lost if the platform restarts.</p>
 </li>
 <li>
 <p><strong>Delegate work and create a tracker project.</strong> The fake harness runs lines that start with <code>/</code> as commands (see <a href="tools.html#fake-harness">the script language</a>). This message asks the representative to delegate to the engineering lead. The lead creates a Linear project and the result comes back to Sean:</p>

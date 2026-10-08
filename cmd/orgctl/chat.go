@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/term"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,8 +71,25 @@ func chat(ctx context.Context, c client.Client, orgs []v1alpha1.AgentOrganizatio
 	}
 	cl := &chatClient{base: base + runtimeapi.PathChannels + orgID + "/" + connKey, token: token}
 
-	fmt.Printf("Chatting with %s's representative over %s. Ctrl-D or Ctrl-C to leave.\n", o.user, connKey)
-	go cl.receive(ctx)
+	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		return chatTUI(ctx, cl, o.user, connKey)
+	}
+	return chatPlain(ctx, cl, o.user, connKey)
+}
+
+// chatPlain is the line-oriented chat used when stdin or stdout is not a
+// terminal, e.g. when input is piped.
+func chatPlain(ctx context.Context, cl *chatClient, user, connKey string) error {
+	var mu sync.Mutex
+	printf := func(format string, args ...any) {
+		mu.Lock()
+		defer mu.Unlock()
+		fmt.Printf(format, args...)
+	}
+	printf("Chatting with %s's representative over %s. Ctrl-D or Ctrl-C to leave.\n", user, connKey)
+	go cl.receive(ctx,
+		func(ev terminal.Event) { printf("representative> %s\n", ev.Text) },
+		func(status string) { printf("! %s\n", status) })
 	lines := make(chan string)
 	go func() {
 		defer close(lines)
@@ -81,7 +99,6 @@ func chat(ctx context.Context, c client.Client, orgs []v1alpha1.AgentOrganizatio
 		}
 	}()
 	for {
-		cl.prompt()
 		select {
 		case <-ctx.Done():
 			fmt.Println()
@@ -95,7 +112,7 @@ func chat(ctx context.Context, c client.Client, orgs []v1alpha1.AgentOrganizatio
 				continue
 			}
 			if err := cl.send(ctx, line); err != nil {
-				cl.printf("! not delivered: %v\n", err)
+				printf("! not delivered: %v\n", err)
 			}
 		}
 	}
@@ -182,20 +199,9 @@ func portForward(ctx context.Context, o chatOptions) (string, error) {
 	return "", errors.New("platform did not answer through kubectl port-forward")
 }
 
-// chatClient talks to the terminal adapter and owns the terminal output.
+// chatClient talks to the terminal adapter.
 type chatClient struct {
 	base, token string
-	mu          sync.Mutex
-}
-
-const youPrompt = "you> "
-
-func (c *chatClient) prompt() { c.printf("%s", youPrompt) }
-
-func (c *chatClient) printf(format string, args ...any) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	fmt.Printf(format, args...)
 }
 
 func (c *chatClient) request(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
@@ -241,15 +247,15 @@ func (c *chatClient) send(ctx context.Context, text string) error {
 	return last
 }
 
-// receive prints the representative's messages until ctx ends, reconnecting
-// when the stream drops.
-func (c *chatClient) receive(ctx context.Context) {
+// receive passes the representative's messages to onEvent until ctx ends,
+// reconnecting when the stream drops and reporting that to onStatus.
+func (c *chatClient) receive(ctx context.Context, onEvent func(terminal.Event), onStatus func(string)) {
 	for ctx.Err() == nil {
-		err := c.stream(ctx)
+		err := c.stream(ctx, onEvent)
 		if ctx.Err() != nil {
 			return
 		}
-		c.printf("\r! connection to representative lost (%v); reconnecting\n%s", err, youPrompt)
+		onStatus(fmt.Sprintf("connection to representative lost (%v); reconnecting", err))
 		select {
 		case <-ctx.Done():
 		case <-time.After(2 * time.Second):
@@ -257,7 +263,7 @@ func (c *chatClient) receive(ctx context.Context) {
 	}
 }
 
-func (c *chatClient) stream(ctx context.Context) error {
+func (c *chatClient) stream(ctx context.Context, onEvent func(terminal.Event)) error {
 	resp, err := c.request(ctx, http.MethodGet, "/events", nil)
 	if err != nil {
 		return err
@@ -278,8 +284,7 @@ func (c *chatClient) stream(ctx context.Context) error {
 		if err := json.Unmarshal([]byte(data), &ev); err != nil {
 			continue
 		}
-		// Clear the pending prompt, print the message, then re-prompt.
-		c.printf("\r\033[K%s> %s\n%s", "representative", ev.Text, youPrompt)
+		onEvent(ev)
 	}
 	if err := sc.Err(); err != nil {
 		return err

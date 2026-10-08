@@ -57,7 +57,7 @@
 <h3>Models and endpoints actually used</h3>
 <p>From the <code>model_request</code> events the platform recorded for each seat's runs.</p>
 <table><tr><th>Seat</th><th>Harness</th><th>Connection</th><th>API</th><th>Model</th><th>Upstream host</th><th>Requests (2xx)</th></tr>
-<tr><td><code>eng_lead</code></td><td>claude-code</td><td>anthropic</td><td><code>anthropic_messages</code></td><td><code>claude-sonnet-5-5</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>23 (23)</td></tr><tr><td><code>engineer</code></td><td>codex</td><td>openai</td><td><code>openai_responses</code></td><td><code>gpt-5.5</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>23 (23)</td></tr><tr><td><code>reviewer</code></td><td>pi</td><td>i14</td><td><code>openai_chat</code></td><td><code>qwen3.8-27b</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>14 (14)</td></tr>
+<tr><td><code>eng_lead</code></td><td>claude-code</td><td>anthropic</td><td><code>anthropic_messages</code></td><td><code>claude-sonnet-5-5</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>23 (23)</td></tr><tr><td><code>engineer</code></td><td>codex</td><td>openai</td><td><code>openai_responses</code></td><td><code>gpt-5.5</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>23 (23)</td></tr><tr><td><code>reviewer</code></td><td>pi</td><td>selfhosted</td><td><code>openai_chat</code></td><td><code>qwen3.8-27b</code></td><td><code>steadmesh-fakes.steadmesh-system.svc:8092</code></td><td>14 (14)</td></tr>
 </table>
 <details><summary>Configuration (examples/mixed-harness)</summary><pre><code>{
   &#34;access_profiles&#34;: {
@@ -87,7 +87,7 @@
   &#34;harness&#34;: &#34;fake&#34;,
   &#34;model_api_keys&#34;: {
     &#34;anthropic&#34;: &#34;demo-anthropic-1&#34;,
-    &#34;i14&#34;: &#34;demo-i14&#34;,
+    &#34;selfhosted&#34;: &#34;demo-selfhosted&#34;,
     &#34;openai&#34;: &#34;demo-openai&#34;
   },
   &#34;model_connections&#34;: {
@@ -96,7 +96,7 @@
       &#34;endpoint_ref&#34;: &#34;http://steadmesh-fakes.steadmesh-system.svc:8092/v1&#34;,
       &#34;secret_ref&#34;: &#34;k8s:anthropic-credentials&#34;
     },
-    &#34;i14&#34;: {
+    &#34;selfhosted&#34;: {
       &#34;adapter&#34;: &#34;model&#34;,
       &#34;endpoint_ref&#34;: &#34;http://steadmesh-fakes.steadmesh-system.svc:8092/v1&#34;,
       &#34;model&#34;: {
@@ -109,7 +109,7 @@
           }
         ]
       },
-      &#34;secret_ref&#34;: &#34;k8s:i14-credentials&#34;
+      &#34;secret_ref&#34;: &#34;k8s:selfhosted-credentials&#34;
     },
     &#34;openai&#34;: {
       &#34;adapter&#34;: &#34;openai&#34;,
@@ -143,7 +143,7 @@
     &#34;reviewer&#34;: {
       &#34;adapter&#34;: &#34;pi&#34;,
       &#34;model&#34;: {
-        &#34;connection&#34;: &#34;i14&#34;,
+        &#34;connection&#34;: &#34;selfhosted&#34;,
         &#34;id&#34;: &#34;qwen3.8-27b&#34;
       }
     }
@@ -162,7 +162,7 @@
 <h3>Models and endpoints actually used</h3>
 <p>From the <code>model_request</code> events the platform recorded for each seat's runs.</p>
 <table><tr><th>Seat</th><th>Harness</th><th>Connection</th><th>API</th><th>Model</th><th>Upstream host</th><th>Requests (2xx)</th></tr>
-<tr><td><code>eng_lead</code></td><td>claude-code</td><td>anthropic</td><td><code>anthropic_messages</code></td><td><code>claude-sonnet-5-5</code></td><td><code>api.anthropic.com</code></td><td>25 (25)</td></tr><tr><td><code>engineer</code></td><td>codex</td><td>openai</td><td><code>openai_responses</code></td><td><code>gpt-5.5</code></td><td><code>api.openai.com</code></td><td>41 (41)</td></tr><tr><td><code>reviewer</code></td><td>pi</td><td>i14</td><td><code>openai_chat</code></td><td><code>qwen3.8-27b</code></td><td><code>api-dev.i14.ai</code></td><td>24 (24)</td></tr>
+<tr><td><code>eng_lead</code></td><td>claude-code</td><td>anthropic</td><td><code>anthropic_messages</code></td><td><code>claude-sonnet-5-5</code></td><td><code>api.anthropic.com</code></td><td>25 (25)</td></tr><tr><td><code>engineer</code></td><td>codex</td><td>openai</td><td><code>openai_responses</code></td><td><code>gpt-5.5</code></td><td><code>api.openai.com</code></td><td>41 (41)</td></tr><tr><td><code>reviewer</code></td><td>pi</td><td>selfhosted</td><td><code>openai_chat</code></td><td><code>qwen3.8-27b</code></td><td><code>llm.example.com</code></td><td>24 (24)</td></tr>
 </table>
 <details><summary>Configuration (examples/mixed-harness)</summary><pre><code>{
   &#34;access_profiles&#34;: {
@@ -201,9 +201,9 @@
       &#34;adapter&#34;: &#34;anthropic&#34;,
       &#34;secret_ref&#34;: &#34;k8s:anthropic-credentials&#34;
     },
-    &#34;i14&#34;: {
+    &#34;selfhosted&#34;: {
       &#34;adapter&#34;: &#34;model&#34;,
-      &#34;endpoint_ref&#34;: &#34;https://api-dev.i14.ai/v1&#34;,
+      &#34;endpoint_ref&#34;: &#34;https://llm.example.com/v1&#34;,
       &#34;model&#34;: {
         &#34;apis&#34;: [
           &#34;openai_chat&#34;
@@ -214,7 +214,7 @@
           }
         ]
       },
-      &#34;secret_ref&#34;: &#34;k8s:i14-credentials&#34;
+      &#34;secret_ref&#34;: &#34;k8s:selfhosted-credentials&#34;
     },
     &#34;openai&#34;: {
       &#34;adapter&#34;: &#34;openai&#34;,
@@ -244,7 +244,7 @@
     &#34;reviewer&#34;: {
       &#34;adapter&#34;: &#34;pi&#34;,
       &#34;model&#34;: {
-        &#34;connection&#34;: &#34;i14&#34;,
+        &#34;connection&#34;: &#34;selfhosted&#34;,
         &#34;id&#34;: &#34;qwen3.8-27b&#34;
       }
     }

@@ -11,7 +11,7 @@
     "model_api_keys": {
       "anthropic": "demo-anthropic-1",
       "openai": "demo-openai",
-      "i14": "demo-i14"
+      "selfhosted": "demo-selfhosted"
     },
     "enable_egress": true,
     "enable_console": true,
@@ -37,7 +37,7 @@
       "reviewer": {
         "adapter": "pi",
         "model": {
-          "connection": "i14",
+          "connection": "selfhosted",
           "id": "qwen3.8-27b"
         }
       }
@@ -53,9 +53,9 @@
         "secret_ref": "k8s:openai-credentials",
         "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1"
       },
-      "i14": {
+      "selfhosted": {
         "adapter": "model",
-        "secret_ref": "k8s:i14-credentials",
+        "secret_ref": "k8s:selfhosted-credentials",
         "endpoint_ref": "http://steadmesh-fakes.steadmesh-system.svc:8092/v1",
         "model": {
           "apis": [
@@ -169,7 +169,7 @@
       "harness": "pi",
       "requests": [
         {
-          "connection": "i14",
+          "connection": "selfhosted",
           "api": "openai_chat",
           "model": "qwen3.8-27b",
           "upstream_host": "steadmesh-fakes.steadmesh-system.svc:8092",

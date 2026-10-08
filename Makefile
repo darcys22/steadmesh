@@ -147,7 +147,7 @@ live-github:
 	$(LOADENV) $(GO) test -count=1 -tags live -run LiveGitHub -v -timeout 10m ./tests/live/...
 
 # Each real harness CLI on its real model endpoint, without a cluster:
-# ANTHROPIC_API_KEY, OPENAI_API_KEY and/or I14_API_KEY (see tests/live/README.md).
+# ANTHROPIC_API_KEY, OPENAI_API_KEY and/or SELFHOSTED_API_KEY (see tests/live/README.md).
 live-harnesses:
 	build/harness-bins.sh
 	$(LOADENV) $(GO) test -count=1 -tags live -run LiveHarnesses -v -timeout 30m ./tests/live/...
