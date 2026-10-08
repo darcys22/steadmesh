@@ -319,7 +319,7 @@ func (a *Adapter) startProcessLocked(ctx context.Context) error {
 	cmd := exec.Command(a.bin, "app-server")
 	cmd.Dir = a.env.WorkspaceDir
 	cmd.Env = baseEnv(a.env, a.home)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	harnesses.NewProcessGroup(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
@@ -361,7 +361,7 @@ func (a *Adapter) stderrNote() string {
 
 func (a *Adapter) killLocked() {
 	if a.proc != nil && a.proc.Process != nil {
-		_ = syscall.Kill(-a.proc.Process.Pid, syscall.SIGKILL)
+		harnesses.KillProcessGroup(a.proc.Process.Pid, syscall.SIGKILL)
 	}
 	if a.procDone != nil {
 		select {

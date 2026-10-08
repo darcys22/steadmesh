@@ -417,7 +417,7 @@ func (p *process) read(r io.Reader, tap func([]byte)) {
 
 func (p *process) kill() {
 	if p.cmd.Process != nil {
-		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+		harnesses.KillProcessGroup(p.cmd.Process.Pid, syscall.SIGKILL)
 	}
 	select {
 	case <-p.done:
@@ -438,7 +438,7 @@ func (a *Adapter) startLocked(ctx context.Context) error {
 	cmd := exec.Command(a.bin, args...)
 	cmd.Dir = a.env.WorkspaceDir
 	cmd.Env = baseEnv(a.env, a.dir)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	harnesses.NewProcessGroup(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err

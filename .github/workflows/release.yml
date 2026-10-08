@@ -44,6 +44,13 @@ jobs:
             exit 1
           fi
       - run: make lint test
+      - name: The provider builds for every release platform
+        run: |
+          for os in linux darwin windows; do
+            for arch in amd64 arm64; do
+              GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -o /dev/null ./cmd/terraform-provider-steadmesh
+            done
+          done
 
   images:
     needs: check

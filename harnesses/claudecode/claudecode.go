@@ -432,7 +432,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		p := a.proc
 		a.mu.Unlock()
 		if p != nil {
-			killGroup(p.Pid, syscall.SIGKILL)
+			harnesses.KillProcessGroup(p.Pid, syscall.SIGKILL)
 		}
 	}
 	done := a.guard.Stop()
@@ -630,7 +630,7 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 	cmd.Env = append(cmd.Env, "CLAUDE_CODE_MAX_RETRIES="+strconv.Itoa(cfg.maxRetries))
 	cmd.Env = append(cmd.Env, "STEADMESH_EXECUTION="+d.ExecutionID)
 	cmd.Stdin = strings.NewReader(a.prompt(d, recovery, sessionID == ""))
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	harnesses.NewProcessGroup(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err
@@ -645,7 +645,7 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 	killNow := a.killNow
 	a.mu.Unlock()
 	if killNow {
-		killGroup(cmd.Process.Pid, syscall.SIGKILL)
+		harnesses.KillProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	}
 	emit(harnesses.EventProgress, "", map[string]any{"phase": "process_started", "pid": cmd.Process.Pid, "resume": sessionID})
 
@@ -663,15 +663,15 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 		immediate := a.killNow
 		a.mu.Unlock()
 		if immediate {
-			killGroup(cmd.Process.Pid, syscall.SIGKILL)
+			harnesses.KillProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 			return
 		}
-		killGroup(cmd.Process.Pid, syscall.SIGINT)
+		harnesses.KillProcessGroup(cmd.Process.Pid, syscall.SIGINT)
 		emit(harnesses.EventProgress, "", map[string]any{"phase": "interrupt_sent", "signal": "SIGINT"})
 		select {
 		case <-stopWatch:
 		case <-time.After(cfg.grace):
-			killGroup(cmd.Process.Pid, syscall.SIGKILL)
+			harnesses.KillProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 		}
 	}()
 
@@ -697,7 +697,7 @@ func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID s
 	close(stopWatch)
 	<-watchDone
 	// Reap stragglers (e.g. the MCP server) left in the process group.
-	killGroup(cmd.Process.Pid, syscall.SIGKILL)
+	harnesses.KillProcessGroup(cmd.Process.Pid, syscall.SIGKILL)
 	a.mu.Lock()
 	a.proc = nil
 	a.mu.Unlock()
@@ -712,13 +712,6 @@ func mcpStatus(in *Init) string {
 		}
 	}
 	return "absent"
-}
-
-func killGroup(pid int, sig syscall.Signal) {
-	if pid <= 0 {
-		return
-	}
-	_ = syscall.Kill(-pid, sig)
 }
 
 // tailBuffer keeps the last stderrTail bytes written.
