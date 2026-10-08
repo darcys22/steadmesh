@@ -22,7 +22,7 @@
     <a class="seat-name" href="/seats/{{$v.Config.SeatID}}">{{or $v.Config.DisplayName $v.Config.Key}}</a>
     <span class="chip {{tone $v.State}}">{{$v.State}}</span>
   </header>
-  <p class="meta"><code>{{$v.Config.Key}}</code> · {{$v.Config.RoleRef}}{{if $v.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}</p>
+  <p class="meta"><code>{{$v.Config.Key}}</code> · <code class="ref" title="{{$v.Config.RoleRef}}">{{shortRef $v.Config.RoleRef}}</code>{{if $v.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}</p>
   <dl class="facts">
     <dt>Runner</dt>
     <dd>{{if $v.Alive}}<span class="dot ok"></span>lease held{{else}}<span class="dot muted"></span>no runner{{end}}{{with $v.Pod}} · <code title="Pod">{{.Name}}</code>{{end}}</dd>

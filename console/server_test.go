@@ -404,3 +404,13 @@ func TestStreamSkipsItemsAlreadyOnThePage(t *testing.T) {
 		t.Fatalf("stream sent %v, want only the new item", data)
 	}
 }
+
+func TestShortRef(t *testing.T) {
+	ref := "configmap:steadmesh-role-engineer/engineer.md#sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	if got := shortRef(ref); got != "configmap:steadmesh-role-engineer/engineer.md#sha256:0123456789ab…" {
+		t.Fatalf("shortRef = %q", got)
+	}
+	if got := shortRef("role:engineer"); got != "role:engineer" {
+		t.Fatalf("shortRef = %q", got)
+	}
+}

@@ -14,6 +14,7 @@ var funcs = template.FuncMap{
 	"list":     func(v ...string) []string { return v },
 	"ago":      ago,
 	"short":    short,
+	"shortRef": shortRef,
 	"duration": duration,
 	"pretty":   pretty,
 	"tone":     tone,
@@ -45,6 +46,17 @@ var activityLabels = map[string]string{
 	"egress_revoked":    "connection closed: access revoked",
 	"credential_issued": "credential delivered",
 	"credential_denied": "credential refused",
+}
+
+// shortRef shortens the digest of an instruction reference
+// (configmap:<name>/<key>#sha256:<digest>) for display; the full reference
+// goes in the title.
+func shortRef(ref string) string {
+	base, digest, ok := strings.Cut(ref, "#sha256:")
+	if !ok || len(digest) <= 12 {
+		return ref
+	}
+	return base + "#sha256:" + digest[:12] + "…"
 }
 
 func derefTime(t *time.Time) time.Time {

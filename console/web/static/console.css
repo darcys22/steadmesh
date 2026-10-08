@@ -44,7 +44,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 16px; }
 .page-head { margin-bottom: 12px; }
 .lede, .meta, .muted, .crumb { color: var(--muted); }
 .lede { max-width: 72ch; margin: 4px 0 0; }
-.meta { font-size: 13px; margin: 4px 0; }
+.meta { font-size: 13px; margin: 4px 0; overflow-wrap: anywhere; min-width: 0; }
 .crumb { margin: 0 0 2px; font-size: 13px; }
 .empty { color: var(--muted); font-style: italic; }
 .bad { color: var(--bad); }

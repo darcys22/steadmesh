@@ -4,7 +4,7 @@
 <div class="page-head">
   <p class="crumb"><a href="/orgs/{{.H.Org.ID}}">Organisation</a> /</p>
   <h1>{{or $d.Config.DisplayName $d.Config.Key}} <span class="chip {{tone $v.State}}">{{$v.State}}</span></h1>
-  <p class="meta">Seat <code title="Permanent seat id: it survives Pod replacement">{{$d.Config.SeatID}}</code> · <code>{{$d.Config.Key}}</code> · {{$d.Config.RoleRef}}{{if $d.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}{{if $d.Config.Teams}} · teams {{join $d.Config.Teams ", "}}{{end}}</p>
+  <p class="meta">Seat <code title="Permanent seat id: it survives Pod replacement">{{$d.Config.SeatID}}</code> · <code>{{$d.Config.Key}}</code> · <code class="ref" title="{{$d.Config.RoleRef}}">{{shortRef $d.Config.RoleRef}}</code>{{if $d.Config.IsRepresentative}} · <span class="badge">representative</span>{{end}}{{if $d.Config.Teams}} · teams {{join $d.Config.Teams ", "}}{{end}}</p>
 </div>
 
 {{if $v.Attention}}<section class="callout bad-soft"><h2>Needs attention</h2><ul>{{range $v.Attention}}<li>{{.}}</li>{{end}}</ul></section>{{end}}
