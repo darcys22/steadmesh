@@ -61,7 +61,23 @@ func (r *SeatReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	ctx = logf.IntoContext(ctx, log)
 	orig := seat.DeepCopy()
 
-	if seat.DeletionTimestamp != nil || seat.Spec.Retired {
+	// A seat removed from the organisation keeps running while the platform
+	// still has it (retiring: its retirement turn); its runtime is removed once
+	// a fresh platform view no longer lists it.
+	var retiring bool
+	var retireBy *time.Time
+	if seat.DeletionTimestamp == nil && seat.Spec.Retired {
+		rt, fresh := r.Pollers.Lookup(seat.Spec.OrganizationID, seat.Spec.SeatKey)
+		switch {
+		case !fresh:
+			setSeatCond(&seat, readiness.Condition(readiness.SeatReady, false, lifecycle.ReasonRetiring, "removed from the organisation; waiting for the platform's view of its retirement", seat.Generation))
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, r.writeStatus(ctx, orig, &seat)
+		case rt != nil && rt.SeatID == seat.Spec.SeatID:
+			// A view from before the sync may not show the deadline yet.
+			retiring, retireBy = true, rt.RetireBy
+		}
+	}
+	if seat.DeletionTimestamp != nil || (seat.Spec.Retired && !retiring) {
 		return r.retire(ctx, &seat, orig)
 	}
 	if controllerutil.AddFinalizer(&seat, v1alpha1.FinalizerSeat) {
@@ -112,8 +128,9 @@ func (r *SeatReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	current := readiness.ProbeCurrent(probe, rev, nonce)
 	retryFailed := current && probe.Status == readiness.ProbeFailed &&
 		(probe.CompletedTime == nil || now.Sub(probe.CompletedTime.Time) >= r.ProbeRetry)
-	needProbe := eligible && (!current || retryFailed)
-	probeActive := eligible && current && probe.Status == readiness.ProbePending
+	// A retiring seat is not probed: it only runs its retirement turn.
+	needProbe := eligible && !retiring && (!current || retryFailed)
+	probeActive := eligible && !retiring && current && probe.Status == readiness.ProbePending
 
 	in := lifecycle.Input{
 		Now: now, AdminSuspended: seat.Spec.AdminSuspended, Blocked: blocked,
@@ -181,6 +198,26 @@ func (r *SeatReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	r.fillStatus(&seat, st, rt, action, blocked, enf)
 	setSeatCond(&seat, accessCondition(sm.Access, rev, rt, blocked, seat.Generation))
+	seat.Status.RetiringUntil = nil
+	if retiring {
+		// The seat runs its retirement turn; the platform retires it when
+		// that is done or at the deadline, and it then leaves the runtime view.
+		until := "the platform's deadline"
+		if retireBy != nil {
+			t := metav1.NewTime(retireBy.UTC())
+			seat.Status.RetiringUntil = &t
+			until = t.Format(time.RFC3339)
+		}
+		if seat.Status.ExecutionState != v1alpha1.StateBlocked {
+			seat.Status.ExecutionState = v1alpha1.StateRetiring
+		}
+		setSeatCond(&seat, readiness.Condition(readiness.SeatReady, false, lifecycle.ReasonRetiring,
+			fmt.Sprintf("removed from the organisation; winding down until %s (%s: %s)", until, action.State, action.Message), seat.Generation))
+		if orig.Status.ExecutionState != v1alpha1.StateRetiring {
+			r.event(&seat, corev1.EventTypeNormal, lifecycle.ReasonRetiring, "Retire", "winding down until %s: retirement notice turn, then retirement", until)
+		}
+		requeue = minDuration(requeue, 3*time.Second)
+	}
 	switch {
 	case probeErr != nil:
 		seat.Status.LastError = "probe: " + probeErr.Error()

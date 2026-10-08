@@ -43,6 +43,9 @@ type Config struct {
 	Console bool
 	// PollInterval is how often a waiting inbox request re-checks the queue.
 	PollInterval time.Duration
+	// RetirementGrace bounds the wind-down of a seat removed from the
+	// declaration before it is retired.
+	RetirementGrace time.Duration
 }
 
 type server struct{ Config }

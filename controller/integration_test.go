@@ -52,6 +52,7 @@ type fakePlatform struct {
 	orgs      map[string]string            // key -> id
 	seats     map[string]map[string]string // org id -> seat key -> seat id
 	retired   map[string]bool              // seat id
+	retiring  map[string]time.Time         // seat id -> retire by
 	syncs     int
 	verifies  int
 	deletes   []string // "<id>?retention=<r>"
@@ -62,7 +63,7 @@ type fakePlatform struct {
 
 func newFakePlatform() *fakePlatform {
 	return &fakePlatform{
-		orgs: map[string]string{}, seats: map[string]map[string]string{}, retired: map[string]bool{},
+		orgs: map[string]string{}, seats: map[string]map[string]string{}, retired: map[string]bool{}, retiring: map[string]time.Time{},
 		probes: map[string]string{}, lastSeats: map[string][]string{},
 	}
 }
@@ -98,13 +99,23 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				f.seats[id][k] = sid
 			}
 			keys = append(keys, k)
+			delete(f.retiring, sid)
 			resp.Seats[k] = runtimeapi.SeatIdentity{SeatID: sid, ServiceAccount: names.Seat(req.Key, k), PolicyRevision: 1}
 		}
+		// Removed seats retire gracefully: retiring until the test calls finishRetirement.
 		for k, sid := range f.seats[id] {
-			if _, ok := m.Seats[k]; !ok && !f.retired[sid] {
-				f.retired[sid] = true
-				resp.Retired = append(resp.Retired, k)
+			if _, ok := m.Seats[k]; ok || f.retired[sid] {
+				continue
 			}
+			by, ok := f.retiring[sid]
+			if !ok {
+				by = time.Now().Add(time.Hour).UTC().Truncate(time.Second)
+				f.retiring[sid] = by
+			}
+			if resp.Retiring == nil {
+				resp.Retiring = map[string]runtimeapi.RetiringSeat{}
+			}
+			resp.Retiring[k] = runtimeapi.RetiringSeat{SeatID: sid, RetireBy: by}
 		}
 		f.lastSeats[id] = keys
 		writeJSON(w, resp)
@@ -113,6 +124,11 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		resp := runtimeapi.RuntimeResponse{Seats: map[string]runtimeapi.SeatRuntime{}}
 		for _, k := range f.lastSeats[id] {
 			resp.Seats[k] = runtimeapi.SeatRuntime{SeatID: f.seats[id][k], SeatKey: k, State: "Stopped"}
+		}
+		for k, sid := range f.seats[id] {
+			if by, ok := f.retiring[sid]; ok {
+				resp.Seats[k] = runtimeapi.SeatRuntime{SeatID: sid, SeatKey: k, State: "Stopped", RetireBy: &by}
+			}
 		}
 		writeJSON(w, resp)
 	case r.Method == http.MethodPost && strings.HasSuffix(p, "/verify"):
@@ -142,6 +158,15 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, `{"code":"not_found","message":"`+r.Method+" "+p+`"}`, http.StatusNotFound)
 	}
+}
+
+// finishRetirement retires a retiring seat, as the platform does once its
+// retirement turn is done or its grace period ends.
+func (f *fakePlatform) finishRetirement(sid string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.retiring, sid)
+	f.retired[sid] = true
 }
 
 func (f *fakePlatform) counts() (syncs, verifies int) {
@@ -529,6 +554,27 @@ func TestSeatRemovalRetiresAndRetainsWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	n := names.Seat("retire", "reviewer")
+	// While the platform reports it retiring, the seat keeps its runtime.
+	eventually(t, 30*time.Second, "reviewer retiring", func() error {
+		var seat v1alpha1.AgentSeat
+		if err := k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: n}, &seat); err != nil {
+			return err
+		}
+		c := meta.FindStatusCondition(seat.Status.Conditions, readiness.SeatReady)
+		if !seat.Spec.Retired || seat.Status.ExecutionState != v1alpha1.StateRetiring || seat.Status.RetiringUntil == nil ||
+			c == nil || c.Reason != "Retiring" {
+			return fmt.Errorf("seat state %s retiringUntil %v ready %+v", seat.Status.ExecutionState, seat.Status.RetiringUntil, c)
+		}
+		return nil
+	})
+	var sts appsv1.StatefulSet
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: n}, &sts); err != nil {
+		t.Fatalf("a retiring seat keeps its runtime: %v", err)
+	}
+	if org := waitReady(t, ns, "retire"); org.Status.Seats["reviewer"].SeatID != "" {
+		t.Fatal("a retiring seat must leave the status summary")
+	}
+	fp.finishRetirement("seat-retire-reviewer")
 	eventually(t, 30*time.Second, "reviewer AgentSeat removed", func() error {
 		var seat v1alpha1.AgentSeat
 		err := k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: n}, &seat)
@@ -545,12 +591,6 @@ func TestSeatRemovalRetiresAndRetainsWorkspace(t *testing.T) {
 	var pvc corev1.PersistentVolumeClaim
 	if err := k8s.Get(ctx, types.NamespacedName{Namespace: ns, Name: names.WorkspaceClaim(n)}, &pvc); err != nil {
 		t.Fatalf("retired seat's workspace must be retained: %v", err)
-	}
-	fp.mu.Lock()
-	retired := fp.retired["seat-retire-reviewer"]
-	fp.mu.Unlock()
-	if !retired {
-		t.Fatal("platform sync must retire the identity")
 	}
 	org := waitReady(t, ns, "retire")
 	if _, ok := org.Status.Seats["reviewer"]; ok {

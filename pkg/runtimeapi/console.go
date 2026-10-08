@@ -54,6 +54,8 @@ type ConsoleSeatConfig struct {
 	Capabilities        []ConsoleCapability `json:"capabilities,omitempty"`
 	CreatedAt           time.Time           `json:"created_at"`
 	AdoptedFrom         string              `json:"adopted_from,omitempty"`
+	// RetiredAt is set for a retired seat, whose history stays readable.
+	RetiredAt *time.Time `json:"retired_at,omitempty"`
 }
 
 // ConsoleCapability is one resolved grant of a seat.

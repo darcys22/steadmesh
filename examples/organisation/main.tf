@@ -51,11 +51,11 @@ module "representative" {
 locals {
   rep_seats = { for k, m in module.representative : k => m.seat_key }
 
-  engineering_seats = {
+  engineering_seats = merge({
     eng_lead = { role = "engineering_lead", display_name = "Engineering lead" }
     engineer = { role = "engineer", display_name = "Engineer" }
     reviewer = { role = "reviewer", display_name = "Reviewer" }
-  }
+  }, var.extra_engineering_seats)
 
   seats = merge(
     [for m in module.representative : m.seats]...
@@ -183,6 +183,7 @@ resource "steadmesh_organization" "this" {
         eng_lead_reviewer = { from = "seat:eng_lead", to = "seat:reviewer", bidirectional = true }
         engineer_reviewer = { from = "seat:engineer", to = "seat:reviewer", bidirectional = true }
       },
+      { for k in keys(var.extra_engineering_seats) : "eng_lead_${k}" => { from = "seat:eng_lead", to = "seat:${k}", bidirectional = true } },
     )
 
     channel_bindings = merge([for m in module.representative : m.channel_bindings]...)

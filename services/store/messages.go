@@ -96,7 +96,8 @@ type SeatMessage struct {
 }
 
 // SendSeatMessage persists an internal message and its delivery in one
-// fenced transaction. A full recipient inbox is rejected (ADR-0006).
+// fenced transaction. A full recipient inbox is rejected (ADR-0006), and a
+// retiring or retired recipient with ErrRecipientRetiring.
 func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*Sent, error) {
 	out := &Sent{MessageID: uuid.NewString(), CorrelationID: in.CorrelationID}
 	if out.CorrelationID == "" {
@@ -106,6 +107,9 @@ func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*
 	}
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		if err := checkFence(ctx, tx, f); err != nil {
+			return err
+		}
+		if err := checkRecipient(ctx, tx, in.RecipientID); err != nil {
 			return err
 		}
 		if in.ConversationID != "" {

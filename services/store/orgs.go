@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -21,11 +22,16 @@ type SyncInput struct {
 	Key       string
 	SourceUID string
 	Manifest  *compile.Manifest
+	// RetirementGrace is how long a seat removed from the manifest may wind
+	// down before it is retired; zero retires it at the next retirement pass.
+	RetirementGrace time.Duration
 }
 
 // SyncOrganization idempotently upserts the organisation, its seats and its
-// memory stores in one transaction (§6.1). Seats missing from the manifest are
-// retired with their data retained. A seat's policy revision is bumped when its
+// memory stores in one transaction (§6.1). Seats missing from the manifest
+// start retiring (retire.go): they take no new messages and get a bounded
+// wind-down before they are retired with their data retained. A seat added
+// back while retiring carries on. A seat's policy revision is bumped when its
 // authority changes; because tools read the committed seat manifest on every
 // call, the new policy is in force when this returns (A13).
 func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi.SyncResponse, error) {
@@ -53,15 +59,24 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 		if err != nil {
 			return err
 		}
-		for key, seat := range active {
-			if _, ok := in.Manifest.Seats[key]; !ok {
-				if err := retireSeat(ctx, tx, seat.id, "seat retired"); err != nil {
-					return err
-				}
-				out.Retired = append(out.Retired, key)
+		retiring := map[string]string{} // personal store key -> retiring owner seat id
+		for _, key := range sortedKeys(active) {
+			seat := active[key]
+			if _, ok := in.Manifest.Seats[key]; ok {
+				continue
+			}
+			rs, err := beginRetirement(ctx, tx, orgID, key, seat, in.RetirementGrace)
+			if err != nil {
+				return err
+			}
+			if out.Retiring == nil {
+				out.Retiring = map[string]runtimeapi.RetiringSeat{}
+			}
+			out.Retiring[key] = rs
+			if seat.manifest.PersonalMemory != "" {
+				retiring[seat.manifest.PersonalMemory] = seat.id
 			}
 		}
-		slices.Sort(out.Retired)
 
 		adopted := map[string]string{} // personal store key -> adopting seat id
 		for _, key := range sortedKeys(in.Manifest.Seats) {
@@ -75,7 +90,7 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 			}
 			out.Seats[key] = runtimeapi.SeatIdentity{SeatID: id, ServiceAccount: names.Seat(in.Key, key), PolicyRevision: rev}
 		}
-		return syncStores(ctx, tx, orgID, in.Manifest, out.Seats, adopted)
+		return syncStores(ctx, tx, orgID, in.Manifest, out.Seats, adopted, retiring)
 	})
 	if err != nil {
 		return nil, err
@@ -87,10 +102,12 @@ type activeSeat struct {
 	id       string
 	manifest compile.SeatManifest
 	policy   int64
+	// retireBy is set while the seat is retiring.
+	retireBy *time.Time
 }
 
 func activeSeats(ctx context.Context, tx pgx.Tx, orgID string) (map[string]*activeSeat, error) {
-	rows, err := tx.Query(ctx, `SELECT id, key, manifest, policy_revision FROM seats
+	rows, err := tx.Query(ctx, `SELECT id, key, manifest, policy_revision, retire_by FROM seats
 		WHERE organization_id = $1 AND retired_at IS NULL FOR UPDATE`, orgID)
 	if err != nil {
 		return nil, err
@@ -100,7 +117,7 @@ func activeSeats(ctx context.Context, tx pgx.Tx, orgID string) (map[string]*acti
 		var key string
 		var raw []byte
 		a := &activeSeat{}
-		if err := rows.Scan(&a.id, &key, &raw, &a.policy); err != nil {
+		if err := rows.Scan(&a.id, &key, &raw, &a.policy, &a.retireBy); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(raw, &a.manifest); err != nil {
@@ -131,6 +148,11 @@ func upsertSeat(ctx context.Context, tx pgx.Tx, orgID, orgKey string, sm compile
 		return "", 0, err
 	}
 	if cur != nil {
+		if cur.retireBy != nil {
+			if err := cancelRetirement(ctx, tx, orgID, cur.id); err != nil {
+				return "", 0, err
+			}
+		}
 		rev := cur.policy
 		if authority(cur.manifest) != authority(sm) {
 			rev++
@@ -204,7 +226,8 @@ func transferSeatData(ctx context.Context, tx pgx.Tx, orgID, oldID, newID string
 }
 
 // retireSeat stops new delivery, interrupts active work and revokes the lease;
-// all rows are retained (§5.5).
+// all rows are retained (§5.5). A graceful retirement (retire.go) hands back
+// what the seat held first.
 func retireSeat(ctx context.Context, tx pgx.Tx, seatID, reason string) error {
 	if _, err := tx.Exec(ctx, `UPDATE seats SET retired_at = now(), updated_at = now() WHERE id = $1`, seatID); err != nil {
 		return err
@@ -234,13 +257,21 @@ type storeRow struct {
 // syncStores creates, updates and retires memory stores. A personal store
 // still owned by a retired seat is never handed to a different identity: it is
 // retired (data retained per its retention) and a fresh store takes the key
-// (A18). An explicit adoption restores the adopted seat's store instead.
-func syncStores(ctx context.Context, tx pgx.Tx, orgID string, m *compile.Manifest, seats map[string]runtimeapi.SeatIdentity, adopted map[string]string) error {
+// (A18). An explicit adoption restores the adopted seat's store instead. A
+// retiring seat keeps its personal store until it is retired, even when the
+// manifest no longer declares it.
+func syncStores(ctx context.Context, tx pgx.Tx, orgID string, m *compile.Manifest, seats map[string]runtimeapi.SeatIdentity,
+	adopted, retiring map[string]string) error {
 	owners := map[string]string{}
 	for key, sm := range m.Seats {
 		if sm.PersonalMemory != "" {
 			owners[sm.PersonalMemory] = seats[key].SeatID
 		}
+	}
+	// A retiring owner wins: its private memory never passes to another
+	// identity (A18); it is retired with the seat.
+	for key, id := range retiring {
+		owners[key] = id
 	}
 	for _, key := range sortedKeys(m.Spec.MemoryStores) {
 		ms := m.Spec.MemoryStores[key]
@@ -300,7 +331,8 @@ func syncStores(ctx context.Context, tx pgx.Tx, orgID string, m *compile.Manifes
 		if err := rows.Scan(&id, &key); err != nil {
 			return err
 		}
-		if _, ok := m.Spec.MemoryStores[key]; !ok {
+		_, declared := m.Spec.MemoryStores[key]
+		if _, keep := retiring[key]; !declared && !keep {
 			removed = append(removed, id)
 		}
 	}

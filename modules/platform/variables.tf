@@ -27,6 +27,12 @@ variable "enable_egress" {
   default     = false
 }
 
+variable "seat_retirement_grace" {
+  description = "How long a seat removed from the organisation may wind down (finish its turn, save a handoff, hand over its work) before it is retired, as a Go duration. \"0s\" retires removed seats at once."
+  type        = string
+  default     = "10m"
+}
+
 variable "image_registry" {
   description = "Registry and path prefix of the Steadmesh images."
   type        = string

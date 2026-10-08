@@ -92,7 +92,7 @@ func (s *Store) FireDue(ctx context.Context, now time.Time, limit int, next Next
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx, `SELECT w.id, w.organization_id, w.seat_id, w.schedule, w.next_trigger_at, w.note
 			FROM wake_schedules w JOIN seats s ON s.id = w.seat_id
-			WHERE w.active AND w.next_trigger_at <= $1 AND s.retired_at IS NULL
+			WHERE w.active AND w.next_trigger_at <= $1 AND s.retired_at IS NULL AND s.retiring_at IS NULL
 			ORDER BY w.next_trigger_at LIMIT $2 FOR UPDATE OF w SKIP LOCKED`, now, limit)
 		if err != nil {
 			return err

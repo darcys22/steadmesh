@@ -53,6 +53,8 @@ spec:
               value: {{ .Values.credentials.grace | quote }}
             - name: CREDENTIAL_MAX_STALE
               value: {{ .Values.credentials.maxStale | quote }}
+            - name: RETIREMENT_GRACE
+              value: {{ .Values.retirement.grace | quote }}
             {{- if .Values.vault.enabled }}
             - name: VAULT_ADDR
               value: {{ required "vault.address is required when vault.enabled" .Values.vault.address | quote }}

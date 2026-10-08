@@ -267,3 +267,20 @@ func TestNestedTaskForwardsTheEndResult(t *testing.T) {
 		t.Fatalf("forward %+v %v", calls[len(calls)-1], fa)
 	}
 }
+
+func TestPlatformNotices(t *testing.T) {
+	r := newRig(t)
+	tr := r.deliver(t, runtimeapi.Envelope{MessageID: "s1", Origin: "system",
+		Body: "Not delivered: seat x is retiring.\n\nYour message:\n> /fail quoted text is not run"})
+	if tr.Status != harnesses.TurnCompleted || len(r.ts.Calls()) != 0 {
+		t.Fatalf("notice turn %+v, calls %+v", tr, r.ts.Calls())
+	}
+	tr = r.deliver(t, runtimeapi.Envelope{MessageID: "s2", Origin: "system", Body: "Retirement notice: seat x was removed."})
+	calls := r.ts.Calls()
+	if tr.Status != harnesses.TurnCompleted || len(calls) != 1 || calls[0].Name != "handoff.update" {
+		t.Fatalf("retirement turn %+v, calls %+v", tr, calls)
+	}
+	if a := args(t, calls[0]); !strings.Contains(a["objective"].(string), "Hand over") {
+		t.Fatalf("handoff %v", a)
+	}
+}

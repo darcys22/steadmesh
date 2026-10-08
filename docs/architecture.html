@@ -158,7 +158,7 @@
 <p>On each reconcile of the current generation, the controller works through these steps in order:</p>
 <ol>
 <li>Compile the specification and verify instruction digests (<code>Configured</code>).</li>
-<li>Sync identities with the platform. This retires removed seats and activates the new policy revision before returning (<code>IdentitiesReady</code>).</li>
+<li>Sync identities with the platform. This starts retiring removed seats (they wind down, then retire; see <a href="operations.html#retiring">Retiring a seat</a>) and activates the new policy revision before returning (<code>IdentitiesReady</code>).</li>
 <li>Ensure each seat's objects: ServiceAccount, volume, manifest, NetworkPolicy and StatefulSet (<code>StorageReady</code>, <code>HarnessCompatible</code>).</li>
 <li>Run the NetworkPolicy enforcement probe (<code>SandboxEnforced</code>).</li>
 <li>Have the platform verify connections, Slack ingress and bound users (<code>ConnectionsAuthenticated</code>, <code>IngressReady</code>, <code>BindingsValid</code>).</li>

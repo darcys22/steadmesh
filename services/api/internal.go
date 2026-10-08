@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
@@ -32,12 +34,13 @@ func (s *server) sync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	res, err := s.Store.SyncOrganization(r.Context(), store.SyncInput{Namespace: req.Namespace, Key: req.Key, SourceUID: req.SourceUID, Manifest: &m})
+	res, err := s.Store.SyncOrganization(r.Context(), store.SyncInput{Namespace: req.Namespace, Key: req.Key, SourceUID: req.SourceUID, Manifest: &m,
+		RetirementGrace: s.RetirementGrace})
 	if err != nil {
 		s.storeError(w, r, err)
 		return
 	}
-	annotate(r.Context(), "organization_id", res.OrganizationID, "revision", m.Digest, "retired", res.Retired)
+	annotate(r.Context(), "organization_id", res.OrganizationID, "revision", m.Digest, "retiring", slices.Sorted(maps.Keys(res.Retiring)))
 	s.Connections.SyncManifest(r.Context(), res.OrganizationID, &m)
 	s.reconcileCredentials(r, res.OrganizationID, &m)
 	writeJSON(w, http.StatusOK, res)

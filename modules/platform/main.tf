@@ -86,5 +86,8 @@ resource "helm_release" "platform" {
     egress = {
       enabled = var.enable_egress
     }
+    retirement = {
+      grace = var.seat_retirement_grace
+    }
   }, var.extra_values))]
 }

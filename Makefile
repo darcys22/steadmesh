@@ -105,7 +105,7 @@ LOADENV := set -a; if [ -f .env ]; then . ./.env; fi; set +a;
 e2e: images provider orgctl
 	$(MAKE) e2e-reset
 	$(MAKE) kind-up kind-load
-	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestE2E -timeout 40m ./tests/e2e/...
+	KIND_CONTEXT=$(KCTX) $(GO) test -count=1 -tags e2e -run TestE2E -timeout 55m ./tests/e2e/...
 
 # The completion demo (examples/mixed-harness) on a fresh cluster: Claude
 # Code, Codex and Pi seats collaborate, with and without work items, through

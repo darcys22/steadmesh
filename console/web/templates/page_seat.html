@@ -32,7 +32,7 @@
       <dt>Memory</dt><dd>{{range $d.Memory}}<div><code>{{.Key}}</code>{{if .Personal}} (personal){{end}} · {{.Records}} records{{with .LastUpdatedAt}} · updated {{ago $now .}}{{end}}</div>{{else}}none{{end}}</dd>
       <dt>Config revision</dt><dd><code title="{{$d.Config.ConfigRevision}}">{{short $d.Config.ConfigRevision}}</code> · policy {{$d.Config.PolicyRevision}}</dd>
       <dt>Harness</dt><dd>{{$d.Config.HarnessAdapter}}{{if $d.Config.Model}} · {{$d.Config.Model}}{{end}}</dd>
-      <dt>Seat since</dt><dd>{{$d.Config.CreatedAt.Format "2006-01-02"}}{{if $d.Config.AdoptedFrom}} · adopted from <code>{{short $d.Config.AdoptedFrom}}</code>{{end}}</dd>
+      <dt>Seat since</dt><dd>{{$d.Config.CreatedAt.Format "2006-01-02"}}{{if $d.Config.AdoptedFrom}} · adopted from <code>{{short $d.Config.AdoptedFrom}}</code>{{end}}{{with $d.Config.RetiredAt}} · retired {{.Format "2006-01-02 15:04"}}{{end}}</dd>
     </dl>
   </section>
 </div>

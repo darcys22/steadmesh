@@ -60,7 +60,11 @@ const (
 	StateStopped      ExecutionState = "Stopped"
 	StateRecovering   ExecutionState = "Recovering"
 	StateBlocked      ExecutionState = "Blocked"
-	StateRetired      ExecutionState = "Retired"
+	// StateRetiring is a seat removed from the organisation that is winding
+	// down: it takes no new messages and is retired when its retirement turn
+	// is done or its grace period ends.
+	StateRetiring ExecutionState = "Retiring"
+	StateRetired  ExecutionState = "Retired"
 )
 
 // AgentOrganizationSpec is the resolved organisation declaration.
@@ -164,7 +168,9 @@ type AgentSeatSpec struct {
 	Tools            []ToolCapability `json:"tools,omitempty"`
 	// ManifestConfigMap holds the resolved seat manifest and instruction texts.
 	ManifestConfigMap string `json:"manifestConfigMap"`
-	// Retired is set when the seat is removed from the organisation.
+	// Retired is set when the seat is removed from the organisation. The
+	// seat keeps running while the platform reports it retiring, then its
+	// runtime is removed.
 	// +optional
 	Retired bool `json:"retired,omitempty"`
 	// AdminSuspended is an infrastructure control that stops execution (§14).
@@ -189,6 +195,9 @@ type AgentSeatStatus struct {
 	// Probe is the synthetic readiness probe of the current config revision.
 	// +optional
 	Probe *SeatProbeStatus `json:"probe,omitempty"`
+	// RetiringUntil is the end of a retiring seat's grace period.
+	// +optional
+	RetiringUntil *metav1.Time `json:"retiringUntil,omitempty"`
 }
 
 // SeatProbeStatus records one synthetic execution probe (§5.4).

@@ -177,6 +177,8 @@ func mapError(err error) *Error {
 		return toolErr("invalid", "that record is a work item; change it with the work tools")
 	case errors.Is(err, store.ErrInboxFull):
 		return toolErr("inbox_full", "recipient inbox full; retry later")
+	case errors.Is(err, store.ErrRecipientRetiring):
+		return toolErr("unavailable", "the recipient seat is retiring and takes no new messages; nothing was sent. Send it to whoever now handles this")
 	case errors.Is(err, store.ErrInvalid), errors.Is(err, gateway.ErrInvalid):
 		return toolErr("invalid", "%s", err.Error())
 	case errors.Is(err, gateway.ErrForbidden):

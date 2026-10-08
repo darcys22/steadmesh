@@ -150,16 +150,17 @@ func enableLinear(t *testing.T, f *fakes, env []string) {
 		})
 		// Work carries on internally.
 		out := f.delegateChain(t, `/tool work.create {"store":"engineering","objective":"Write the release notes"}`, "Write the release notes", 3*time.Minute)
-		if !strings.Contains(out, "engineering/W-2") {
+		id := workIDRe.FindString(out)
+		if id == "" || !strings.Contains(out, `"status":"ready"`) {
 			t.Fatalf("work item not created while Linear is down:\n%s", out)
 		}
-		if n := len(issues(t, "engineering/W-2: ")); n != 0 {
+		if n := len(issues(t, id+": ")); n != 0 {
 			t.Fatalf("published while Linear rejects every key: %d", n)
 		}
 		// Reconnect: publication converges without duplicates.
 		f.post(t, f.linear+"/_test/keys", map[string]any{"valid": []string{}})
 		waitFor(t, "the release notes item to be published after reconnecting", 6*time.Minute, func() bool {
-			return len(issues(t, "engineering/W-2: Write the release notes")) == 1
+			return len(issues(t, id+": Write the release notes")) == 1
 		})
 		if n := len(issues(t, "engineering/W-1: ")); n != 1 {
 			t.Fatalf("signup item published %d times, want 1", n)

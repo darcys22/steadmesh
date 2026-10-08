@@ -20,6 +20,9 @@
 //	/claim <text>            the agent claims business completion (informational)
 //	/fail <text>             fail the turn technically (for tests)
 //
+// A platform notice (origin system) is never replied to; on a retirement
+// notice the fake saves a handoff with handoff.update.
+//
 // A body with no commands gets "ack: <first 200 chars>" via messages.reply
 // (unless it is itself a reply from a seat, to avoid ack loops). A seat
 // message whose body starts with "/task" has its remaining lines executed
@@ -341,6 +344,22 @@ func (t *turn) run() {
 	// this one; report them so tests can see they were handed over.
 	for _, p := range t.d.Passive {
 		t.out(fmt.Sprintf("queued message from %s: %s", firstNonEmpty(p.SenderSeat, p.Origin), harnesses.TruncateUTF8(p.Body, 500)))
+	}
+
+	// Platform notices are never replied to, and text quoted in them is not
+	// run. A retirement notice is answered as an agent should: save a
+	// handoff before the seat stops.
+	if m.Origin == "system" {
+		if strings.HasPrefix(body, "Retirement notice") {
+			h, _ := json.Marshal(map[string]string{"objective": "Hand over " + t.a.env.SeatKey + "'s work before it retires",
+				"notes": t.a.env.SeatKey + " wound down on its retirement notice; its progress is in the team notes and work items."})
+			if res, isErr, err := t.tool("handoff.update", h); err == nil && !isErr {
+				t.out("handoff saved for retirement: " + res)
+			}
+			return
+		}
+		t.out("platform notice: " + harnesses.TruncateUTF8(lines[0], 200))
+		return
 	}
 
 	// A delegated task from another seat.

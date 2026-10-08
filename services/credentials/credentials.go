@@ -169,6 +169,27 @@ func (r *Registry) Reconcile(ctx context.Context, org string, seats map[string]*
 	return out
 }
 
+// RevokeSeat revokes every credential delivered to a seat, e.g. when it
+// retires.
+func (r *Registry) RevokeSeat(ctx context.Context, org, seat string) []Revoked {
+	ref := seatRef{org, seat}
+	r.mu.Lock()
+	list := r.prune(r.issued[ref])
+	delete(r.issued, ref)
+	r.mu.Unlock()
+	var out []Revoked
+	for _, i := range list {
+		err := r.revoke(ctx, org, i)
+		if err != nil {
+			r.log().Warn("credential revocation failed; it expires on its own", "seat", seat, "connection", i.connection, "expires", i.expires, "err", err)
+		} else {
+			r.log().Info("credential revoked", "seat", seat, "connection", i.connection)
+		}
+		out = append(out, Revoked{Seat: seat, Connection: i.connection, Err: err})
+	}
+	return out
+}
+
 func (r *Registry) revoke(ctx context.Context, org string, i issued) error {
 	t, err := r.Connections.Tracker(org, i.connection)
 	if err != nil {

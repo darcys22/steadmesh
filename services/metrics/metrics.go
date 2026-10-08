@@ -26,6 +26,9 @@ type Metrics struct {
 	HTTPRequests     *prometheus.CounterVec
 	HTTPDuration     *prometheus.HistogramVec
 	SchedulesFired   prometheus.Counter
+	// SeatsRetired counts finished seat retirements by outcome: finished
+	// (the seat wound down in time) or overdue (the grace period ended).
+	SeatsRetired *prometheus.CounterVec
 }
 
 // New creates the metrics and registers them with reg.
@@ -74,10 +77,13 @@ func New(reg prometheus.Registerer) *Metrics {
 		SchedulesFired: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "steadmesh_wake_schedules_fired_total", Help: "Scheduled wakes queued.",
 		}),
+		SeatsRetired: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "steadmesh_seats_retired_total", Help: "Seat retirements completed, by outcome (finished or overdue).",
+		}, []string{"outcome"}),
 	}
 	reg.MustRegister(m.IngressEvents, m.MessagesAccepted, m.MessagesRejected, m.QueueAge, m.Seats, m.DeadLettered,
 		m.MemoryConflicts, m.ConnectorRetries, m.ConnectorOps, m.ConnectorUnknown, m.ToolCalls, m.HTTPRequests,
-		m.HTTPDuration, m.SchedulesFired)
+		m.HTTPDuration, m.SchedulesFired, m.SeatsRetired)
 	return m
 }
 

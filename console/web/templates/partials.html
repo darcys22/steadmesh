@@ -1,7 +1,7 @@
 {{define "seat-grid"}}
 {{$now := .Now}}
 <div class="summary">
-  {{range $state := (list "working" "queued" "waiting" "starting" "blocked" "offline" "unknown")}}{{with index $.S.Counts $state}}<span class="chip {{tone $state}}">{{.}} {{$state}}</span>{{end}}{{end}}
+  {{range $state := (list "working" "queued" "waiting" "starting" "blocked" "retiring" "offline" "unknown")}}{{with index $.S.Counts $state}}<span class="chip {{tone $state}}">{{.}} {{$state}}</span>{{end}}{{end}}
 </div>
 {{range .Teams}}
 <section class="team">

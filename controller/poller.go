@@ -99,6 +99,22 @@ func (p *Pollers) Stop(orgID string) {
 	delete(p.fetched, orgID)
 }
 
+// Lookup returns the latest runtime view of a seat and whether the
+// organisation's view is fresh; a fresh view without the seat means the
+// platform has no active seat under that key.
+func (p *Pollers) Lookup(orgID, seatKey string) (*runtimeapi.SeatRuntime, bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if t, ok := p.fetched[orgID]; !ok || p.now().Sub(t) > p.Stale {
+		return nil, false
+	}
+	r, ok := p.data[orgID][seatKey]
+	if !ok {
+		return nil, true
+	}
+	return &r, true
+}
+
 // Get returns the latest fresh runtime view of a seat.
 func (p *Pollers) Get(orgID, seatKey string) (*runtimeapi.SeatRuntime, bool) {
 	p.mu.Lock()

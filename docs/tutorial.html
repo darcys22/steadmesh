@@ -165,7 +165,7 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
         workspace         = { persistent = true }
       }
     }</code></pre>
-<p>The seat key (<code>representative_sean</code>) is its stable name. The platform assigns each seat an immutable ID the first time it sees the seat. Changing the display name, instructions or image keeps that identity. Removing a seat <em>retires</em> it, and its data is retained by default. A new seat that reuses the same key does <strong>not</strong> inherit the old private data unless it names the old seat in <code>adopt_from</code>.</p>
+<p>The seat key (<code>representative_sean</code>) is its stable name. The platform assigns each seat an immutable ID the first time it sees the seat. Changing the display name, instructions or image keeps that identity. Removing a seat <em>retires</em> it: it first finishes its current turn, saves a handoff and hands over its work (see <a href="operations.html#retiring">Retiring a seat</a>), and its data is retained by default. A new seat that reuses the same key does <strong>not</strong> inherit the old private data unless it names the old seat in <code>adopt_from</code>.</p>
 
 <h2>6. Teams and templates</h2>
 <p>A template is reusable team configuration. Templates can extend each other, and roles are defined on the template. A concrete team instantiates a template, and seats join teams by listing them; the team itself has no member list.</p>

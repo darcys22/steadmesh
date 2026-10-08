@@ -116,8 +116,19 @@ func TestRetireAndRecreateDoesNotInheritPrivateData(t *testing.T) {
 	delete(sp.Grants, "org_memory_read")
 	delete(sp.MessageRoutes, "rep_a_to_lead")
 	res = syncOrg(t, s, orgfixture.Compile(t, sp))
-	if len(res.Retired) != 1 || res.Retired[0] != "rep_a" {
-		t.Fatalf("retired = %v", res.Retired)
+	if _, ok := res.Retiring["rep_a"]; !ok || len(res.Retiring) != 1 {
+		t.Fatalf("retiring = %v", res.Retiring)
+	}
+	// With no grace period the seat is due at once.
+	due, err := s.DueRetirements(ctx, 10)
+	if err != nil || len(due) != 1 || due[0].SeatID != old || !due[0].Overdue {
+		t.Fatalf("due = %+v %v", due, err)
+	}
+	if r, err := s.FinishRetirement(ctx, old, nil); err != nil || r == nil {
+		t.Fatalf("finish retirement: %+v %v", r, err)
+	}
+	if r, err := s.FinishRetirement(ctx, old, nil); err != nil || r != nil {
+		t.Fatalf("second finish: %+v %v", r, err)
 	}
 	if _, err := s.Seat(ctx, old); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("retired seat still active: %v", err)
@@ -176,6 +187,19 @@ func TestAdoptionTransfersPersonalData(t *testing.T) {
 	delete(sp.MessageRoutes, "rep_b_to_lead")
 	delete(sp.MessageRoutes, "lead_engineer")
 	syncOrg(t, s, orgfixture.Compile(t, sp))
+	// A retiring seat cannot be adopted yet.
+	sp2 := orgfixture.Spec()
+	early := sp2.Seats["lead"]
+	early.AdoptFrom = old
+	sp2.Seats["lead"] = early
+	if _, err := s.SyncOrganization(ctx, SyncInput{Namespace: "acme", Key: "acme", Manifest: orgfixture.Compile(t, sp2)}); err != nil {
+		// Declaring the key again cancels the retirement instead.
+		t.Fatalf("redeclare: %v", err)
+	}
+	syncOrg(t, s, orgfixture.Compile(t, sp))
+	if _, err := s.FinishRetirement(ctx, old, nil); err != nil {
+		t.Fatal(err)
+	}
 
 	sp = orgfixture.Spec()
 	lead := sp.Seats["lead"]
@@ -525,5 +549,35 @@ func TestDeleteOrganization(t *testing.T) {
 	_ = s.pool.QueryRow(ctx, `SELECT count(*) FROM seats`).Scan(&seats)
 	if seats != 0 {
 		t.Fatalf("purge left %d seats", seats)
+	}
+}
+
+func TestRetiringSeatRefusesMessages(t *testing.T) {
+	ctx := context.Background()
+	s := open(t)
+	res := syncOrg(t, s, orgfixture.Manifest(t))
+	org, lead, eng := res.OrganizationID, res.Seats["lead"].SeatID, res.Seats["engineer"].SeatID
+	f := lease(t, s, lead)
+	sp := orgfixture.Spec()
+	delete(sp.Seats, "engineer")
+	delete(sp.MessageRoutes, "lead_engineer")
+	delete(sp.MessageRoutes, "engineer_to_reviewer")
+	if _, err := s.SyncOrganization(ctx, SyncInput{Namespace: "acme", Key: "acme", Manifest: orgfixture.Compile(t, sp),
+		RetirementGrace: time.Hour}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.SendSeatMessage(ctx, f, SeatMessage{OrganizationID: org, SenderID: lead, RecipientID: eng, Body: "late"})
+	if !errors.Is(err, ErrRecipientRetiring) {
+		t.Fatalf("send to retiring seat: %v", err)
+	}
+	if _, err := s.CreateProbe(ctx, org, eng); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("probe of retiring seat: %v", err)
+	}
+	if due, err := s.DueRetirements(ctx, 10); err != nil || len(due) != 0 {
+		t.Fatalf("seat with an unhandled notice is due: %+v %v", due, err)
+	}
+	rt, err := s.SeatRuntimes(ctx, org, []string{"engineer"})
+	if err != nil || rt["engineer"].RetireBy == nil || rt["engineer"].PendingDeliveries != 1 {
+		t.Fatalf("runtime = %+v %v", rt, err)
 	}
 }

@@ -340,6 +340,9 @@ func TestSeatState(t *testing.T) {
 	}
 	queued := live
 	queued.PendingDeliveries = 2
+	by := now.Add(5 * time.Minute)
+	retiring := live
+	retiring.RetireBy = &by
 	for _, tc := range []struct {
 		name string
 		st   runtimeapi.SeatRuntime
@@ -354,6 +357,8 @@ func TestSeatState(t *testing.T) {
 		{"recovering", live, crd(v1alpha1.StateRecovering), StateStarting},
 		{"stopped", runtimeapi.SeatRuntime{SeatID: "s", State: "Stopped"}, nil, StateOffline},
 		{"stopped with inbox", runtimeapi.SeatRuntime{SeatID: "s", State: "Stopped", PendingDeliveries: 1}, nil, StateQueued},
+		{"retiring", retiring, crd(v1alpha1.StateExecuting), StateRetiring},
+		{"retiring per the controller", live, crd(v1alpha1.StateRetiring), StateRetiring},
 	} {
 		v := newSeatView(runtimeapi.ConsoleSeatConfig{}, runtimeapi.ConsoleSeatStatus{SeatRuntime: tc.st}, tc.crd, nil, now)
 		if v.State != tc.want {

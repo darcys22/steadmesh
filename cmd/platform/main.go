@@ -48,9 +48,9 @@ func envDuration(key string, def time.Duration) time.Duration {
 }
 
 type config struct {
-	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace string
-	vaultAddr, vaultRole, vaultMount, vaultJWT                             string
-	credentialRefresh, credentialGrace, credentialMaxStale                 time.Duration
+	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace  string
+	vaultAddr, vaultRole, vaultMount, vaultJWT                              string
+	credentialRefresh, credentialGrace, credentialMaxStale, retirementGrace time.Duration
 }
 
 func main() {
@@ -72,6 +72,8 @@ func main() {
 		"how long the previous credential stays in use after its replacement is rejected or its secret is deleted")
 	flag.DurationVar(&c.credentialMaxStale, "credential-max-stale", envDuration("CREDENTIAL_MAX_STALE", connections.DefaultMaxStale),
 		"how long a credential stays in use while its secret cannot be read")
+	flag.DurationVar(&c.retirementGrace, "retirement-grace", envDuration("RETIREMENT_GRACE", store.DefaultRetirementGrace),
+		"how long a seat removed from the declaration may wind down (finish its turn, hand over) before it is retired; 0 retires it at once")
 	flag.Parse()
 
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -79,6 +81,15 @@ func main() {
 		log.Error("platform stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+// retirementGrace maps the flag to platform.Options, where zero means the
+// default and a negative value means none.
+func retirementGrace(d time.Duration) time.Duration {
+	if d <= 0 {
+		return -1
+	}
+	return d
 }
 
 func run(c config, log *slog.Logger) error {
@@ -148,6 +159,7 @@ func run(c config, log *slog.Logger) error {
 		CredentialRefresh:  c.credentialRefresh,
 		CredentialGrace:    c.credentialGrace,
 		CredentialMaxStale: c.credentialMaxStale,
+		RetirementGrace:    retirementGrace(c.retirementGrace),
 		Registry:           reg,
 		Log:                log,
 	})

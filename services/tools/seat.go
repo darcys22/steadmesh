@@ -51,6 +51,7 @@ func Self(seat *store.Seat, org *store.Organization) runtimeapi.Self {
 		ConfigRevision: seat.ConfigRevision, PolicyRevision: seat.PolicyRevision, ChannelBindings: sm.ChannelBindings,
 		Instructions: []runtimeapi.InstructionInfo{}, MemoryStores: []runtimeapi.MemoryStoreInfo{},
 		Recipients: []runtimeapi.RecipientInfo{}, Connections: []runtimeapi.ConnectionInfo{},
+		RetiringUntil: seat.RetireBy,
 	}
 	for _, i := range sm.Instructions {
 		out.Instructions = append(out.Instructions, runtimeapi.InstructionInfo{Ref: i.Ref, Scope: i.Scope, Order: i.Order})
@@ -85,6 +86,8 @@ type seatStatus struct {
 	Dead             int        `json:"dead_letters,omitempty"`
 	LastActivity     *time.Time `json:"last_activity,omitempty"`
 	OnCurrentConfig  bool       `json:"on_current_config"`
+	// RetiringUntil is set for a seat that is retiring and takes no new messages.
+	RetiringUntil *time.Time `json:"retiring_until,omitempty"`
 }
 
 func (r *Registry) status(ctx context.Context, c *Call) (any, error) {
@@ -124,7 +127,7 @@ func (r *Registry) status(ctx context.Context, c *Call) (any, error) {
 		}
 		st := seatStatus{Seat: k, State: s.State, Detail: s.StateDetail, Running: s.LeaseExpiresAt.After(now),
 			Pending: s.PendingDeliveries, OldestPendingAge: s.OldestPendingAge, Dead: s.DeadDeliveries, LastActivity: s.LastActivity,
-			OnCurrentConfig: s.AdoptedRevision != "" && s.AdoptedRevision == c.Org.Manifest.Seats[k].ConfigRevision}
+			OnCurrentConfig: s.AdoptedRevision != "" && s.AdoptedRevision == c.Org.Manifest.Seats[k].ConfigRevision, RetiringUntil: s.RetireBy}
 		if k == c.Seat.Key {
 			out["self"] = st
 		} else {

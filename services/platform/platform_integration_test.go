@@ -615,24 +615,208 @@ func TestWakeTools(t *testing.T) {
 	}
 }
 
-func TestRetiredSeatLosesAccess(t *testing.T) {
-	e := newEnv(t)
-	e.sync(orgfixture.Spec())
-	rev := e.seat("reviewer")
+// removeEngineer is the fixture without the engineer seat, its routes and
+// its personal store.
+func removeEngineer() spec.OrganizationSpec {
 	sp := orgfixture.Spec()
-	delete(sp.Seats, "reviewer")
+	delete(sp.Seats, "engineer")
+	delete(sp.MemoryStores, "engineer")
+	delete(sp.MessageRoutes, "lead_engineer")
 	delete(sp.MessageRoutes, "engineer_to_reviewer")
-	if res := e.sync(sp); !slices.Equal(res.Retired, []string{"reviewer"}) {
-		t.Fatalf("retired = %v", res.Retired)
+	return sp
+}
+
+// waitRetired waits until the platform has retired the seat: its token stops
+// authenticating.
+func waitRetired(t *testing.T, s *seat) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		code, _ := s.do("GET", runtimeapi.PathSelf, nil)
+		if code == http.StatusForbidden {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("%s not retired: self %d", s.key, code)
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	if code, _ := rev.do("GET", runtimeapi.PathSelf, nil); code != http.StatusForbidden {
-		t.Fatalf("retired seat self: %d", code)
+}
+
+// nextFrom waits for the seat's next delivery and acks it.
+func (s *seat) nextAcked() *runtimeapi.InboxDelivery {
+	s.e.t.Helper()
+	d := s.next()
+	if d == nil {
+		s.e.t.Fatalf("%s: no delivery", s.key)
 	}
-	code, _ := e.request("DELETE", runtimeapi.PathInternalOrgs+e.org+"?retention=retain", controllerToken, nil, nil)
+	s.ack(d)
+	return d
+}
+
+// TestGracefulRetirement removes a busy seat: its running turn finishes, it
+// gets a retirement notice turn in which it still has its tools and personal
+// memory, its queued messages go back to their senders, new messages are
+// refused, and once the notice turn is done it is retired: its work item is
+// released, the representatives get a summary with its handoff, and its
+// access ends.
+func TestGracefulRetirement(t *testing.T) {
+	e := newEnvWith(t, true, func(o *platform.Options) { o.RetirementGrace = time.Minute })
+	e.sync(orgfixture.Spec())
+	engID := e.seats["engineer"]
+	lead, eng := e.seat("lead"), e.seat("engineer")
+	w := lead.mustTool("work.create", map[string]any{"store": "engineering", "objective": "Migrate the database", "owner": "engineer"})
+	workID := w["work_id"].(string)
+
+	lead.mustTool("messages.send", map[string]any{"to": "engineer", "body": "start the migration"})
+	busy := eng.next() // the engineer is mid-turn
+	if busy == nil {
+		t.Fatal("engineer got no work")
+	}
+	lead.mustTool("messages.send", map[string]any{"to": "engineer", "body": "also rotate the logs"})
+	lead.mustTool("messages.send", map[string]any{"to": "engineer", "body": "fyi: freeze on friday", "wake": false})
+
+	res := e.sync(removeEngineer())
+	rs, ok := res.Retiring["engineer"]
+	if !ok || rs.SeatID != engID || time.Until(rs.RetireBy) < 50*time.Second {
+		t.Fatalf("retiring = %+v", res.Retiring)
+	}
+	if again := e.sync(removeEngineer()); !again.Retiring["engineer"].RetireBy.Equal(rs.RetireBy) {
+		t.Fatalf("a repeated sync moved the deadline: %+v", again.Retiring)
+	}
+
+	// Queued messages went back to the lead, quoting them.
+	for _, want := range []string{"also rotate the logs", "fyi: freeze on friday"} {
+		d := lead.nextAcked()
+		if d.Message.Origin != "system" || !strings.Contains(d.Message.Body, "Not delivered: seat engineer is retiring") ||
+			!strings.Contains(d.Message.Body, want) {
+			t.Fatalf("returned message = %+v", d.Message)
+		}
+	}
+	// The status tool and self report the wind-down.
+	if self := eng.mustTool("self", nil); self["retiring_until"] == nil {
+		t.Fatalf("self = %v", self)
+	}
+	// Retiring seats take no probes.
+	if code, _ := e.request("POST", runtimeapi.PathInternalSeats+engID+"/probe", controllerToken, nil, struct{}{}); code == http.StatusOK {
+		t.Fatal("a retiring seat was probed")
+	}
+
+	// The running turn finishes normally; then the retirement notice.
+	eng.ack(busy)
+	notice := eng.next()
+	if notice == nil || notice.Message.Origin != "system" || !strings.Contains(notice.Message.Body, "Retirement notice") ||
+		!strings.Contains(notice.Message.Body, "handoff.update") || len(notice.Passive) != 0 {
+		t.Fatalf("notice = %+v", notice)
+	}
+	if !strings.Contains(notice.Message.Body, "also rotate the logs") {
+		t.Fatalf("notice does not list the returned messages: %s", notice.Message.Body)
+	}
+	// It still has its personal memory and tools during the wind-down.
+	eng.mustTool("memory.write", map[string]any{"store": "engineer", "path": "notes/migration.md", "text": "schema v2 applied to staging"})
+	eng.mustTool("handoff.update", map[string]any{"objective": "Migrate the database to schema v2",
+		"unresolved": []string{"production cut-over not scheduled"}, "notes": "staging done; see notes/migration.md"})
+	eng.ack(notice)
+
+	waitRetired(t, eng)
+	got := lead.mustTool("work.get", map[string]any{"work_id": workID})
+	if got["owner"] != "" || got["status"] != "ready" || !strings.Contains(fmt.Sprint(got["log"]), "owner engineer retired") {
+		t.Fatalf("work item after retirement = %v", got)
+	}
+	for _, key := range []string{"rep_a", "rep_b"} {
+		d := e.seat(key).nextAcked()
+		b := d.Message.Body
+		for _, want := range []string{"Seat engineer has retired", "finished its retirement turn", "schema v2", "production cut-over",
+			workID, "Migrate the database"} {
+			if !strings.Contains(b, want) {
+				t.Fatalf("%s summary lacks %q:\n%s", key, want, b)
+			}
+		}
+	}
+	code, b := e.request("GET", runtimeapi.PathInternalOrgs+e.org+"/runtime", controllerToken, nil, nil)
+	if code != http.StatusOK || strings.Contains(string(b), `"engineer"`) {
+		t.Fatalf("runtime still lists the engineer: %d %s", code, b)
+	}
+	if code, _ := e.request("POST", runtimeapi.PathLeaseAcquire, eng.token, nil, runtimeapi.LeaseAcquireRequest{}); code != http.StatusForbidden {
+		t.Fatalf("retired seat acquired a lease: %d", code)
+	}
+	// The retired seat's history stays readable in the console: both turns
+	// completed and its handoff is kept.
+	code, b = e.request("GET", runtimeapi.PathConsoleSeats+engID, consoleToken, nil, nil)
+	var detail runtimeapi.ConsoleSeatDetail
+	if err := json.Unmarshal(b, &detail); code != http.StatusOK || err != nil {
+		t.Fatalf("console seat: %d %s", code, b)
+	}
+	if detail.Config.RetiredAt == nil || detail.Handoff == nil || detail.Handoff.Objective != "Migrate the database to schema v2" {
+		t.Fatalf("retired seat detail = %+v", detail)
+	}
+	completed := 0
+	for _, ex := range detail.Executions {
+		if ex.State == "completed" {
+			completed++
+		}
+	}
+	if completed != 2 {
+		t.Fatalf("executions = %+v", detail.Executions)
+	}
+
+	// A later organisation deletion revokes everything at once.
+	code, _ = e.request("DELETE", runtimeapi.PathInternalOrgs+e.org+"?retention=retain", controllerToken, nil, nil)
 	if code != http.StatusNoContent {
 		t.Fatalf("delete: %d", code)
 	}
 	if code, _ := e.request("GET", runtimeapi.PathSelf, "tok-lead", nil, nil); code != http.StatusForbidden {
 		t.Fatalf("seat of deleted organisation: %d", code)
+	}
+}
+
+// TestRetirementGraceEnds retires a seat whose turn outlives the grace
+// period: the turn is interrupted, its message returned to the sender, and
+// the summary says so.
+func TestRetirementGraceEnds(t *testing.T) {
+	e := newEnvWith(t, false, func(o *platform.Options) { o.RetirementGrace = 300 * time.Millisecond })
+	e.sync(orgfixture.Spec())
+	lead, eng := e.seat("lead"), e.seat("engineer")
+	lead.mustTool("messages.send", map[string]any{"to": "engineer", "body": "a very long task"})
+	if eng.next() == nil {
+		t.Fatal("engineer got no work")
+	}
+	e.sync(removeEngineer())
+	waitRetired(t, eng)
+	d := lead.nextAcked()
+	if !strings.Contains(d.Message.Body, "Not delivered") || !strings.Contains(d.Message.Body, "a very long task") {
+		t.Fatalf("returned = %s", d.Message.Body)
+	}
+	sum := e.seat("rep_a").nextAcked().Message.Body
+	for _, want := range []string{"grace period ended", "last turn was interrupted", "left no handoff", "a very long task"} {
+		if !strings.Contains(sum, want) {
+			t.Fatalf("summary lacks %q:\n%s", want, sum)
+		}
+	}
+}
+
+// TestRetirementCancelledByRedeclaring keeps a seat that is declared again
+// before it retires.
+func TestRetirementCancelledByRedeclaring(t *testing.T) {
+	e := newEnvWith(t, false, func(o *platform.Options) { o.RetirementGrace = time.Minute })
+	first := e.sync(orgfixture.Spec())
+	eng := e.seat("engineer")
+	eng.mustTool("memory.write", map[string]any{"store": "engineer", "path": "notes/keep.md", "text": "keep me"})
+	e.sync(removeEngineer())
+	res := e.sync(orgfixture.Spec())
+	if len(res.Retiring) != 0 || res.Seats["engineer"].SeatID != first.Seats["engineer"].SeatID {
+		t.Fatalf("redeclared seat: %+v", res)
+	}
+	// The unseen notice was withdrawn; the seat carries on with its memory.
+	if d := eng.next(); d != nil {
+		t.Fatalf("unexpected delivery after cancellation: %+v", d.Message)
+	}
+	if out := eng.mustTool("memory.read", map[string]any{"store": "engineer", "path": "notes/keep.md"}); !strings.Contains(fmt.Sprint(out), "keep me") {
+		t.Fatalf("personal memory = %v", out)
+	}
+	lead := e.seat("lead")
+	lead.mustTool("messages.send", map[string]any{"to": "engineer", "body": "welcome back"})
+	if d := eng.nextAcked(); d.Message.Body != "welcome back" {
+		t.Fatalf("delivery = %+v", d.Message)
 	}
 }

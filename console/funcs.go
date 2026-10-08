@@ -135,7 +135,7 @@ func tone(s string) string {
 	switch strings.ToLower(s) {
 	case "working", "running", "succeeded", "completed", "done", "passed", "true", "bound", "sent", "ok", "published", "in_progress":
 		return "ok"
-	case "waiting", "queued", "starting", "pending", "leased", "unknown", "interrupted", "missing", "ready", "in_review":
+	case "waiting", "queued", "starting", "pending", "leased", "unknown", "interrupted", "missing", "ready", "in_review", "retiring":
 		return "warn"
 	case "blocked", "failed", "dead", "error", "false":
 		return "bad"

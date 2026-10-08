@@ -208,3 +208,12 @@ variable "extra_connections" {
   }))
   default = {}
 }
+
+variable "extra_engineering_seats" {
+  description = "Further engineering team seats, e.g. { contractor = { role = \"engineer\", display_name = \"Contractor\" } }, each with a route to and from the lead. Removing one retires it gracefully: it finishes its turn and hands over its work first."
+  type = map(object({
+    role         = string
+    display_name = string
+  }))
+  default = {}
+}

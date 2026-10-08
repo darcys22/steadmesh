@@ -82,12 +82,21 @@ func (s *server) accessEvent(r *http.Request, q *seatReq, kind string, data map[
 }
 
 // reconcileCredentials revokes delivered credentials whose grant the new
-// manifest removed.
+// manifest removed. Retiring seats keep their access until they retire
+// (services/retirement revokes it then).
 func (s *server) reconcileCredentials(r *http.Request, orgID string, m *compile.Manifest) {
 	if s.Credentials == nil {
 		return
 	}
 	seats := map[string]*access.SeatAccess{}
+	retiring, err := s.Store.RetiringManifests(r.Context(), orgID)
+	if err != nil {
+		s.Log.Warn("list retiring seats; their credentials are reconciled on the next sync", "err", err)
+		return
+	}
+	for k, sm := range retiring {
+		seats[k] = sm.Access
+	}
 	for k, sm := range m.Seats {
 		seats[k] = sm.Access
 	}

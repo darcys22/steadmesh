@@ -123,6 +123,7 @@ func TestE2E(t *testing.T) {
 	})
 
 	coordinationWithoutLinear(t, f)
+	seatRetirement(t, f, env)
 	enableLinear(t, f, env)
 
 	// A06 + A21: delegate through the declared route; the lead creates a

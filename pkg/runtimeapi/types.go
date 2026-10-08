@@ -123,6 +123,9 @@ type Self struct {
 	Recipients       []RecipientInfo   `json:"recipients"`
 	Connections      []ConnectionInfo  `json:"connections"`
 	ChannelBindings  []string          `json:"channel_bindings,omitempty"`
+	// RetiringUntil is set while the seat is retiring: it was removed from
+	// the declaration, takes no new messages and stops at this time.
+	RetiringUntil *time.Time `json:"retiring_until,omitempty"`
 }
 
 type Recovery struct {
@@ -306,8 +309,16 @@ type SeatIdentity struct {
 type SyncResponse struct {
 	OrganizationID string                  `json:"organization_id"`
 	Seats          map[string]SeatIdentity `json:"seats"`
-	// Retired lists seat keys retired by this sync.
-	Retired []string `json:"retired,omitempty"`
+	// Retiring lists seats removed from the declaration that are winding
+	// down: they take no new messages, get one retirement notice turn and
+	// are retired at RetireBy at the latest.
+	Retiring map[string]RetiringSeat `json:"retiring,omitempty"`
+}
+
+// RetiringSeat is a seat winding down before retirement.
+type RetiringSeat struct {
+	SeatID   string    `json:"seat_id"`
+	RetireBy time.Time `json:"retire_by"`
 }
 
 // SeatRuntime is the platform's view of one seat, used for wake and idle decisions.
@@ -325,6 +336,9 @@ type SeatRuntime struct {
 	LastActivity      *time.Time `json:"last_activity,omitempty"`
 	LatestCheckpoint  string     `json:"latest_checkpoint,omitempty"`
 	DeadDeliveries    int        `json:"dead_deliveries"`
+	// RetireBy is set while the seat is retiring: removed from the
+	// declaration and winding down until then.
+	RetireBy *time.Time `json:"retire_by,omitempty"`
 }
 
 type RuntimeResponse struct {

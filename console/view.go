@@ -23,6 +23,9 @@ const (
 	StateStarting = "starting"
 	StateBlocked  = "blocked"
 	StateOffline  = "offline"
+	// StateRetiring is a seat removed from the organisation that is winding
+	// down before it retires.
+	StateRetiring = "retiring"
 	StateUnknown  = "unknown"
 )
 
@@ -68,6 +71,9 @@ func seatState(st runtimeapi.ConsoleSeatStatus, crd *v1alpha1.AgentSeat, alive b
 	}
 	if crd != nil && crd.Spec.AdminSuspended {
 		return StateOffline
+	}
+	if st.RetireBy != nil || state == v1alpha1.StateRetiring {
+		return StateRetiring
 	}
 	switch {
 	case st.Current != nil || state == v1alpha1.StateExecuting:

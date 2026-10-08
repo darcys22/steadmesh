@@ -14,7 +14,7 @@ import (
 )
 
 // SeatRuntimes reports the runtime view of the organisation's active seats,
-// optionally restricted to the given keys.
+// retiring ones included, optionally restricted to the given keys.
 func (s *Store) SeatRuntimes(ctx context.Context, orgID string, keys []string) (map[string]runtimeapi.SeatRuntime, error) {
 	rows, err := s.pool.Query(ctx, `SELECT s.id, s.key, l.generation, l.holder, l.expires_at, l.state, l.state_detail,
 			l.adopted_revision, l.last_activity,
@@ -22,7 +22,8 @@ func (s *Store) SeatRuntimes(ctx context.Context, orgID string, keys []string) (
 			COALESCE((SELECT EXTRACT(EPOCH FROM now() - min(d.created_at)) FROM deliveries d
 				WHERE d.seat_id = s.id AND d.state IN ('pending', 'leased')), 0)::float8,
 			(SELECT count(*) FROM deliveries d WHERE d.seat_id = s.id AND d.state = 'dead'),
-			COALESCE((SELECT checkpoint_ref FROM sessions ss WHERE ss.seat_id = s.id ORDER BY updated_at DESC LIMIT 1), '')
+			COALESCE((SELECT checkpoint_ref FROM sessions ss WHERE ss.seat_id = s.id ORDER BY updated_at DESC LIMIT 1), ''),
+			CASE WHEN s.retiring_at IS NOT NULL THEN s.retire_by END
 		FROM seats s JOIN execution_leases l ON l.seat_id = s.id
 		WHERE s.organization_id = $1 AND s.retired_at IS NULL AND (cardinality($2::text[]) = 0 OR s.key = ANY($2))`,
 		orgID, nonNil(keys))
@@ -35,7 +36,7 @@ func (s *Store) SeatRuntimes(ctx context.Context, orgID string, keys []string) (
 		var r runtimeapi.SeatRuntime
 		if err := rows.Scan(&r.SeatID, &r.SeatKey, &r.LeaseGeneration, &r.LeaseHolder, &r.LeaseExpiresAt, &r.State,
 			&r.StateDetail, &r.AdoptedRevision, &r.LastActivity, &r.PendingDeliveries, &r.OldestPendingAge,
-			&r.DeadDeliveries, &r.LatestCheckpoint); err != nil {
+			&r.DeadDeliveries, &r.LatestCheckpoint, &r.RetireBy); err != nil {
 			return nil, err
 		}
 		out[r.SeatKey] = r
@@ -109,12 +110,13 @@ func (s *Store) Handoff(ctx context.Context, seatID string) (*runtimeapi.Handoff
 }
 
 // CreateProbe queues a synthetic probe message for the seat; the probe id is
-// the message id.
+// the message id. A retiring seat is not probed.
 func (s *Store) CreateProbe(ctx context.Context, orgID, seatID string) (string, error) {
 	var id string
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		var ok bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM seats WHERE id = $1 AND organization_id = $2 AND retired_at IS NULL)`,
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM seats WHERE id = $1 AND organization_id = $2
+			AND retired_at IS NULL AND retiring_at IS NULL)`,
 			seatID, orgID).Scan(&ok); err != nil {
 			return err
 		}

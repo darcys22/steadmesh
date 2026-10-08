@@ -600,3 +600,21 @@ func OwnedWork(ctx context.Context, st *store.Store, seat *store.Seat) ([]runtim
 	}
 	return out, nil
 }
+
+// ReleaseRetired is the store.WorkRelease for a retired owner: the work item
+// becomes unowned and ready again, with a log entry pointing whoever picks it
+// up at the owner's handoff.
+func ReleaseRetired(seat string) store.WorkRelease {
+	return func(data json.RawMessage) (json.RawMessage, string, error) {
+		w := &workItem{}
+		if err := json.Unmarshal(data, w); err != nil {
+			return nil, "", err
+		}
+		was := w.Status
+		w.Owner = ""
+		w.Status, w.Blocker = WorkReady, ""
+		w.note("platform", fmt.Sprintf("released: owner %s retired while this was %s. Its last notes here and its handoff "+
+			"(summarised to the representatives) describe the progress; claim it to continue.", seat, was))
+		return w.encode()
+	}
+}

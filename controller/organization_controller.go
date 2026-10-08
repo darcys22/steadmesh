@@ -360,8 +360,8 @@ func (r *OrganizationReconciler) sync(ctx context.Context, org *v1alpha1.AgentOr
 	if resp.OrganizationID == "" {
 		return nil, errors.New("platform returned no organization id")
 	}
-	if len(resp.Retired) > 0 {
-		logf.FromContext(ctx).Info("platform retired seat identities", "seats", resp.Retired)
+	for key, rs := range resp.Retiring {
+		logf.FromContext(ctx).Info("seat retiring", "seat", key, "seatID", rs.SeatID, "retireBy", rs.RetireBy)
 	}
 	r.mu.Lock()
 	r.syncs[org.UID] = syncEntry{digest: m.Digest, at: r.Now(), resp: resp}
@@ -493,10 +493,11 @@ func (r *OrganizationReconciler) listSeats(ctx context.Context, org *v1alpha1.Ag
 	return out, nil
 }
 
-// retireRemoved retires seats removed from the declaration: the AgentSeat is
-// marked retired, its runtime stopped and removed (workspace retained), then
-// the AgentSeat is deleted. The platform sync has already retired the
-// identity and revoked its capabilities.
+// retireRemoved retires seats removed from the declaration. The platform sync
+// has made the identity retiring: it takes no new messages and gets a bounded
+// retirement turn. The AgentSeat is marked retired; the seat controller keeps
+// it running while the platform reports it retiring, then stops and removes
+// its runtime (workspace retained), and the AgentSeat is deleted.
 func (r *OrganizationReconciler) retireRemoved(ctx context.Context, org *v1alpha1.AgentOrganization, m *compile.Manifest) error {
 	seats, err := r.listSeats(ctx, org, m.Spec.Key)
 	if err != nil {
@@ -515,7 +516,7 @@ func (r *OrganizationReconciler) retireRemoved(ctx context.Context, org *v1alpha
 				return err
 			}
 			logf.FromContext(ctx).Info("retiring seat", "seat", s.Spec.SeatKey, "seatID", s.Spec.SeatID)
-			r.event(org, corev1.EventTypeNormal, "SeatRetiring", "Retire", "seat %s removed from the declaration; retiring with workspace retained", s.Spec.SeatKey)
+			r.event(org, corev1.EventTypeNormal, "SeatRetiring", "Retire", "seat %s removed from the declaration; winding down, then retiring with workspace retained", s.Spec.SeatKey)
 		case s.Status.ExecutionState == v1alpha1.StateRetired:
 			if err := r.Client.Delete(ctx, s); err != nil && !apierrors.IsNotFound(err) {
 				return err

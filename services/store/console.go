@@ -206,23 +206,33 @@ func (s *Store) ConsoleSeat(ctx context.Context, seatID string, runs int) (*runt
 	if _, err := uuid.Parse(seatID); err != nil {
 		return nil, ErrNotFound
 	}
-	st, err := s.Seat(ctx, seatID)
-	if err != nil {
-		return nil, err
-	}
+	// Retired seats are included: their history, handoff and runs stay
+	// readable (data is retained, §5.5).
+	st := &Seat{ID: seatID}
+	var raw []byte
 	var created time.Time
 	var adopted string
-	if err := s.pool.QueryRow(ctx, `SELECT created_at, COALESCE(adopted_from::text, '') FROM seats WHERE id = $1`, seatID).
-		Scan(&created, &adopted); err != nil {
+	var retired *time.Time
+	if err := s.pool.QueryRow(ctx, `SELECT s.organization_id, s.key, s.config_revision, s.policy_revision, s.manifest, s.created_at,
+			COALESCE(s.adopted_from::text, ''), s.retired_at
+		FROM seats s JOIN organizations o ON o.id = s.organization_id WHERE s.id = $1 AND o.deleted_at IS NULL`, seatID).
+		Scan(&st.OrganizationID, &st.Key, &st.ConfigRevision, &st.PolicyRevision, &raw, &created, &adopted, &retired); err != nil {
 		return nil, notFound(err)
 	}
+	if err := json.Unmarshal(raw, &st.Manifest); err != nil {
+		return nil, err
+	}
 	out := &runtimeapi.ConsoleSeatDetail{Config: seatConfig(st.OrganizationID, st.ID, st.Manifest, st.PolicyRevision, created, adopted)}
+	out.Config.RetiredAt = retired
 	statuses, err := s.ConsoleSeatStatuses(ctx, st.OrganizationID, []string{st.Key})
 	if err != nil {
 		return nil, err
 	}
-	if len(statuses) == 1 {
+	// The key may belong to a newer seat by now.
+	if len(statuses) == 1 && statuses[0].SeatID == seatID {
 		out.Status = statuses[0]
+	} else {
+		out.Status.SeatID, out.Status.SeatKey, out.Status.State = seatID, st.Key, "Retired"
 	}
 	if out.Handoff, err = s.Handoff(ctx, seatID); err != nil {
 		return nil, err

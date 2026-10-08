@@ -23,6 +23,13 @@ credentials:
   grace: 10m
   maxStale: 24h
 
+# Seats removed from the declaration wind down before they retire: they take
+# no new messages and get one retirement turn to finish, save a handoff and
+# hand over their work. The turn is interrupted when the grace period ends.
+# 0s retires removed seats at once (what they held is still handed back).
+retirement:
+  grace: 10m
+
 # Optional Vault (Kubernetes auth with the platform ServiceAccount token).
 vault:
   enabled: false

@@ -73,7 +73,10 @@ spec:
               organizationName:
                 type: string
               retired:
-                description: Retired is set when the seat is removed from the organisation.
+                description: |-
+                  Retired is set when the seat is removed from the organisation. The
+                  seat keeps running while the platform reports it retiring, then its
+                  runtime is removed.
                 type: boolean
               sandboxProfile:
                 type: string
@@ -239,6 +242,10 @@ spec:
                 - revision
                 - status
                 type: object
+              retiringUntil:
+                description: RetiringUntil is the end of a retiring seat's grace period.
+                format: date-time
+                type: string
             type: object
         type: object
     served: true

@@ -25,6 +25,13 @@ CREATE TABLE seats (
     -- capability manifest (compile.SeatManifest) of the active policy revision
     manifest        jsonb NOT NULL DEFAULT '{}'::jsonb,
     policy_revision bigint NOT NULL DEFAULT 1,
+    -- Graceful retirement (§5.5): a seat removed from the declaration is
+    -- retiring until retire_by. It accepts no new messages and gets one
+    -- retirement notice turn (retire_notice_id) to finish and hand over; then
+    -- it is retired (retired_at) and what it still held is handed back.
+    retiring_at     timestamptz,
+    retire_by       timestamptz,
+    retire_notice_id uuid,
     retired_at      timestamptz,
     adopted_from    uuid REFERENCES seats(id),
     created_at      timestamptz NOT NULL DEFAULT now(),
@@ -33,6 +40,7 @@ CREATE TABLE seats (
 -- One active seat per key per organisation; retired seats keep their rows.
 CREATE UNIQUE INDEX seats_active_key ON seats (organization_id, key) WHERE retired_at IS NULL;
 CREATE UNIQUE INDEX seats_service_account ON seats (organization_id, service_account) WHERE retired_at IS NULL;
+CREATE INDEX seats_retiring ON seats (retire_by) WHERE retiring_at IS NOT NULL AND retired_at IS NULL;
 
 CREATE TABLE execution_leases (
     seat_id      uuid PRIMARY KEY REFERENCES seats(id),

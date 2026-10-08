@@ -94,7 +94,8 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <tr><td><code>Stopped</code></td><td>The Pod is gone, but every durable piece of state remains.</td></tr>
 <tr><td><code>Recovering</code></td><td>The runtime failed. The old writer is being fenced off before a new one starts.</td></tr>
 <tr><td><code>Blocked</code></td><td>A dependency or required capability is unavailable. Messages are kept, and the reason is shown.</td></tr>
-<tr><td><code>Retired</code></td><td>The seat was removed from the declaration. Its data is retained by default.</td></tr>
+<tr><td><code>Retiring</code></td><td>The seat was removed from the declaration and is winding down. It takes no new messages and is retired when its retirement turn is done or its grace period ends (see <a href="#retiring">Retiring a seat</a>).</td></tr>
+<tr><td><code>Retired</code></td><td>The seat was removed from the declaration and has retired. Its data is retained by default.</td></tr>
 </table>
 <p>The controller acts on these rules:</p>
 <ul>
@@ -108,9 +109,27 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <ul>
 <li><strong>Instructions or templates.</strong> The plan's <code>resolved_seats</code> shows which seats get a new configuration revision. Each execution records the revision it ran with.</li>
 <li><strong>Grants.</strong> A revocation takes effect for the next tool call, before the apply reports ready. Information a model has already read cannot be un-read. Revocation stops future access only.</li>
-<li><strong>Seats.</strong> Adding a seat creates a new identity. Removing one retires it. Renaming a seat key is a retirement plus a new seat. To carry data over, set <code>adopt_from = "&lt;old seat id&gt;"</code> on the new seat.</li>
+<li><strong>Seats.</strong> Adding a seat creates a new identity. Removing one retires it gracefully (below). Renaming a seat key is a retirement plus a new seat. To carry data over, set <code>adopt_from = "&lt;old seat id&gt;"</code> on the new seat once the old one has retired.</li>
 <li><strong>Harness.</strong> Changing <code>harness_profile</code> keeps identity, memory, workspace and messages. A native session that cannot be converted is replaced by a portable handoff, with a recovery note.</li>
 </ul>
+<h3 id="retiring">Retiring a seat</h3>
+<p>Removing a seat from the declaration never cuts it off mid-task. The apply returns at once, and the seat retires in three steps:</p>
+<ol>
+<li><strong>Retiring.</strong> The seat takes no new work. Sending it a message fails with <code>unavailable</code> and nothing is queued. Messages already waiting for it go back to their senders as <em>not delivered</em>, with the original quoted. Wake schedules and readiness probes stop. Its current turn, if any, carries on, and it keeps its tools, memory and sandbox access.</li>
+<li><strong>Wind-down.</strong> The seat gets one last message: a retirement notice. It finishes or pauses its work, saves a handoff with <code>handoff.update</code>, releases or hands over the work items it owns, and tells the seats it works with. This is bounded by the grace period, 10 minutes by default. When the period ends, the running turn is interrupted.</li>
+<li><strong>Retired.</strong> Once the notice turn is done, or the grace period ends, the platform retires the seat. Whatever it still holds is handed back:
+<ul>
+<li>Unfinished work items it owns are released to <code>ready</code>, with a log entry pointing at its handoff.</li>
+<li>Messages it never handled are returned to their senders.</li>
+<li>The organisation's representatives get a summary: whether it finished, its handoff, the released work items and the returned messages.</li>
+</ul>
+Its lease is fenced, credentials delivered to its sandbox are revoked, and its personal memory store is retired. The controller then stops the Pod and removes the runtime, keeping the workspace volume.</li>
+</ol>
+<p>Adding the seat back before it retires cancels the retirement. Messages already returned stay returned. The grace period is the platform's <code>RETIREMENT_GRACE</code>: the chart value <code>retirement.grace</code>, or <code>seat_retirement_grace</code> on the <code>modules/platform</code> Terraform module. <code>0s</code> retires removed seats at once, and what they held is still handed back. Deleting the whole organisation retires every seat immediately.</p>
+<pre><code><span class="c"># Watch a seat wind down</span>
+kubectl --context kind-steadmesh -n steadmesh-example get agentseats
+kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-name&gt; -o jsonpath='{.status.retiringUntil}'</code></pre>
+
 <p>Agents can change the organisation only the way people do: through the infrastructure repository and its deployment workflow, and only if you grant them access to that repository. Seat credentials have no access to the Kubernetes API.</p>
 
 <h2>Administrative controls</h2>

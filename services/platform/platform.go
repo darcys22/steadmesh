@@ -22,6 +22,7 @@ import (
 	"github.com/darcys22/steadmesh/services/metrics"
 	"github.com/darcys22/steadmesh/services/outbox"
 	"github.com/darcys22/steadmesh/services/publisher"
+	"github.com/darcys22/steadmesh/services/retirement"
 	"github.com/darcys22/steadmesh/services/scheduler"
 	"github.com/darcys22/steadmesh/services/store"
 	"github.com/darcys22/steadmesh/services/tools"
@@ -46,12 +47,17 @@ type Options struct {
 	CredentialRefresh  time.Duration
 	CredentialGrace    time.Duration
 	CredentialMaxStale time.Duration
+	// RetirementGrace bounds the wind-down of a seat removed from the
+	// declaration; zero takes store.DefaultRetirementGrace. Negative retires
+	// removed seats at once (still handing back what they held).
+	RetirementGrace time.Duration
 }
 
 // Platform is a running platform service.
 type Platform struct {
 	Handler     http.Handler
 	Connections *connections.Manager
+	Credentials *credentials.Registry
 
 	opts    Options
 	metrics *metrics.Metrics
@@ -67,6 +73,12 @@ func New(ctx context.Context, o Options) *Platform {
 	if o.RetryBackoff == 0 {
 		o.RetryBackoff = 200 * time.Millisecond
 	}
+	switch {
+	case o.RetirementGrace == 0:
+		o.RetirementGrace = store.DefaultRetirementGrace
+	case o.RetirementGrace < 0:
+		o.RetirementGrace = 0
+	}
 	m := metrics.New(o.Registry)
 	sinks := func(orgID string) connectors.IngressSink {
 		return &ingress.Sink{OrganizationID: orgID, Store: o.Store, Metrics: m, Log: o.Log}
@@ -75,11 +87,12 @@ func New(ctx context.Context, o Options) *Platform {
 		RefreshInterval: o.CredentialRefresh, Grace: o.CredentialGrace, MaxStale: o.CredentialMaxStale})
 	gw := &gateway.Gateway{Ledger: o.Store, Trackers: conns, Metrics: m, Log: o.Log, Attempts: 3, Backoff: o.RetryBackoff}
 	reg := tools.New(tools.Deps{Store: o.Store, Gateway: gw, Metrics: m, Log: o.Log})
+	creds := &credentials.Registry{Connections: conns, Log: o.Log}
 	return &Platform{
 		Handler: api.New(api.Config{Store: o.Store, Auth: o.Auth, Tools: reg, Connections: conns, Metrics: m,
-			Credentials: &credentials.Registry{Connections: conns, Log: o.Log},
-			Gatherer:    o.Registry, Log: o.Log, Console: o.Console}),
+			Credentials: creds, Gatherer: o.Registry, Log: o.Log, Console: o.Console, RetirementGrace: o.RetirementGrace}),
 		Connections: conns,
+		Credentials: creds,
 		opts:        o,
 		metrics:     m,
 	}
@@ -103,6 +116,8 @@ func (p *Platform) Start(ctx context.Context) error {
 	disp := &outbox.Dispatcher{Store: p.opts.Store, Comms: p.Connections, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
 	p.wg.Go(func() { loop.Run(ctx) })
 	p.wg.Go(func() { disp.Run(ctx) })
+	ret := &retirement.Loop{Store: p.opts.Store, Credentials: p.Credentials, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
+	p.wg.Go(func() { ret.Run(ctx) })
 	pub := &publisher.Publisher{Store: p.opts.Store, Trackers: p.Connections, Log: p.opts.Log, Interval: p.opts.Interval}
 	p.wg.Go(func() { pub.Run(ctx) })
 	return nil

@@ -23,6 +23,9 @@ type Seat struct {
 	ConfigRevision string
 	PolicyRevision int64
 	Manifest       compile.SeatManifest
+	// RetireBy is set while the seat is retiring: it takes no new messages
+	// and winds down until then.
+	RetireBy *time.Time
 }
 
 // SeatByServiceAccount maps an authenticated ServiceAccount to its active seat.
@@ -45,14 +48,15 @@ func (s *Store) SeatByKey(ctx context.Context, orgID, key string) (*Seat, error)
 	return scanSeat(s.pool.QueryRow(ctx, seatQuery+` AND s.organization_id = $1 AND s.key = $2`, orgID, key))
 }
 
-const seatQuery = `SELECT s.id, s.organization_id, s.key, s.config_revision, s.policy_revision, s.manifest
+const seatQuery = `SELECT s.id, s.organization_id, s.key, s.config_revision, s.policy_revision, s.manifest,
+	CASE WHEN s.retiring_at IS NOT NULL THEN s.retire_by END
 	FROM seats s JOIN organizations o ON o.id = s.organization_id
 	WHERE s.retired_at IS NULL AND o.deleted_at IS NULL`
 
 func scanSeat(row pgx.Row) (*Seat, error) {
 	st := &Seat{}
 	var raw []byte
-	if err := row.Scan(&st.ID, &st.OrganizationID, &st.Key, &st.ConfigRevision, &st.PolicyRevision, &raw); err != nil {
+	if err := row.Scan(&st.ID, &st.OrganizationID, &st.Key, &st.ConfigRevision, &st.PolicyRevision, &raw, &st.RetireBy); err != nil {
 		return nil, notFound(err)
 	}
 	if err := json.Unmarshal(raw, &st.Manifest); err != nil {

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -89,8 +90,17 @@ func (r *Registry) send(ctx context.Context, c *Call) (any, error) {
 	if err != nil {
 		return nil, toolErr("unavailable", "seat %q is not active", a.To)
 	}
+	if to.RetireBy != nil {
+		r.d.Metrics.MessagesRejected.WithLabelValues("recipient_retiring").Inc()
+		return nil, retiringErr(a.To)
+	}
 	return r.deliver(ctx, c, to, store.SeatMessage{ConversationID: a.ConversationID, CorrelationID: a.CorrelationID,
 		Route: strings.Join(edge.Routes, ","), Body: a.Body, Passive: a.Wake != nil && !*a.Wake})
+}
+
+func retiringErr(seat string) *Error {
+	return &Error{Code: "unavailable", Message: fmt.Sprintf("seat %q is retiring: it was removed from the organisation and takes no new messages. "+
+		"Nothing was sent; send it to whoever now handles this", seat), Details: map[string]any{"recipient_state": "Retiring"}}
 }
 
 // deliver persists a seat-to-seat message and reports the recipient's
@@ -153,6 +163,10 @@ func (r *Registry) reply(ctx context.Context, c *Call) (any, error) {
 		to, err := r.d.Store.SeatByKey(ctx, c.Seat.OrganizationID, m.SenderSeat)
 		if err != nil || to.ID != m.SenderSeatID {
 			return nil, toolErr("unavailable", "the sending seat is no longer active")
+		}
+		if to.RetireBy != nil {
+			r.d.Metrics.MessagesRejected.WithLabelValues("recipient_retiring").Inc()
+			return nil, retiringErr(m.SenderSeat)
 		}
 		return r.deliver(ctx, c, to, store.SeatMessage{ConversationID: m.ConversationID, ParentID: m.ID,
 			CorrelationID: m.CorrelationID, Route: "reply", Body: a.Body, Passive: a.Wake != nil && !*a.Wake})
