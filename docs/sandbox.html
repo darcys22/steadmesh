@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sandbox access · Steadmesh</title>
-<meta name="description" content="Give seats practical access from their sandbox through plugins: tools, hostname egress, IP ranges, GitHub credentials and a browser, with live revocation and a stated credential boundary.">
+<meta name="description" content="Give agents the tools, repository access and browser connections they need, with explicit sandbox and credential boundaries.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/sandbox.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Sandbox access · Steadmesh">
-<meta property="og:description" content="Give seats practical access from their sandbox through plugins: tools, hostname egress, IP ranges, GitHub credentials and a browser, with live revocation and a stated credential boundary.">
+<meta property="og:description" content="Give agents the tools, repository access and browser connections they need, with explicit sandbox and credential boundaries.">
 <meta property="og:url" content="https://steadmesh.com/sandbox.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,17 +66,18 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Sandbox access</h1>
-<p>By default a seat's sandbox reaches only the platform: no internet, no cluster services, no credentials. <strong>Access profiles</strong> grant practical access: binaries, hosts, IP ranges, GitHub repositories and a browser. Each part of a profile is a <strong>plugin</strong> with its own enforcement, and a seat gets the union of the profiles named on the seat and on its teams.</p>
+<p class="lede">Give each role the access its work needs: a repository to edit, a package host to reach or a browser for an allowed site. Access profiles keep that setup in the team's declaration.</p>
+<p>By default a seat's sandbox reaches only the platform, with no general internet access, other cluster services or external credentials. An <strong>access profile</strong> adds binaries, hosts, IP ranges, GitHub repositories or a browser. Each part is a <strong>plugin</strong> with its own enforcement, and a seat gets the union of the profiles named on the seat and its teams.</p>
 <p>Access is granted only by these declarations, never by instructions or by asking in natural language. Hostname access needs a cluster whose CNI enforces NetworkPolicy and the egress gateway enabled. For a plain-English summary, see <a href="faq.html#filesystem-github">Do agents have filesystems, and how do they use GitHub?</a></p>
 <pre><code>access_profiles = {
   github_engineer = {
@@ -95,7 +96,7 @@ teams = {
   engineering = { …, access_profiles = ["web"] }   # every member
 }</code></pre>
 
-<h2>Plugins</h2>
+<h2>Choose the access a task needs</h2>
 <table>
 <tr><th>Plugin</th><th>What it grants</th><th>How it is enforced</th><th>Changes apply</th></tr>
 <tr><td><code>tools</code></td><td>Binaries the seat needs, e.g. <code>git</code>, <code>gh</code>, <code>curl</code>.</td><td>The seat runner checks they are on the image's PATH before the harness starts. A missing binary stops the seat with a reason; nothing is installed at run time.</td><td>New Pod</td></tr>
@@ -104,9 +105,9 @@ teams = {
 <tr><td><code>github</code></td><td>Repositories and permissions (<code>contents</code>, <code>pull_requests</code>, <code>issues</code>, <code>metadata</code>: read or write) through a <code>github</code> connection.</td><td>See <a href="#github">GitHub</a>.</td><td>Repositories and permissions live; switching delivery needs a new Pod</td></tr>
 <tr><td><code>browser</code></td><td>A headless Chromium as tools (<code>browser_navigate</code>, <code>browser_click</code>, …), optionally signed in.</td><td>Its traffic goes through the egress gateway, so the seat's egress hosts decide what it can open. The browser closes when the grant goes.</td><td>New Pod</td></tr>
 </table>
-<p>Readiness never claims access that is not in effect. A seat's <code>AccessApplied</code> condition is true only when its Pod runs the configuration revision that contains its tools, image, NetworkPolicy and proxy settings. Until then it says what it is waiting for, and if the seat cannot start, for example because a binary is missing, it says why.</p>
+<p>Check a seat's <code>AccessApplied</code> condition after changing access. It is true only when its Pod runs the configuration revision that contains its tools, image, NetworkPolicy and proxy settings. Until then it says what it is waiting for, and if the seat cannot start, for example because a binary is missing, it says why.</p>
 
-<h2 id="egress-gateway">The egress gateway</h2>
+<h2 id="egress-gateway">Reach allowed hosts through the egress gateway</h2>
 <p>Hostname egress needs the gateway. It is off by default; enable it in the platform stage with <code>enable_egress = true</code>. A seat whose profiles need it stays blocked, with that reason, while it is off.</p>
 <ul>
 <li><strong>Path.</strong> Harness processes get <code>HTTPS_PROXY</code> and <code>HTTP_PROXY</code> pointing at a proxy in the seat runner. The runner forwards each connection to the gateway with the seat's projected token, read afresh for every connection. <code>git</code>, <code>gh</code>, <code>curl</code>, Python and Node tools honour these variables, and the browser is started with the proxy.</li>
@@ -116,7 +117,7 @@ teams = {
 <li><strong>Denials.</strong> A refused request gets <code>403</code> naming the host and the seat ("no access profile grants it"). It is recorded as an <code>egress_denied</code> event on the seat's run, visible in the console. Closed tunnels are recorded as <code>egress_revoked</code>.</li>
 </ul>
 
-<h2 id="github">GitHub</h2>
+<h2 id="github">Give a seat GitHub access</h2>
 <p>Declare a connection with adapter <code>github</code>. Its secret holds either a GitHub App (<code>app_id</code>, <code>installation_id</code>, <code>private_key</code>; recommended) or a fine-grained personal access token (<code>token</code>). <code>endpoint_ref</code> points at GitHub Enterprise's API, for example <code>https://ghe.example.com/api/v3</code>.</p>
 <h3>Platform delivery (default)</h3>
 <p>The seat calls repository operations with <code>connections.invoke</code>: <code>repo.read</code>, <code>pull_request.read</code>, <code>pull_request.create</code>, <code>issue.read</code> and <code>issue.comment</code>, as the permissions allow and only on the granted repositories. They go through the operation ledger like any connector operation, and the credential never enters the sandbox.</p>
@@ -133,12 +134,12 @@ teams = {
 <li><strong>Credentials already delivered:</strong> GitHub App installation tokens are revoked at GitHub when a sync removes the seat's grant. Steadmesh cannot invalidate a personal access token: rotate or revoke it at GitHub. Rotation is picked up without Terraform (see <a href="operations.html#credential-rotation">Rotating credentials</a>).</li>
 </ul>
 
-<h2 id="browser">Browser</h2>
+<h2 id="browser">Add a browser for allowed sites</h2>
 <p>The browser plugin needs a seat image with Chromium and Playwright MCP: the <code>-browser</code> variants. Releases publish <code>ghcr.io/darcys22/steadmesh/seat-pi-browser</code> (the platform module's <code>seat_images["pi-browser"]</code>); build one locally with <code>build/build.sh seat-pi-browser</code>. The seat's harness gets a <code>browser</code> MCP server, <code>steadmesh-tools browser-mcp</code>, which runs Playwright MCP headless and isolated through the egress gateway.</p>
 <p><strong>Signed-in sessions.</strong> A personal access token cannot create a browser session. To browse as an account, declare a connection with adapter <code>browser_session</code> whose secret key <code>storage_state</code> holds a Playwright storage state (cookies and local storage) for a dedicated test account, and name it in <code>browser.session</code>. Produce the state with a manual login, for example <code>npx playwright codegen --save-storage=state.json https://github.com/login</code>. Then store <code>state.json</code> in the Secret or Vault entry. It is delivered to the sandbox, with the boundary stated above.</p>
 <p><strong>Revocation.</strong> When the grant goes, the browser is killed within a few seconds and a tool call in progress fails. The gateway also closes its connections. Cookies already delivered stay valid at the website until you log the account out or replace the session. Rotating the secret is picked up without Terraform; the browser loads the new state when it next starts.</p>
 
-<h2>Seat images</h2>
+<h2>Choose an image with the tools you need</h2>
 <table>
 <tr><th>Image</th><th>Includes</th></tr>
 <tr><td><code>seat-claudecode</code>, <code>seat-codex</code>, <code>seat-pi</code></td><td>The harness; <code>git</code> 2.39, <code>gh</code> 2.23 (with the credential wrapper) and <code>curl</code> 7.88 from Debian bookworm</td></tr>
@@ -150,7 +151,7 @@ teams = {
 <ol>
 <li>Add the plugin's configuration to <code>spec.AccessProfile</code> and to the provider schema; run <code>make generate</code> and <code>make provider-docs</code>.</li>
 <li>Implement <code>access.Plugin</code> in <code>pkg/access</code>. <code>Check</code> validates the configuration with exact paths; <code>Apply</code> adds the plugin's contribution to the seat's <code>SeatAccess</code>. Decide which parts need a new Pod: they belong in <code>PodPart</code>, so they change the configuration revision. Live parts must be enforced where the platform or gateway reads them at request time.</li>
-<li>Enforce it where it acts: the Pod or NetworkPolicy (<code>runtime/kube</code>), the seat runner (<code>cmd/seat-runner/access.go</code>), the platform (<code>/v1/access</code>, <code>/v1/credentials</code>) or the gateway. If it cannot be enforced on a cluster, fail validation with a clear reason rather than claim it.</li>
+<li>Enforce it where it acts: the Pod or NetworkPolicy (<code>runtime/kube</code>), the seat runner (<code>cmd/seat-runner/access.go</code>), the platform (<code>/v1/access</code>, <code>/v1/credentials</code>) or the gateway. If it cannot be enforced on a cluster, fail validation and explain which requirement is missing.</li>
 <li>Record denials and deliveries as events, document the revocation behaviour and credential boundary, and add unit and e2e tests.</li>
 </ol>
 <!-- shell:pager -->
@@ -166,8 +167,8 @@ teams = {
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/sandbox.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

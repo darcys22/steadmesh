@@ -48,9 +48,9 @@ NAV = [
         ("architecture.html", "Architecture"),
         ("decisions.html", "Design decisions"),
     ]),
-    ("Evidence", [
-        ("status.html", "Acceptance status"),
-        ("demo-results.html", "Demo results"),
+    ("Project", [
+        ("status.html", "Status and limits"),
+        ("demo-results.html", "Example run"),
     ]),
 ]
 
@@ -104,7 +104,7 @@ def header(page):
   <a class="wordmark" href="{L('')}"><img src="{L('assets/favicon.svg')}" alt="" width="22" height="22">Steadmesh</a>{menu}
   <nav class="topnav" aria-label="Site">
     <a href="{home}#how-it-works">How it works</a>
-    <a href="{home}#demo">Demo</a>
+    <a href="{home}#possibilities">What you can do</a>
     <a href="{L('docs/')}"{docs_current}>Docs</a>
     <a href="{L('faq.html')}"{faq_current}>FAQ</a>
     <a href="{REPO}">GitHub</a>
@@ -143,8 +143,8 @@ def footer(page):
     <a href="{REPO}">GitHub repository</a>
     <a href="{REPO}/releases">Releases</a>
     <a href="{REPO}/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="{L('status.html')}">Acceptance status</a>
-    <a href="{L('demo-results.html')}">Demo results</a>
+    <a href="{L('status.html')}">Status and limits</a>
+    <a href="{L('demo-results.html')}">Example run</a>
   </nav>{edit}
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
 </footer>"""

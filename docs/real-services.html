@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Connect Slack, Linear and Claude · Steadmesh</title>
-<meta name="description" content="Replace the fakes with a real Slack app, a Linear workspace and real model endpoints, starting with the Claude Code harness.">
+<meta name="description" content="Connect your team to Slack, Linear and supported model endpoints, with setup and credential guidance.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/real-services.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Connect Slack, Linear and Claude · Steadmesh">
-<meta property="og:description" content="Replace the fakes with a real Slack app, a Linear workspace and real model endpoints, starting with the Claude Code harness.">
+<meta property="og:description" content="Connect your team to Slack, Linear and supported model endpoints, with setup and credential guidance.">
 <meta property="og:url" content="https://steadmesh.com/real-services.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,18 +66,18 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Connect Slack, Linear and Claude</h1>
-<p class="lede">Replace the fakes with a real Slack app, a Linear workspace and real model endpoints, starting with the Claude Code harness.</p>
-<p>This guide moves the example organisation from the fakes to a real Slack workspace, a real Linear team and the Claude Code harness backed by an Anthropic model. The deployment workflow stays the same. Only the credentials and a few variables change.</p>
+<p class="lede">Bring your team into Slack, give it a Linear workspace and connect a model. This guide starts with Claude Code and an Anthropic endpoint.</p>
+<p>If you have tried the local setup, this is the next step towards giving the team useful work. Keep the same deployment workflow and replace the fake services with your Slack workspace, a dedicated Linear team and the Claude Code harness backed by an Anthropic model. You will add credentials and update a few variables.</p>
 
 <h2>What you need</h2>
 <table>
@@ -98,7 +98,7 @@
 <p>Socket Mode means Slack never has to reach your cluster: the platform opens an outbound websocket. One app installation serves every representative.</p>
 
 <h2>2. Prepare Linear</h2>
-<p>Create an API key under <strong>Settings → Security &amp; access → Personal API keys</strong> (or a workspace key) with write access, and find the ID of the team agents should work in. Start with a dedicated team, because agents with <code>project.create</code> really do create projects.</p>
+<p>Create an API key under <strong>Settings → Security &amp; access → Personal API keys</strong> (or a workspace key) with write access, and find the ID of the team agents should work in. Use a dedicated team to begin with: seats granted <code>project.create</code> can create projects there.</p>
 
 <h2>3. Provide the credentials</h2>
 <p>Credentials go into the <strong>foundation</strong> stage only. It stores them as Kubernetes Secrets in <code>steadmesh-system</code>, where only the platform service can read them. The organisation stage refers to them by name, for example <code>k8s:slack-credentials</code>, so they never appear in its plans or state.</p>
@@ -117,10 +117,10 @@ export TF_VAR_linear_team_id=&lt;team id&gt;
 export TF_VAR_humans='{sean={slack_user_id="U0SEAN123"},alex={slack_user_id="U0ALEX456"}}'</code></pre>
 <p><code>harness = "claude-code"</code> switches every seat to the Claude Code image, and <code>model</code> selects the model and the connection that serves it (declared from <code>model_connections</code>). Each seat is implicitly allowed <code>model.infer</code> on that connection, for that model only. To give seats different harnesses, set <code>seat_harnesses</code>, for example <code>{ engineer = { adapter = "codex", model = { connection = "openai", id = "gpt-5.5" } } }</code>; see <a href="harnesses.html">Harnesses and models</a>.</p>
 
-<h2>5. Apply</h2>
+<h2>5. Start the team and check its connections</h2>
 <pre><code>make kind-up kind-load provider build
 make -C examples apply</code></pre>
-<p>Readiness now checks the real services:</p>
+<p>The readiness checks help catch connection problems before you send a task:</p>
 <ul>
 <li>Slack <code>auth.test</code> passes, and the team matches <code>account_id</code>.</li>
 <li><code>users.info</code> succeeds for every bound human.</li>
@@ -132,9 +132,9 @@ make -C examples apply</code></pre>
 <pre><code>OperationalReady  False  ConnectionsAuthenticated  connection slack: unauthorized: invalid_auth</code></pre>
 
 <h2>6. Talk to your representative</h2>
-<p>In Slack, open the app (Apps → Steadmesh) and send it a direct message. Your representative replies in the same DM. Try asking it to remember a preference, delegate something to engineering, or create a Linear project for a small task.</p>
+<p>In Slack, open the app (Apps → Steadmesh) and send it a direct message. Your representative replies in the same DM. Start with a small, specific request: ask it to remember a working preference, have engineering investigate a question, or create a Linear project for a task you want to track. Include the outcome you want and ask it to report back with the result.</p>
 
-<h2>How the Claude Code harness runs</h2>
+<h2>What happens between messages</h2>
 <ul>
 <li><strong>One process per turn.</strong> Each delivered message runs one <code>claude -p</code> process that resumes the seat's session. The session files live on the seat's persistent volume, so the conversation continues across restarts.</li>
 <li><strong>Tools.</strong> Platform tools are exposed over MCP by <code>steadmesh-tools mcp</code> (they appear as <code>mcp__steadmesh__memory_search</code> and so on). Built-in tools default to Bash, Edit and Read in the seat's workspace.</li>
@@ -143,7 +143,7 @@ make -C examples apply</code></pre>
 <li><strong>Version pinning.</strong> The Claude Code version is pinned exactly in <code>build/seat-claudecode.Dockerfile</code>. A version change is treated as a session format change: the seat resumes from a portable handoff and records that it did.</li>
 </ul>
 
-<h2>Run the live acceptance test</h2>
+<h2>Check the live setup</h2>
 <p><code>make live</code> automates this guide. It needs the variables above plus user tokens for two test humans, so it can message the bot as them. See <code>tests/live/README.md</code> for the exact list. Use test accounts and a dedicated Linear team.</p>
 <!-- shell:pager -->
 <nav class="pager" aria-label="Previous and next page"><a class="previous" href="faq.html" rel="prev"><small>Previous</small>FAQ</a><a class="next" href="operations.html" rel="next"><small>Next</small>Operating an organisation</a></nav>
@@ -158,8 +158,8 @@ make -C examples apply</code></pre>
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/real-services.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart · Steadmesh</title>
-<meta name="description" content="Clone the Steadmesh example organisation, apply two Terraform stages and chat with your AI team from the terminal, or connect Slack with the quickstart modules.">
+<meta name="description" content="Start a small engineering team, connect a test repository and talk to your representative from a terminal or Slack.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/quickstart.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Quickstart · Steadmesh">
-<meta property="og:description" content="Clone the Steadmesh example organisation, apply two Terraform stages and chat with your AI team from the terminal, or connect Slack with the quickstart modules.">
+<meta property="og:description" content="Start a small engineering team, connect a test repository and talk to your representative from a terminal or Slack.">
 <meta property="og:url" content="https://steadmesh.com/quickstart.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,18 +66,18 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Quickstart</h1>
-<p class="lede">Clone a small example organisation, point it at a model endpoint and a GitHub repository, and chat with your representative from the terminal. Slack is optional.</p>
-<p>This page documents release <strong>v0.5.0</strong>. Steadmesh is early-stage software: check <a href="status.html">Acceptance status</a> for what has been proven, and read the security notes below before connecting real accounts.</p>
+<p class="lede">Give a small engineering team a test repository and its first task. You'll connect a model, start the team and talk to your representative from the terminal. Slack is optional.</p>
+<p>This page documents release <strong>v0.5.0</strong>. Steadmesh is early-stage software: check <a href="status.html">Status and limits</a> for test coverage and known gaps, and read the security notes below before connecting real accounts.</p>
 
 <h2 id="paths">Choose a path</h2>
 <table>
@@ -108,7 +108,7 @@ organisation/    stage 2: your keys, the seats, and who may talk to whom
 <tr><td>A GitHub repository and token</td><td>A <a href="https://github.com/settings/personal-access-tokens/new">fine-grained personal access token</a> for that repository only, with Contents, Pull requests and Issues set to read and write. Use a test repository: the token is delivered into the seats' sandboxes so they can run <code>git</code> and <code>gh</code> (see <a href="sandbox.html#github">Sandbox delivery</a>).</td></tr>
 </table>
 
-<h3 id="example-steps">Steps</h3>
+<h3 id="example-steps">Start your team</h3>
 <ol class="steps">
 <li>
 <p><strong>Clone the example.</strong></p>
@@ -146,18 +146,27 @@ terraform apply</code></pre>
 orgctl chat --context "$TF_VAR_kube_context" --user me</code></pre>
 <pre data-no-copy><code>Chatting with me's representative over terminal. Ctrl-D or Ctrl-C to leave.
 you&gt; Add a CONTRIBUTING.md to the repo explaining how to run the tests.</code></pre>
-<p>Your representative passes the work to the tech lead, who shares it out with the senior engineer and the reviewer. They open a pull request in your repository, and the representative reports back in the chat. Delegated work takes minutes, not seconds. If you leave the chat, its messages wait until you reconnect, but they are lost if the platform restarts. <code>orgctl</code> connects through <code>kubectl port-forward</code> and reads your login token from the <code>terminal-credentials</code> Secret that the organisation stage created. See <a href="faq.html#chat">How do I chat with my representative?</a></p>
+<p>The example's instructions have your representative pass the request to the tech lead, with the senior engineer and reviewer working towards a pull request. Ask for the pull request link and review the change when it is ready. Delegated work can take several minutes. If you leave the chat, its messages wait until you reconnect, but they are lost if the platform restarts. <code>orgctl</code> connects through <code>kubectl port-forward</code> and reads your login token from the <code>terminal-credentials</code> Secret that the organisation stage created. See <a href="faq.html#chat">How do I chat with my representative?</a></p>
 </li>
 </ol>
 
-<h3 id="example-watch">Watch the agents work</h3>
+<h3 id="example-first-task">Choose a useful first task</h3>
+<p>Pick something small enough to review in one sitting. Include the repository, the outcome you want and how the team should check its work. For example:</p>
+<ul>
+<li>Ask the engineer to document how to run the tests, and the reviewer to check the instructions against the repository.</li>
+<li>Ask for a regression test around one function before attempting a wider refactor.</li>
+<li>Ask the team to save its findings and open questions in shared memory so you can return to them in a later conversation.</li>
+</ul>
+<p>Use a test repository and review proposed changes before merging. Your instructions guide the work; the declared grants and sandbox access determine what the team can actually reach.</p>
+
+<h3 id="example-watch">Follow the work</h3>
 <p>The example enables the read-only <a href="operations.html">console</a>. In another terminal:</p>
 <pre><code>kubectl --context "$TF_VAR_kube_context" get agentseats -A
 kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy/steadmesh-console 8090
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
 <p>The console shows seats, messages, runs, work items and readiness; it cannot change the organisation. See <a href="faq.html#watch">How do I see the organisation working?</a> and <a href="faq.html#lease">What does lease held mean?</a></p>
 
-<h3 id="example-change">Change the organisation</h3>
+<h3 id="example-change">Make the team your own</h3>
 <table>
 <tr><th>To change</th><th>Edit</th></tr>
 <tr><td>How everyone works</td><td><code>instructions/culture.md</code>; <code>team.md</code> applies to the engineering team, and the other files to one seat each.</td></tr>
@@ -165,7 +174,7 @@ kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy
 <tr><td>Who may message whom</td><td><code>message_routes</code>. Seats can only message along declared routes.</td></tr>
 <tr><td>The model</td><td><code>TF_VAR_llm_base_url</code>, <code>TF_VAR_llm_model</code> and <code>TF_VAR_llm_api_key</code> in <code>.env</code>. To mix harnesses, see <a href="harnesses.html">Harnesses and models</a>.</td></tr>
 </table>
-<p>Run <code>terraform apply</code> in <code>organisation/</code> again. <code>terraform plan</code> lists the seats each change affects, and seats keep their identity, workspace and memory across applies. The <a href="tutorial.html">tutorial</a> explains every part of the declaration.</p>
+<p>Run <code>terraform apply</code> in <code>organisation/</code> again. <code>terraform plan</code> lists the seats each change affects, and seats keep their identity, workspace and memory across applies. Use the <a href="tutorial.html">tutorial</a> to build out the roles, shared context and permissions for your next task.</p>
 
 <h2 id="slack">Use Slack and the quickstart modules</h2>
 <p>For one representative per person in Slack, start from the quickstart modules in the main repository instead. Terraform downloads the <code>darcys22/steadmesh</code> provider from the Terraform Registry, the platform chart and images from <code>ghcr.io/darcys22/steadmesh</code>, and the modules from GitHub; no clone is needed.</p>
@@ -181,7 +190,7 @@ kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy
 <tr><td>Optional: a Linear API key and team ID</td><td>Lets agents create projects and issues. Linear is optional: the organisation stays ready and keeps working when it is missing or down.</td></tr>
 </table>
 
-<h3 id="slack-steps">Steps</h3>
+<h3 id="slack-steps">Start the team in Slack</h3>
 <ol class="steps">
 <li>
 <p><strong>Get the quickstart.</strong> This copies two small Terraform roots into a new directory. <code>platform/</code> installs Steadmesh, and <code>organisation/</code> declares your agents.</p>
@@ -205,17 +214,17 @@ terraform apply</code></pre>
 <p>This stage reads the cluster, namespace, images and secret references from the platform stage's state, so keep both directories together. <code>terraform apply</code> returns once every seat has passed its readiness checks; the first time takes a few minutes while the seat images are pulled.</p>
 </li>
 <li>
-<p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM, usually within a minute; delegated work takes longer, and the representative reports back when the team replies. Try asking it to remember a preference, to have engineering look into something, or, with Linear connected, for a project for a small task. If nothing arrives, check <code>kubectl --context &lt;your-context&gt; get agentseats -A</code> and the console.</p>
+<p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM, usually within a minute; delegated work takes longer, and the representative reports back when the team replies. Start by sharing a preference you want it to remember, giving engineering a specific question to investigate, or asking it to create a small project with Linear connected. If nothing arrives, check <code>kubectl --context &lt;your-context&gt; get agentseats -A</code> and the console.</p>
 </li>
 </ol>
 
-<h3 id="slack-watch">Watch the agents work</h3>
+<h3 id="slack-watch">Follow the work from the console</h3>
 <p>Set <code>enable_console = true</code> in <code>platform/terraform.tfvars</code> and apply that stage. Then forward the console:</p>
 <pre><code>kubectl --context &lt;your-context&gt; -n steadmesh-system port-forward deploy/steadmesh-console 8090
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
 <p>With <code>orgctl</code> installed, <code>orgctl console --context &lt;your-context&gt;</code> does the same.</p>
 
-<h3 id="slack-shape">Shape your organisation</h3>
+<h3 id="slack-shape">Choose the people, roles and access</h3>
 <table>
 <tr><th>To change</th><th>Edit</th></tr>
 <tr><td>How everyone works</td><td><code>instructions/culture.md</code></td></tr>
@@ -259,8 +268,8 @@ kind delete cluster --name steadmesh     <span class="c"># only if you created i
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/quickstart.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

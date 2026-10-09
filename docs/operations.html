@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Operating an organisation · Steadmesh</title>
-<meta name="description" content="Check readiness, understand seat lifecycle, change configuration safely, retire seats and troubleshoot.">
+<meta name="description" content="Keep your organisation running as the team changes: readiness, seat lifecycle, configuration, retirement and troubleshooting.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/operations.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Operating an organisation · Steadmesh">
-<meta property="og:description" content="Check readiness, understand seat lifecycle, change configuration safely, retire seats and troubleshoot.">
+<meta property="og:description" content="Keep your organisation running as the team changes: readiness, seat lifecycle, configuration, retirement and troubleshooting.">
 <meta property="og:url" content="https://steadmesh.com/operations.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,19 +66,19 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Operating an organisation</h1>
-<p class="lede">Check readiness, understand seat lifecycle, change configuration safely, retire seats and troubleshoot.</p>
-<h2>The deployment workflow</h2>
-<p>An infrastructure repository applies three stages in order. The example roots live in <code>examples/</code>:</p>
+<p class="lede">Keep the organisation running as the team changes. Check progress, adjust roles and access, and understand what happens when seats stop, recover or retire.</p>
+<h2>Deploy the platform and team</h2>
+<p>Keep the platform setup separate from the team declaration so each can change at its own pace. The source repository's example uses three stages in order, with roots in <code>examples/</code>:</p>
 <table>
 <tr><th>Stage</th><th>Creates</th><th>Typical owner</th></tr>
 <tr><td><code>foundation</code></td><td>Cluster prerequisites: namespaces, Postgres, the secret manager integration, credential Secrets</td><td>Platform/infra team</td></tr>
@@ -101,7 +101,7 @@
 bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeout 10m</code></pre>
 <p><code>status</code> prints the current conditions, the seats and the representative endpoints. <code>verify</code> asks the controller for a completely fresh pass: it re-verifies connections and re-probes every seat. It exits non-zero unless the organisation is <code>OperationalReady</code>. A no-change <code>terraform apply</code> is not a health check, so run <code>verify</code> after every deploy.</p>
 
-<h3>Conditions</h3>
+<h3>Find the check that needs attention</h3>
 <p>The conditions are evaluated in this order. The first one that is not <code>True</code> becomes the reason for <code>OperationalReady</code>.</p>
 <table>
 <tr><th>Condition</th><th>True when</th><th>Common reasons for False</th></tr>
@@ -112,14 +112,14 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <tr><td><code>BindingsValid</code></td><td>Every bound human exists in the workspace.</td><td>Unknown or deleted user</td></tr>
 <tr><td><code>StorageReady</code></td><td>Every seat's workspace volume is bound.</td><td>Pending PVC, no storage class</td></tr>
 <tr><td><code>HarnessCompatible</code></td><td>The harness profiles are supported.</td><td>Unsupported adapter or capability</td></tr>
-<tr><td><code>SandboxEnforced</code></td><td>A probe Pod has proved that the NetworkPolicy actually blocks traffic, and any requested RuntimeClass exists.</td><td>CNI without NetworkPolicy support, missing RuntimeClass</td></tr>
+<tr><td><code>SandboxEnforced</code></td><td>A probe Pod has checked that the NetworkPolicy blocks traffic, and any requested RuntimeClass exists.</td><td>CNI without NetworkPolicy support, missing RuntimeClass</td></tr>
 <tr><td><code>RoutesExecutable</code></td><td>Every seat passed a synthetic probe for its current revision: a tool call, a workspace write/read and, if it has a model connection, a model ping.</td><td><code>ProbePending</code>, <code>ProbeFailed</code></td></tr>
 </table>
 <p>A seat that is stopped but has passed its probe still counts as ready. The probe never creates business work and never sends messages to people.</p>
 <p><code>IntegrationsDegraded</code> is informational and is not part of <code>OperationalReady</code>. It is <code>True</code> while an optional connection, such as a work tracker, is failing. Agents keep working without it, and work publication catches up when it recovers. Which connections are optional is described under <a href="configuration.html">connections</a>.</p>
 
-<h2>Seat lifecycle</h2>
-<p>Seats have technical execution states, separate from any project's business status:</p>
+<h2>Understand a seat's current state</h2>
+<p>Use the seat state to tell whether it is working, waiting or needs attention. These execution states are separate from a project's status:</p>
 <table>
 <tr><th>State</th><th>Meaning</th></tr>
 <tr><td><code>Provisioning</code></td><td>The workspace, identity or Pod is being prepared.</td></tr>
@@ -141,7 +141,7 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 </ul>
 <p>A held lease means a runner owns the seat, which includes a warm, idle runner; it does not by itself mean the model is working. Read it alongside the seat's last progress and queued messages (<a href="faq.html#lease">What does lease held mean?</a>). For what a seat remembers between messages, see <a href="faq.html#context">Does each agent keep its context?</a></p>
 
-<h2>Changing an organisation</h2>
+<h2>Change roles, access and team members</h2>
 <ul>
 <li><strong>Instructions or templates.</strong> The plan's <code>resolved_seats</code> shows which seats get a new configuration revision. Each execution records the revision it ran with.</li>
 <li><strong>Grants.</strong> A revocation takes effect for the next tool call, before the apply reports ready. Information a model has already read cannot be un-read. Revocation stops future access only.</li>
@@ -149,7 +149,7 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <li><strong>Harness.</strong> Changing <code>harness_profile</code> keeps identity, memory, workspace and messages. A native session that cannot be converted is replaced by a portable handoff, with a recovery note.</li>
 </ul>
 <h3 id="retiring">Retiring a seat</h3>
-<p>Removing a seat from the declaration never cuts it off mid-task. The apply returns at once, and the seat retires in three steps:</p>
+<p>When you remove a seat from the declaration, it gets a bounded wind-down period to finish or hand over its work. The apply returns at once, and retirement proceeds in three steps:</p>
 <ol>
 <li><strong>Retiring.</strong> The seat takes no new work. Sending it a message fails with <code>unavailable</code> and nothing is queued. Messages already waiting for it go back to their senders as <em>not delivered</em>, with the original quoted. Wake schedules and readiness probes stop. Its current turn, if any, carries on, and it keeps its tools, memory and sandbox access.</li>
 <li><strong>Wind-down.</strong> The seat gets one last message: a retirement notice. It finishes or pauses its work, saves a handoff with <code>handoff.update</code>, releases or hands over the work items it owns, and tells the seats it works with. This is bounded by the grace period, 10 minutes by default. When the period ends, the running turn is interrupted.</li>
@@ -169,7 +169,7 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-nam
 <p>Agents can change the organisation only the way people do: through the infrastructure repository and its deployment workflow, and only if you grant them access to that repository. Seat credentials have no access to the Kubernetes API.</p>
 
 <h2>Administrative controls</h2>
-<p>These are infrastructure controls. Normal business steering goes through representatives.</p>
+<p>Use these controls to pause or inspect a seat at the infrastructure level. To change the direction of its work, talk to your representative.</p>
 <pre><code><span class="c"># Stop a seat's execution without editing its prompt or workspace</span>
 kubectl --context kind-steadmesh -n steadmesh-example patch agentseat &lt;seat-name&gt; \
   --type merge -p '{"spec":{"adminSuspended":true}}'
@@ -192,7 +192,7 @@ kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-name&gt;-0</
 </ul>
 <div class="callout warn"><p><strong>Retention is not a backup.</strong> This release has no built-in backup or restore (acceptance scenario A26 is deferred). Destroying the platform stage deletes its namespaces and the database in them, and deleting a cluster deletes its volumes. Back up Postgres and the seat workspace volumes yourself, and test a restore, before destroying anything you want to keep; a database dump alone does not include workspaces. See <a href="faq.html#data">Where is the data stored?</a> and <a href="faq.html#teardown">How do I take it down?</a></p></div>
 
-<h2>Observability</h2>
+<h2>Trace messages and spot delays</h2>
 <p>Every component logs structured JSON. Each line carries organisation, seat, execution and message IDs, so one inbound message can be traced from acceptance, through wake and harness execution, to tool calls and the reply. The platform exports Prometheus metrics on <code>:8080/metrics</code>:</p>
 <table>
 <tr><th>Metric</th><th>Meaning</th></tr>
@@ -207,8 +207,8 @@ kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-name&gt;-0</
 <tr><td><code>steadmesh_http_requests_total</code>, <code>steadmesh_http_request_duration_seconds</code></td><td>API traffic</td></tr>
 </table>
 
-<h2>The console</h2>
-<p>The Steadmesh Console is an optional, read-only browser view of a running organisation. It is <strong>off by default</strong>. When it is off, nothing is deployed and the platform does not serve the console API. To turn it on, set <code>enable_console</code> in the platform stage and apply:</p>
+<h2>Follow the team in the console</h2>
+<p>The Steadmesh Console brings the team's messages, runs, work items and readiness into one read-only browser view. It is <strong>off by default</strong>. When it is off, nothing is deployed and the platform does not serve the console API. To turn it on, set <code>enable_console</code> in the platform stage and apply:</p>
 <pre><code>terraform -chdir=examples/platform apply -var enable_console=true
 orgctl console --context kind-steadmesh     # forwards http://127.0.0.1:8090</code></pre>
 <p>Without <code>orgctl</code>, run <code>kubectl --context kind-steadmesh -n steadmesh-system port-forward deploy/steadmesh-console 8090</code>. The console listens only on its Pod's loopback interface and has no login of its own, so it can be reached only by someone allowed to port-forward in the control-plane namespace.</p>
@@ -238,7 +238,7 @@ vault kv put secret/steadmesh/linear api_key=lin_api_new</code></pre>
 <p><strong>When the secret is deleted</strong>, the previous credential stays in use for the grace period, and then the connection becomes unavailable. <strong>When the secret store can't be read</strong>, for example because Vault is sealed or unreachable, the current credential stays in use for <code>credentials.maxStale</code> (default 24 hours) while refreshes keep retrying.</p>
 <p><strong>Status.</strong> Each connection's credential state appears in the console's Readiness view and in the platform's verify response; <code>orgctl status</code> and <code>orgctl verify</code> show it in the <code>ConnectionsAuthenticated</code> condition message. The states are <code>current</code>, <code>replacement_rejected</code>, <code>secret_missing</code>, <code>refresh_failing</code> and <code>unavailable</code>, with the secret's version and the reason. While a required connection still works but is degraded, <code>ConnectionsAuthenticated</code> stays true with reason <code>CredentialRefreshDegraded</code>. No secret value is ever shown or logged.</p>
 <p><strong>Vault login.</strong> The platform's own Vault login is renewed before it expires, and it logs in again if renewal fails. That is separate from reloading the credentials stored in Vault. It is reported by the <code>steadmesh_vault_login_ok</code> and <code>steadmesh_vault_login_expiry_seconds</code> metrics.</p>
-<p><strong>Evidence.</strong> Rotation is covered by the fakes-based completion demo, which rotates the Anthropic key mid-session. The recorded <a href="demo-results.html">real-services run</a> skipped that step, so rotation against a real provider has not been recorded yet.</p>
+<p><strong>Test coverage.</strong> The fakes-based example run includes an Anthropic key rotation mid-session. The recorded <a href="demo-results.html">real-services run</a> skipped that step, so rotation against a real provider has not been recorded yet.</p>
 <p><strong>Keeping values out of Terraform.</strong> Secrets that Terraform creates (the quickstart's <code>slack_bot_token</code> and similar) keep their values in that stage's state. To avoid that, create the Secrets or Vault entries yourself and pass only references in <code>existing_secret_refs</code>.</p>
 
 <h2>Troubleshooting</h2>
@@ -251,7 +251,7 @@ vault kv put secret/steadmesh/linear api_key=lin_api_new</code></pre>
 <tr><td>A seat crash-loops, logging "seat directory … is not writable"</td><td>The workspace volume's directories belong to another user. Use a storage class that honours <code>fsGroup</code>, or fix ownership on the volume.</td></tr>
 <tr><td><code>terraform init</code>: "local package … doesn't match any of the checksums"</td><td>A rebuilt dev provider. The example Makefile regenerates the lock file on every init; if you run Terraform by hand, delete <code>.terraform.lock.hcl</code>.</td></tr>
 <tr><td>A reply never arrives, and the seat shows <code>Blocked</code></td><td>Read the seat's condition message. The message is kept in its inbox and is delivered once the dependency recovers.</td></tr>
-<tr><td>An external operation shows <code>unknown</code></td><td>The external API may have applied it, but the response was lost and could not be confirmed. The platform never replays it blindly. The agent sees it in its recovery context and reconciles it.</td></tr>
+<tr><td>An external operation shows <code>unknown</code></td><td>The external API may have applied it, but the response was lost and could not be confirmed. The platform does not replay it automatically. The agent sees it in its recovery context so it can check the external result.</td></tr>
 </table>
 <!-- shell:pager -->
 <nav class="pager" aria-label="Previous and next page"><a class="previous" href="real-services.html" rel="prev"><small>Previous</small>Connect real services</a><a class="next" href="sandbox.html" rel="next"><small>Next</small>Sandbox access</a></nav>
@@ -266,8 +266,8 @@ vault kv put secret/steadmesh/linear api_key=lin_api_new</code></pre>
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/operations.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

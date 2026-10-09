@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Configuration reference · Steadmesh</title>
-<meta name="description" content="Every record of the organisation specification, with defaults, validation rules and the provider's computed attributes.">
+<meta name="description" content="Configure your organisation, seats, memory, routes and access, with every field, default and validation rule.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/configuration.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Configuration reference · Steadmesh">
-<meta property="og:description" content="Every record of the organisation specification, with defaults, validation rules and the provider's computed attributes.">
+<meta property="og:description" content="Configure your organisation, seats, memory, routes and access, with every field, default and validation rule.">
 <meta property="og:url" content="https://steadmesh.com/configuration.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,20 +66,20 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Configuration reference</h1>
-<p class="lede">Every record of the organisation specification, with defaults, validation rules and the provider's computed attributes.</p>
-<p>The same schema is used everywhere: in Terraform's typed <code>spec</code> attribute, in the <code>AgentOrganization</code> CRD, and in the controller. One compiler validates it at <code>terraform plan</code> time and again in the controller, so the two can never disagree. Field names are snake_case. Map keys are stable keys matching <code>^[a-z][a-z0-9_]{0,62}$</code>.</p>
+<p class="lede">Look up the fields that define your team: roles, models, memory, access and communication. Each section lists the defaults, validation rules and values the provider returns.</p>
+<p>Terraform's typed <code>spec</code> attribute, the <code>AgentOrganization</code> CRD and the controller share the schema. The same compiler validates the declaration at <code>terraform plan</code> time and again in the controller. Field names are snake_case. Map keys are stable keys matching <code>^[a-z][a-z0-9_]{0,62}$</code>.</p>
 
-<h2>Provider</h2>
+<h2>Point the provider at your cluster</h2>
 <pre><code>provider "steadmesh" {
   kubeconfig_path = "~/.kube/config"   <span class="c"># optional; standard loading rules otherwise</span>
   kube_context    = "kind-steadmesh"    <span class="c"># required; the ambient context is never used</span>
@@ -105,10 +105,10 @@
 </table>
 <p><strong>Import.</strong> <code>terraform import steadmesh_organization.this &lt;namespace&gt;/&lt;key&gt;</code>. Objects managed by Helm are rejected. An object with no owner annotation needs explicit adoption: <code>&lt;namespace&gt;/&lt;key&gt;/adopt</code>.</p>
 
-<h2>Spec records</h2>
+<h2>Define the organisation</h2>
 
 <h3><code>culture_refs</code></h3>
-<p>A list of instruction references applied to every seat, first.</p>
+<p>Put guidance for the whole organisation here. These instruction references are applied to every seat before team, role and seat-specific instructions.</p>
 
 <h3 id="refs">Reference formats</h3>
 <table>
@@ -120,6 +120,7 @@
 </table>
 
 <h3><code>team_templates</code></h3>
+<p>Reuse a set of roles, instructions and shared-memory permissions across teams.</p>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
 <tr><td><code>extends</code></td><td>Another template key. Cycles are rejected.</td></tr>
@@ -139,6 +140,7 @@
 <p>Teams have no member list. Seats declare their teams.</p>
 
 <h3><code>seats</code></h3>
+<p>Declare a continuing agent identity for each role, with its own harness, workspace and optional personal memory.</p>
 <table>
 <tr><th>Field</th><th>Required</th><th>Description</th></tr>
 <tr><td><code>role_ref</code></td><td>yes</td><td>An instruction reference, or <code>role:&lt;name&gt;</code> from the seat's team templates. A role defined differently by two of the seat's teams is rejected.</td></tr>
@@ -153,6 +155,7 @@
 </table>
 
 <h3><code>memory_stores</code></h3>
+<p>Create separate stores for personal context and shared team knowledge. Grants determine who can use each shared store.</p>
 <table>
 <tr><th>Field</th><th>Default</th><th>Description</th></tr>
 <tr><td><code>retention</code></td><td><code>retain</code></td><td><code>retain</code> or <code>delete</code></td></tr>
@@ -231,6 +234,7 @@
 <p>Only three permissions are implicit: a seat's own <code>personal_memory</code> (all memory operations), <code>model.infer</code> on its harness's model connection, and <code>channel.reply</code> to the human it is bound to. Each appears in the seat's capability manifest with an <code>implicit:</code> source.</p>
 
 <h3><code>message_routes</code></h3>
+<p>Choose who can delegate to whom and where replies can travel.</p>
 <table>
 <tr><th>Field</th><th>Description</th></tr>
 <tr><td><code>from</code>, <code>to</code></td><td>Seat or team subjects. A team expands to its members, and a seat never routes to itself.</td></tr>
@@ -263,7 +267,7 @@
 <li>The defaults above belong to <code>defaults_version = 1</code>, which is recorded in every effective manifest.</li>
 </ul>
 
-<h2>Modules</h2>
+<h2>Build on the reusable modules</h2>
 <table>
 <tr><th>Module</th><th>Inputs</th><th>Outputs</th></tr>
 <tr><td><code>modules/instruction-bundle</code></td><td><code>name</code>, <code>namespace</code>, <code>source_path</code></td><td><code>ref</code></td></tr>
@@ -285,8 +289,8 @@
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/configuration.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

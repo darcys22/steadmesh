@@ -553,7 +553,7 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -588,10 +588,10 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html" aria-current="page">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html" aria-current="page">Example run</a></li>
     </ul>
   </nav>
 </aside>
@@ -620,7 +620,7 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
 <details><summary>Configuration (examples/mixed-harness)</summary><pre><code>{{pretty .Config}}</code></pre></details>
 {{end}}
 <!-- shell:pager -->
-<nav class="pager" aria-label="Previous and next page"><a class="previous" href="status.html" rel="prev"><small>Previous</small>Acceptance status</a><span></span></nav>
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="status.html" rel="prev"><small>Previous</small>Status and limits</a><span></span></nav>
 <!-- /shell:pager -->
 </main>
 </div>
@@ -632,8 +632,8 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/tests/e2e/demo_test.go">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Acceptance status · Steadmesh</title>
-<meta name="description" content="Which acceptance scenarios from the design are proven, partially proven or still pending.">
+<title>Status and limits · Steadmesh</title>
+<meta name="description" content="Test coverage, recorded runs and known limits to help you plan a Steadmesh deployment.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/status.html">
@@ -13,8 +13,8 @@
 <meta name="theme-color" content="#10151f">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
-<meta property="og:title" content="Acceptance status · Steadmesh">
-<meta property="og:description" content="Which acceptance scenarios from the design are proven, partially proven or still pending.">
+<meta property="og:title" content="Status and limits · Steadmesh">
+<meta property="og:description" content="Test coverage, recorded runs and known limits to help you plan a Steadmesh deployment.">
 <meta property="og:url" content="https://steadmesh.com/status.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,27 +66,27 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html" aria-current="page">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html" aria-current="page">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
-<h1>Acceptance status</h1>
-<p class="lede">Which acceptance scenarios from the design are proven, partially proven or still pending.</p>
+<h1>Status and limits</h1>
+<p class="lede">Test coverage, recorded runs and known limits to help you plan a Steadmesh deployment.</p>
 <p>The design defines 27 acceptance scenarios (A01–A27); A28, retiring a busy seat, was added with seat retirement, so 28 are tracked. This page shows where each one stands, as of release v0.5.0. The detailed record, with test names, is <a href="https://github.com/darcys22/steadmesh/blob/main/tests/acceptance/RESULTS.md"><code>tests/acceptance/RESULTS.md</code></a>.</p>
 
-<div class="callout warn"><p><strong>What has been proven, and how.</strong> The design does not allow the platform to be called usable on mocked connectors alone, so evidence is kept separate by source:</p>
+<div class="callout warn"><p><strong>How to read the results.</strong> Tests use different environments. Check which one covers the behaviour you plan to rely on:</p>
 <ul>
-<li><span class="tag pass">pass</span> means proven on a local kind cluster with the deterministic harness and fake Slack, Linear and GitHub servers, or by integration suites against real Postgres, a Kubernetes API server, Terraform and the real harness binaries against a scripted model.</li>
+<li><span class="tag pass">pass</span> means the scenario passed on a local kind cluster with the deterministic harness and fake Slack, Linear and GitHub servers, or by integration suites against real Postgres, a Kubernetes API server, Terraform and the real harness binaries against a scripted model.</li>
 <li>Real model endpoints and real GitHub: the <a href="demo-results.html">completion demo</a> has a recorded real-services run (8 October 2026) in which a Claude Code lead, a Codex engineer and a Pi reviewer passed readiness through their own models, collaborated, and opened a pull request that reached review. Slack and Linear were the in-cluster fakes in that run, and its key-rotation step was skipped.</li>
 <li>Real Slack and Linear: no run of <code>make live</code> has been recorded yet. The scenarios marked <span class="tag pending">live</span> still need one.</li>
 </ul></div>
 
-<h2>How to reproduce</h2>
+<h2>Run the checks yourself</h2>
 <pre><code>make test               <span class="c"># unit tests</span>
 make test-integration   <span class="c"># Postgres via testcontainers, envtest, Terraform acceptance, Claude Code feasibility</span>
 make e2e                <span class="c"># the full apply-to-conversation suite on a fresh kind cluster</span>
@@ -95,7 +95,7 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 
 <h2>Scenarios</h2>
 <table>
-<tr><th>ID</th><th>Scenario</th><th>Status</th><th>Evidence</th></tr>
+<tr><th>ID</th><th>Scenario</th><th>Status</th><th>Test coverage</th></tr>
 <tr><td>A01</td><td>Apply a prepared organisation</td><td><span class="tag pass">pass</span> <span class="tag pending">live</span></td><td>e2e: <code>make -C examples apply</code> ends with a fresh verify of OperationalReady and representative details. The real-services demo also reached readiness with real model endpoints, but with fake Slack and Linear</td></tr>
 <tr><td>A02</td><td>Connector lacks authorisation</td><td><span class="tag pass">pass</span></td><td>Provider and controller integration: the blocking condition names the connection</td></tr>
 <tr><td>A03</td><td>Repeat the same apply</td><td><span class="tag pass">pass</span></td><td>e2e: plan exit code 0, still five seats</td></tr>
@@ -122,7 +122,7 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 <tr><td>A24</td><td>Configuration change through CI</td><td><span class="tag deferred">not run</span></td><td>The same <code>make apply</code> path; no CI is wired up</td></tr>
 <tr><td>A25</td><td>No-change deploy still detects failures</td><td><span class="tag pass">pass</span></td><td>e2e: verify fails while the connections are down and passes after they recover</td></tr>
 <tr><td>A26</td><td>Restore from backup</td><td><span class="tag deferred">Milestone 5</span></td><td></td></tr>
-<tr><td>A27</td><td>Background vs interactive load</td><td><span class="tag deferred">Milestone 6</span></td><td>No DSec features are claimed</td></tr>
+<tr><td>A27</td><td>Background vs interactive load</td><td><span class="tag deferred">Milestone 6</span></td><td>DSec features are not available</td></tr>
 <tr><td>A28</td><td>Retire a busy seat</td><td><span class="tag pass">pass</span></td><td>e2e: the running turn finishes, the seat saves a handoff on its retirement notice, its work item is released, a queued message goes back to its sender, both representatives get a summary, and the workspace is kept</td></tr>
 </table>
 
@@ -137,7 +137,7 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 <li>Model key rotation has been tested with fakes, not yet against a real provider.</li>
 </ul>
 <!-- shell:pager -->
-<nav class="pager" aria-label="Previous and next page"><a class="previous" href="decisions.html" rel="prev"><small>Previous</small>Design decisions</a><a class="next" href="demo-results.html" rel="next"><small>Next</small>Demo results</a></nav>
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="decisions.html" rel="prev"><small>Previous</small>Design decisions</a><a class="next" href="demo-results.html" rel="next"><small>Next</small>Example run</a></nav>
 <!-- /shell:pager -->
 </main>
 </div>
@@ -149,8 +149,8 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/status.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

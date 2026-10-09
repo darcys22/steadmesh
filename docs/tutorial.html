@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tutorial: build an organisation · Steadmesh</title>
-<meta name="description" content="Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.">
+<meta name="description" content="Build your organisation step by step: choose roles, instructions, shared memory and access, then send the team a request.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/tutorial.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Tutorial: build an organisation · Steadmesh">
-<meta property="og:description" content="Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.">
+<meta property="og:description" content="Build your organisation step by step: choose roles, instructions, shared memory and access, then send the team a request.">
 <meta property="og:url" content="https://steadmesh.com/tutorial.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,23 +66,23 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Tutorial: build an organisation</h1>
-<p class="lede">Declare culture, teams, seats, memory and permissions step by step, then watch a request travel from a human to a tracker project.</p>
-<p>This tutorial builds an organisation declaration from scratch: a culture, a representative for one person, and an engineering team that can create work in Linear. Each section adds one kind of record and explains what the platform does with it. The finished file is close to the quickstart's <code>organisation/main.tf</code>, which uses the reusable modules to say the same thing more compactly.</p>
+<p class="lede">Build a team around a person and a piece of work. Choose its roles, shared memory and permissions, then follow a request from conversation to a tracker project.</p>
+<p>You'll give one person a representative and connect it to an engineering team that can create work in Linear. Along the way, you'll decide how the team works, what it remembers and which services it can use. Each section adds one part of the declaration. The finished file is close to the quickstart's <code>organisation/main.tf</code>, which uses reusable modules to express the same setup more compactly.</p>
 
 <div class="callout"><p>Complete the <a href="quickstart.html">Quickstart</a> first, so the platform is installed. Work in a copy of its <code>organisation/</code> directory, which already reads the cluster, namespace and secret references from the platform stage. The examples below use literal values to keep them readable. If you <a href="from-source.html">run from source</a> instead, work in <code>examples/organisation/</code>, where module sources are local paths such as <code>../../modules/instruction-bundle</code>.</p></div>
 
-<h2>1. The provider and the organisation resource</h2>
-<p>The provider writes a single <code>AgentOrganization</code> object and then watches it converge. <code>kube_context</code> is required on purpose: the provider never falls back to whatever context happens to be current.</p>
+<h2>1. Choose where the team runs</h2>
+<p>Point the provider at the cluster and namespace where this team should run. It writes a single <code>AgentOrganization</code> object and waits for it to become ready. The explicit <code>kube_context</code> keeps deployments tied to that cluster rather than your current kubectl context.</p>
 <pre><code>terraform {
   required_providers {
     steadmesh = {
@@ -114,8 +114,8 @@ resource "steadmesh_organization" "this" {
   }
 }</code></pre>
 
-<h2>2. Culture and instructions</h2>
-<p>Instructions are versioned text, stored outside the organisation object and referenced by content digest. That way a change is always a visible, reviewable diff. The <code>instruction-bundle</code> module publishes a markdown file as a ConfigMap and outputs a reference such as <code>configmap:steadmesh-culture/culture.md#sha256:9f2c…</code>.</p>
+<h2>2. Describe how the team should work</h2>
+<p>Use instructions for the team's working habits: how to clarify a request, record decisions, ask for review and report a result. Instructions are versioned text, stored outside the organisation object and referenced by content digest, so changes can be reviewed as diffs. The <code>instruction-bundle</code> module publishes a markdown file as a ConfigMap and outputs a reference such as <code>configmap:steadmesh-culture/culture.md#sha256:9f2c…</code>.</p>
 <pre><code>module "culture" {
   source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
   name        = "steadmesh-culture"
@@ -134,8 +134,8 @@ module "representative_role" {
 <p>Each seat receives its instructions in a fixed order: organisation culture, then team guidance in declared order, then the seat's role, then seat-specific additions. The controller checks every digest before it renders them into the seat. If a ConfigMap no longer matches its digest, the seat is never started with it.</p>
 <div class="callout warn"><p>Instructions guide behaviour. They are not a security boundary. No instruction, culture text or chat message can widen what a seat is allowed to do. Only <a href="#grants">grants</a> can.</p></div>
 
-<h2>3. Profiles: how seats run</h2>
-<p>Three independent profiles describe how a seat runs. A seat can switch harness without changing its memory, or change resources without changing its role.</p>
+<h2>3. Choose how seats run</h2>
+<p>Give each seat a harness profile, an execution profile and a sandbox profile. Keeping these separate lets you change its harness while retaining its memory, or adjust its resources without rewriting its role.</p>
 <pre><code>    harness_profiles = {
       primary = {
         adapter      = "fake"                   <span class="c"># or "claude-code", "codex", "pi"</span>
@@ -155,13 +155,13 @@ module "representative_role" {
     sandbox_profiles = {
       standard = {}   <span class="c"># default: deny-all network except the platform, non-root, resource limits</span>
     }</code></pre>
-<p>Unsupported combinations fail at plan time and are never quietly downgraded. For example, <code>idle_policy = "suspend"</code> is rejected because the Kubernetes backend cannot suspend processes:</p>
+<p>The plan checks that the backend can support your chosen settings. For example, <code>idle_policy = "suspend"</code> is rejected because the Kubernetes backend cannot suspend processes:</p>
 <pre><code>Error: Invalid organisation specification
 
 execution_profiles.interactive.idle_policy: backend "kubernetes" does not support
 "suspend" (requires feature "process_suspend"); refusing to substitute a weaker policy</code></pre>
 
-<h2>4. Connections</h2>
+<h2>4. Connect the services the team needs</h2>
 <p>A connection says how to reach a service. It holds a <em>reference</em> to credentials, never the credentials themselves. <code>k8s:&lt;name&gt;</code> names a Secret in the control-plane namespace, which only the platform service can read. A connection on its own grants no seat any access.</p>
 <pre><code>    connections = {
       slack = {
@@ -179,8 +179,8 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
     }</code></pre>
 <p>Connections are <code>required</code> by default: the organisation does not report ready until each one has authenticated. If you put a raw token in <code>secret_ref</code>, the plan is rejected.</p>
 
-<h2>5. Memory and seats</h2>
-<p>Declare the memory stores first, then the seats. A seat names its personal store in <code>personal_memory</code>, which implicitly gives it full personal-memory operations on that store and nothing else.</p>
+<h2>5. Give each seat a place to remember</h2>
+<p>Create stores for the context that should stay with an individual seat and the context the team should share. Declare those memory stores first, then the seats. A seat names its personal store in <code>personal_memory</code>, which implicitly gives it full personal-memory operations on that store and nothing else.</p>
 <pre><code>    memory_stores = {
       organisation = {}
       engineering  = {}
@@ -202,8 +202,8 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
     }</code></pre>
 <p>The seat key (<code>representative_sean</code>) is its stable name. The platform assigns each seat an immutable ID the first time it sees the seat. Changing the display name, instructions or image keeps that identity. Removing a seat <em>retires</em> it: it first finishes its current turn, saves a handoff and hands over its work (see <a href="operations.html#retiring">Retiring a seat</a>), and its data is retained by default. A new seat that reuses the same key does <strong>not</strong> inherit the old private data unless it names the old seat in <code>adopt_from</code>.</p>
 
-<h2>6. Teams and templates</h2>
-<p>A template is reusable team configuration. Templates can extend each other, and roles are defined on the template. A concrete team instantiates a template, and seats join teams by listing them; the team itself has no member list.</p>
+<h2>6. Bring the roles together</h2>
+<p>Use a team template to share instructions, role definitions and memory access across related seats. Templates can extend other templates. A concrete team instantiates a template, and seats join it by listing it; the team itself has no member list.</p>
 <pre><code>    team_templates = {
       base = {
         instruction_refs = [module.base_guidance.ref]
@@ -240,7 +240,7 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
 <p>The provider resolves templates before writing the organisation, so the controller only ever sees concrete configuration.</p>
 <p>The modules <code>modules/team-base</code>, <code>modules/team-engineering</code> and <code>modules/team-accounting</code> package these templates with their bundles.</p>
 
-<h2 id="grants">7. Grants</h2>
+<h2 id="grants">7. Grant the access each role needs</h2>
 <p>Grants are the only way a seat gains capabilities beyond its own personal memory. Each grant names a subject (<code>seat:</code> or <code>team:</code>), a resource (<code>connection:</code>, <code>memory:</code> or <code>workspace:</code>) and a list of operations.</p>
 <pre><code>    grants = {
       engineering_linear = {
@@ -261,15 +261,15 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
 <li><code>channel.reply</code> to the one human it is bound to</li>
 </ul>
 
-<h2>8. Message routes</h2>
-<p>Routes say who may message whom. With <code>reply = true</code>, the recipient may reply within conversations opened on that route. That does not let the recipient start new conversations with the sender.</p>
+<h2>8. Let the right seats talk to each other</h2>
+<p>Connect the representative to the lead, and the lead to the reviewer. Routes say who may start each conversation. With <code>reply = true</code>, the recipient may reply within conversations opened on that route. That does not let the recipient start new conversations with the sender.</p>
 <pre><code>    message_routes = {
       sean_to_lead    = { from = "seat:representative_sean", to = "seat:eng_lead", reply = true }
       lead_reviewer   = { from = "seat:eng_lead", to = "seat:reviewer", bidirectional = true }
     }</code></pre>
 <p>The message graph is separate from Terraform's dependency graph, so two-way communication never creates a Terraform dependency cycle.</p>
 
-<h2>9. Channel bindings</h2>
+<h2>9. Connect a person to their representative</h2>
 <p>A channel binding connects a verified external identity to a representative. Incoming Slack events are authorised by the verified workspace and user IDs. A name typed inside the message text is never trusted.</p>
 <pre><code>    channel_bindings = {
       sean = {
@@ -281,9 +281,9 @@ execution_profiles.interactive.idle_policy: backend "kubernetes" does not suppor
   }   <span class="c"># end of spec</span></code></pre>
 <p>Several people can share one Slack app installation. Each person gets their own representative and a private history that other representatives cannot read. A representative is an ordinary seat with a binding; what it may do still comes from its grants and routes, not from its instructions. See <a href="faq.html#chat">How do I chat with my representative?</a> for the terminal alternative to Slack.</p>
 
-<h2>10. Plan</h2>
+<h2>10. Review the plan</h2>
 <pre><code>terraform plan    <span class="c"># from source: make -C examples plan-organisation</span></code></pre>
-<p>The plan validates the whole organisation before anything is applied. Errors point at exact attributes:</p>
+<p>Use the plan to check the team before deploying it. Validation errors point at the attributes to fix:</p>
 <pre><code>Error: Invalid organisation specification
 
   with steadmesh_organization.this,
@@ -293,12 +293,12 @@ seats.reviewer.personal_memory: contradictory ownership: store "rep_sean" is
 already the personal memory of seat "representative_sean"</code></pre>
 <p>A valid plan shows <code>resolved_seats</code>: each seat's resolved role, teams and configuration revision. When you change a shared template or culture bundle, these revisions show exactly which seats the change affects.</p>
 
-<h2>11. Apply and verify</h2>
+<h2>11. Start the team and check readiness</h2>
 <pre><code>terraform apply   <span class="c"># from source: make -C examples apply</span></code></pre>
-<p><code>terraform apply</code> returns only when the current generation is <code>OperationalReady</code>. That means storage, identities, harness compatibility, sandbox enforcement, connections, Slack ingress, human bindings and a synthetic probe of every seat have all passed. To repeat these checks even when Terraform has nothing to change, run <code>orgctl verify</code>. <code>make -C examples apply</code> does this after every apply. That way a broken integration is caught on every deploy.</p>
+<p><code>terraform apply</code> returns only when the current generation is <code>OperationalReady</code>. That means storage, identities, harness compatibility, sandbox enforcement, connections, Slack ingress, human bindings and a synthetic probe of every seat have all passed. To repeat these checks even when Terraform has nothing to change, run <code>orgctl verify</code>. <code>make -C examples apply</code> does this after every apply. This refreshes integration checks on each deployment, including when the declaration has not changed.</p>
 
-<h2>12. Follow a request</h2>
-<p>When Sean messages the bot, the platform does the following:</p>
+<h2>12. Follow a request through the team</h2>
+<p>For a request that delegates a Linear project to engineering, the flow looks like this:</p>
 <ol>
 <li>The Slack adapter receives the event over Socket Mode. The platform maps the verified team and user IDs to the <code>sean</code> binding, stores the message durably and only then acknowledges it to Slack. A replayed event is recognised by its event ID and is not processed twice.</li>
 <li>The message lands in <code>representative_sean</code>'s inbox. If the seat is stopped, the controller wakes it within a few seconds.</li>
@@ -307,8 +307,8 @@ already the personal memory of seat "representative_sean"</code></pre>
 <li>The lead's reply returns to the representative, correlated to the original request. The representative replies to Sean through the outbox and Slack.</li>
 </ol>
 
-<h2>13. Change something</h2>
-<p>Give the reviewer the ability to comment in Linear:</p>
+<h2>13. Add a capability as the work grows</h2>
+<p>If reviews need to happen in the tracker, give the reviewer permission to comment in Linear:</p>
 <pre><code>      reviewer_comments = {
         subject    = "seat:reviewer"
         resource   = "connection:linear"
@@ -316,7 +316,7 @@ already the personal memory of seat "representative_sean"</code></pre>
       }</code></pre>
 <p>The plan shows the reviewer's configuration revision changing and nothing else. On apply, the new policy takes effect for the reviewer's next tool call. The seat restarts at a safe point, after any current turn finishes. Its identity, memory and workspace stay the same, and each execution records which revision it used.</p>
 
-<h2>What survives what</h2>
+<h2>Return to the same team after changes</h2>
 <table>
 <tr><th>Event</th><th>Kept</th></tr>
 <tr><td>Seat goes idle and stops</td><td>Everything: workspace, memory, history, inbox. Process state does not survive; the harness session is restored from its checkpoint.</td></tr>
@@ -338,8 +338,8 @@ already the personal memory of seat "representative_sean"</code></pre>
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/tutorial.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

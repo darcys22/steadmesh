@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Harnesses and models · Steadmesh</title>
-<meta name="description" content="Choose a harness (Claude Code, Codex or Pi) and a model endpoint per seat, how model access and credentials work, readiness checks, and how to add a harness.">
+<meta name="description" content="Choose Claude Code, Codex or Pi for each seat, connect a supported model endpoint and understand session continuity.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/harnesses.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Harnesses and models · Steadmesh">
-<meta property="og:description" content="Choose a harness (Claude Code, Codex or Pi) and a model endpoint per seat, how model access and credentials work, readiness checks, and how to add a harness.">
+<meta property="og:description" content="Choose Claude Code, Codex or Pi for each seat, connect a supported model endpoint and understand session continuity.">
 <meta property="og:url" content="https://steadmesh.com/harnesses.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,19 +66,20 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Harnesses and models</h1>
+<p class="lede">Choose a harness and model for each role. A lead on Claude Code, an engineer on Codex and a reviewer on Pi can share the same organisation, message routes and memory stores.</p>
 <p>Each seat runs a <strong>harness</strong>: the agent program that reasons, edits files and calls tools. You choose a harness and a <strong>model</strong> per harness profile, and a seat uses its profile. Different seats in one organisation can use different harnesses and different model endpoints. They keep the same identity, workspace, memory, permissions and durable messaging whatever harness they run.</p>
 
-<h2>Compatibility</h2>
+<h2>Choose a compatible harness and model API</h2>
 <p>A model connection serves one or more APIs. A harness speaks one or more APIs. A profile uses an API both sides support.</p>
 <table>
 <tr><th>Harness (pinned version)</th><th><code>anthropic_messages</code></th><th><code>openai_responses</code></th><th><code>openai_chat</code></th><th>Model settings</th></tr>
@@ -87,10 +88,10 @@
 <tr><td><code>pi</code> (Pi 1.0.4, <a href="https://pi.dev">pi.dev</a>)</td><td>yes</td><td>yes (preferred)</td><td>yes</td><td><code>thinking</code>: off … max; <code>context_window</code>, <code>max_tokens</code>, <code>reasoning</code></td></tr>
 <tr><td><code>fake</code> (deterministic, tests)</td><td colspan="3">no model</td><td></td></tr>
 </table>
-<p>Each row was verified against the pinned release, with the evidence checked in under <code>harnesses/&lt;name&gt;/CONTRACT.md</code>, and every harness passes the same conformance suite against all its APIs (see <a href="#verifying">Verifying</a>).</p>
-<p>API compatibility does not mean every model or provider has been tested. The conformance suite uses a scripted model; real endpoints are exercised by <code>make live-harnesses</code> and the completion demo for the models they name. Check tool calling, context window and output limits for the model you choose, and set <code>context_window</code> and <code>max_tokens</code> to its real values. A harness is not a model provider: Pi, for example, still needs a model connection and its credential (<a href="faq.html#pi-key">Where is the Pi key?</a>, <a href="faq.html#which-llm">Which LLM does it use?</a>).</p>
+<p>The table describes the pinned releases. Their integration details and checks are recorded under <code>harnesses/&lt;name&gt;/CONTRACT.md</code>; the shared conformance suite covers each harness's supported APIs (see <a href="#verifying">Run the integration checks</a>).</p>
+<p>API compatibility does not mean every model or provider has been tested. The conformance suite uses a scripted model; real endpoints are exercised by <code>make live-harnesses</code> and the example run for the models they name. Check tool calling, context window and output limits for the model you choose, and set <code>context_window</code> and <code>max_tokens</code> to its real values. A harness is not a model provider: Pi, for example, still needs a model connection and its credential (<a href="faq.html#pi-key">Where is the Pi key?</a>, <a href="faq.html#which-llm">Which LLM does it use?</a>).</p>
 
-<h2>Declaring models</h2>
+<h2>Connect a model and assign it to a role</h2>
 <p>A model connection is declared once, with the APIs it serves and optionally its models. A harness profile then selects a connection and a model.</p>
 <pre><code>connections = {
   anthropic = { adapter = "anthropic", secret_ref = "k8s:anthropic-credentials" }   <span class="c"># serves anthropic_messages</span>
@@ -113,7 +114,7 @@ harness_profiles = {
   pi_selfhosted = { adapter = "pi", image_digest = "…/seat-pi@sha256:…",
              model = { connection = "selfhosted", id = "qwen3.8-27b" } }          <span class="c"># api resolves to openai_chat</span>
 }</code></pre>
-<p>Compile errors are specific. For example, selecting the selfhosted connection for Codex fails with:</p>
+<p>The plan reports incompatible combinations before deployment. For example, selecting the selfhosted connection for Codex returns:</p>
 <pre><code>harness_profiles.codex.model: harness "codex" speaks openai_responses but connection "selfhosted" serves openai_chat for model "qwen3.8-27b"; harnesses that would work: pi</code></pre>
 <p>The <code>auth</code> field says how the credential is sent: <code>bearer</code> (default), <code>x-api-key</code> (the Anthropic default) or <code>header:&lt;Name&gt;</code>. The <a href="configuration.html#harness_profiles">configuration reference</a> lists every field.</p>
 
@@ -127,14 +128,14 @@ harness_profiles = {
 </ol>
 <p>No model credential enters a sandbox.</p>
 
-<h2 id="readiness">Readiness</h2>
+<h2 id="readiness">Check that the connection and seat can work</h2>
 <p>Readiness checks two things, separately:</p>
 <ol>
 <li><strong>The connection.</strong> With <code>verify = "request"</code> (the default), the platform sends a minimal valid request for each declared model and API, and for each model and API a profile uses: Anthropic <code>POST /v1/messages</code> with <code>max_tokens: 1</code>; Responses <code>POST /v1/responses</code> with <code>max_output_tokens: 16</code>; Chat <code>POST /v1/chat/completions</code> with <code>max_completion_tokens: 1</code> (falling back to <code>max_tokens</code> for older servers). A successful check is trusted for six hours; a failure names the API and model. <code>verify = "models"</code> lists models instead, and <code>none</code> skips the check.</li>
-<li><strong>The harness.</strong> Each seat's readiness probe is a real turn: the harness is asked to call the platform <code>self</code> tool. The probe passes only if a model request through the proxy succeeded (<code>model</code>), the harness called <code>self</code> through its tool bridge (<code>tool</code>), and the turn completed (<code>turn</code>). A connection check alone is never taken as evidence that a harness works.</li>
+<li><strong>The harness.</strong> Each seat's readiness probe is a real turn: the harness is asked to call the platform <code>self</code> tool. The probe passes only if a model request through the proxy succeeded (<code>model</code>), the harness called <code>self</code> through its tool bridge (<code>tool</code>), and the turn completed (<code>turn</code>). This checks the seat's tool bridge and turn lifecycle as well as the connection.</li>
 </ol>
 
-<h2>Per-harness behaviour</h2>
+<h2>How each harness handles turns</h2>
 <h3>claude-code</h3>
 <ul>
 <li>One <code>claude -p</code> process per turn, resuming the seat's session (<code>--resume</code>); sessions live on the seat volume.</li>
@@ -157,21 +158,21 @@ harness_profiles = {
 <h2>Changing a seat's harness or model</h2>
 <p>Changing a profile's adapter, model, API or settings changes the seat's configuration revision. The seat finishes its turn, and its Pod is replaced. The seat ID, volume, memory, inbox and handoff are kept. With the same harness, the native session resumes. With a different harness, the seat starts a new session seeded from its portable handoff; the first turn reports that recovery and the console shows it. The native transcript is not converted between harnesses; record important decisions in memory, work items or the handoff (<a href="faq.html#context">Does each agent keep its context?</a>).</p>
 
-<h2 id="verifying">Verifying</h2>
+<h2 id="verifying">Run the integration checks</h2>
 <table>
 <tr><th>Command</th><th>What it runs</th></tr>
 <tr><td><code>make conformance</code></td><td>Fetches the pinned CLIs for your machine (<code>build/harness-bins.sh</code>, digest-checked, no install scripts) and runs each against a scripted model over every API it speaks, through the real forwarder: turn lifecycle, interruption, quiesce, native resume, handoff fallback, a tool call made by the model, the probe turn, the model and destination used, and token rotation during a running session.</td></tr>
 <tr><td><code>make conformance-images</code></td><td>The same suite inside each seat image, against its Linux binaries.</td></tr>
 <tr><td><code>make live-harnesses</code></td><td>Each harness on a real endpoint (Anthropic, OpenAI, the self-hosted endpoint) with a real tool call; see <code>tests/live/README.md</code>.</td></tr>
 <tr><td><code>make live-automations</code></td><td>Each harness with a real model, as a representative asked to set up, move, pause, resume and cancel reminders and recurring checks, against a real platform; it checks the automations left behind.</td></tr>
-<tr><td><code>make demo</code></td><td>The completion demo (<code>examples/mixed-harness</code>): Claude Code, Codex and Pi seats collaborate on kind, with fakes or the real services. Results: <a href="demo-results.html">Demo results</a>.</td></tr>
+<tr><td><code>make demo</code></td><td>The mixed-harness example (<code>examples/mixed-harness</code>): Claude Code, Codex and Pi seats collaborate on kind, with fakes or the real services. Results: <a href="demo-results.html">Example run</a>.</td></tr>
 <tr><td><code>make e2e</code></td><td>On kind: Codex and Pi seats join a running organisation, pass the probe turn, do delegated work with platform tools, record <code>model_request</code> events, and survive a model key rotation without a restart.</td></tr>
 </table>
 
 <h2>Adding a harness</h2>
-<p>A new harness needs no change to the platform core:</p>
+<p>To add a harness, implement its adapter and check its lifecycle, tools and model access. The platform core stays the same:</p>
 <ol>
-<li><strong>Verify the contract.</strong> Pin a release and record, with evidence, how it takes a custom base URL and key, how it reaches stdio MCP tools, how a turn starts, ends and is interrupted, how sessions resume, and what else it reaches over the network. Write <code>harnesses/&lt;name&gt;/CONTRACT.md</code>.</li>
+<li><strong>Document the integration.</strong> Pin a release and record the checks for how it takes a custom base URL and key, how it reaches stdio MCP tools, how a turn starts, ends and is interrupted, how sessions resume, and what else it reaches over the network. Write <code>harnesses/&lt;name&gt;/CONTRACT.md</code>.</li>
 <li><strong>Write the adapter.</strong> A package implementing <code>harnesses.Adapter</code> that registers a <code>harnesses.Descriptor</code> in <code>init</code>: name, the APIs it speaks in order of preference, its model settings and capabilities. Point the harness at <code>Environment.Model.BaseURL</code>, use <code>Environment.Model.APIKey</code> as its key, and report tool calls as <code>tool_request</code> events with <code>data.name</code>.</li>
 <li><strong>Register it.</strong> Import the package from <code>harnesses/all</code>. Compile validation and the seat runner pick it up from the registry.</li>
 <li><strong>Build an image.</strong> <code>build/seat-&lt;name&gt;.Dockerfile</code>, pinning the version (the pins test checks it matches the adapter) and asserting it at build time.</li>
@@ -190,8 +191,8 @@ harness_profiles = {
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/harnesses.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
