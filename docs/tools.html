@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Agent tools · Steadmesh</title>
-<meta name="description" content="The platform tools every seat can call, how they are authorised, and the fake harness script language used in tests.">
+<meta name="description" content="Explore the tools agents use to share notes, coordinate work, send messages and schedule follow-ups.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/tools.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Agent tools · Steadmesh">
-<meta property="og:description" content="The platform tools every seat can call, how they are authorised, and the fake harness script language used in tests.">
+<meta property="og:description" content="Explore the tools agents use to share notes, coordinate work, send messages and schedule follow-ups.">
 <meta property="og:url" content="https://steadmesh.com/tools.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,20 +66,20 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Agent tools</h1>
-<p class="lede">The platform tools every seat can call, how they are authorised, and the fake harness script language used in tests.</p>
-<p>Agents interact with the platform only through tools. Every call goes to the platform service, which authenticates the seat from its identity token. The platform checks the seat's current execution lease and its capability manifest, built from your grants, before acting. A seat cannot claim to be someone else, and a tool is never less restricted because it was called from a shell instead of through MCP.</p>
+<p class="lede">Give the team ways to remember decisions, delegate work, follow up later and use connected services. This reference explains the tools available to seats and the permissions each call uses.</p>
+<p>A seat can discover its tools and use them to work with the rest of the team. Calls go to the platform service, which authenticates the seat from its identity token and checks its current execution lease and capability manifest, built from your grants. The same checks apply whether the call comes through MCP, the CLI or HTTP; a seat cannot substitute another identity.</p>
 
-<h2>Transports</h2>
+<h2>How seats call tools</h2>
 <table>
 <tr><th>Transport</th><th>How</th><th>Names</th></tr>
 <tr><td>MCP (Claude Code)</td><td><code>steadmesh-tools mcp</code> runs as a stdio MCP server inside the seat</td><td>Dots become underscores: <code>memory_search</code>, or <code>mcp__steadmesh__memory_search</code> in Claude Code</td></tr>
@@ -88,16 +88,16 @@
 </table>
 <p>Each seat sees only the tools it can use. Results are JSON, capped at 16 KiB, and lists are paginated with <code>cursor</code>.</p>
 
-<h2>Identity and status</h2>
+<h2>Find context and check progress</h2>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>self</code></td><td>none</td><td>The seat's identity, instruction sources, memory stores, recipients and connections.</td></tr>
-<tr><td><code>status</code></td><td><code>seats?</code> (up to 20)</td><td>Technical state (running, stopped, queued work) of this seat and the seats it talks to. Representatives use it to explain real delays instead of inventing progress.</td></tr>
+<tr><td><code>status</code></td><td><code>seats?</code> (up to 20)</td><td>Technical state (running, stopped, queued work) of this seat and the seats it talks to. Representatives can use it to explain delays and report the current state.</td></tr>
 <tr><td><code>handoff.update</code></td><td><code>objective</code>, <code>unresolved[]</code>, <code>record_ids[]</code>, <code>pending_message_ids[]</code>, <code>operation_ids[]</code>, <code>notes</code></td><td>Replaces the seat's portable handoff, which is restored after restarts and harness changes.</td></tr>
 </table>
 
-<h2>Memory</h2>
-<p>Memory stores are scopes the platform enforces. Inside a store, records are addressed like files: each has a path that is unique among the store's live records, for example <code>notes/plan.md</code> or <code>decisions/auth.md</code>. Agents decide how to organise them. Search and listing are authorised <em>before</em> they run, so counts, paths and snippets from stores a seat cannot read are never revealed.</p>
+<h2 id="memory">Keep decisions and working notes</h2>
+<p>Use personal stores for a seat's own context and shared stores for plans, decisions and notes the team needs. The platform enforces access to each store. Records are addressed like files: each has a path that is unique among the store's live records, for example <code>notes/plan.md</code> or <code>decisions/auth.md</code>. Agents decide how to organise them. Search and listing are authorised <em>before</em> they run, so counts, paths and snippets from stores a seat cannot read are never revealed.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>memory.stores</code></td><td>none</td><td>Stores available to this seat and the operations allowed on each.</td></tr>
@@ -112,8 +112,8 @@
 </table>
 <p>Paths under <code>work/</code> hold work items (below). They can be read and searched like any record, but only the work tools change them, so ownership and status rules cannot be bypassed with <code>memory.write</code>.</p>
 
-<h2>Work items (optional)</h2>
-<p>Shared memory and messages are enough to coordinate. When explicit ownership helps, for example with several people on one piece of work or work that runs for days, a seat can record a work item in a shared store. It has an objective, acceptance criteria, an owner, a status, a plan, dependencies and evidence. Its id is <code>&lt;store&gt;/W-&lt;n&gt;</code>. Nothing requires a work item: no workflow is imposed and no status has to be passed through. Every change is revision-checked.</p>
+<h2>Track ownership for longer work</h2>
+<p>For a quick exchange, messages and shared notes may be enough. When several seats contribute to one task, or work continues over days, use a work item to keep the objective, acceptance criteria, owner, status, plan, dependencies and supporting results together. A seat records it in a shared store with the id <code>&lt;store&gt;/W-&lt;n&gt;</code>. Work items are optional, with no required sequence of statuses. Every change is revision-checked.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>work.create</code></td><td><code>store</code>, <code>objective</code>, <code>acceptance[]</code>, <code>depends_on[]</code>, <code>links[]</code>, <code>parent?</code>, <code>owner?</code></td><td>Creates the item as <code>ready</code>, optionally assigned. Personal stores are refused.</td></tr>
@@ -125,7 +125,7 @@
 </table>
 <p>A restarted seat finds its unfinished work items in the recovery section of its bootstrap context. The organisation can optionally publish work items to a tracker (<code>work_publication</code>, see <a href="configuration.html">Configuration</a>). The tracker is a view for people. Agents never depend on it.</p>
 
-<h2>Messages</h2>
+<h2>Delegate work and share updates</h2>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>messages.recipients</code></td><td>none</td><td>Seats this seat may message, and whether they can reply.</td></tr>
@@ -135,8 +135,8 @@
 <tr><td><code>messages.history</code></td><td><code>conversation_id?</code>, <code>limit</code>, <code>cursor</code></td><td>Lists conversations, or reads one this seat takes part in. Human conversations are visible only to their representative.</td></tr>
 </table>
 
-<h2 id="automations">Automations and time</h2>
-<p>An automation is a named instruction a seat carries out for itself on a schedule: a reminder, a follow-up or a recurring check. It is stored by the platform, outside Terraform, and survives restarts. Each run queues a turn for the seat carrying the instruction, waking the seat if it has stopped.</p>
+<h2 id="automations">Return to work on a schedule</h2>
+<p>Use an automation for a reminder, a follow-up or a recurring check on a service the seat can access. Each automation is a named instruction that the seat carries out on a schedule. It is stored by the platform, outside Terraform, and survives restarts. Each run queues a turn for the seat carrying the instruction, waking the seat if it has stopped.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>automations.create</code></td><td><code>name</code>, <code>instruction</code>, and one schedule: <code>in</code> (a delay, e.g. <code>20m</code>), <code>at</code> (local <code>2026-10-09T15:00</code> or RFC 3339), <code>every</code> (an interval, at least 1m) or <code>time</code> (<code>HH:MM</code>) with <code>days?</code> (<code>mon</code>…<code>sun</code>, <code>weekdays</code>, <code>weekends</code>, <code>daily</code>); <code>timezone?</code>, <code>until?</code>, <code>max_runs?</code></td><td>Saves the automation and returns it with a readable schedule and its next three runs in local time with their UTC offsets. A name already used by one of the seat's live automations is a <code>conflict</code> naming its id, so agents update instead of duplicating. At most 50 active or paused automations per seat.</td></tr>
@@ -158,14 +158,14 @@
 <li><strong>Retirement.</strong> A retiring seat's automations stop.</li>
 </ul>
 
-<h2>External connections</h2>
+<h2>Work with connected services</h2>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>connections.list</code></td><td>none</td><td>Connections this seat may use, with the granted operations and targets.</td></tr>
 <tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation on a tracker or code host, such as <code>project.create</code> on Linear or <code>pull_request.create</code> on GitHub (<a href="sandbox.html#github">platform delivery</a>). Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation instead of repeating it.</td></tr>
 <tr><td><code>operations.get</code></td><td><code>id</code></td><td>One recorded operation: status, receipt and result.</td></tr>
 </table>
-<p>Linear parameters:</p>
+<p>Use these parameters to create and read projects, update tasks and follow comments in Linear:</p>
 <ul>
 <li><code>project.create</code>: <code>{name, description, content, team_ids}</code>. Team IDs default to the connection's <code>team_id</code>, and <code>description</code> is limited to 255 characters.</li>
 <li><code>project.read</code>: <code>{id}</code> or <code>{query, first}</code>.</li>
@@ -175,7 +175,7 @@
 <li><code>comment.read</code>: <code>{issue_id, first}</code>. The issue's comments with author and time, so agents can act on what people write in Linear.</li>
 </ul>
 
-<h3>Operation outcomes</h3>
+<h3>Check what happened to an external action</h3>
 <table>
 <tr><th>Status</th><th>Meaning</th></tr>
 <tr><td><code>succeeded</code></td><td>Applied, with an external receipt such as a project ID or issue identifier.</td></tr>
@@ -184,8 +184,8 @@
 </table>
 <p>Because Linear has no idempotency keys, created records carry a marker <code>steadmesh-op:&lt;operation id&gt;</code>. After a lost response, the gateway searches for that marker to find out whether the first attempt landed.</p>
 
-<h2 id="fake-harness">The fake harness script language</h2>
-<p>The <code>fake</code> harness never calls a model. It reads each message body as a small script, which makes infrastructure tests and the quickstart deterministic. Lines that start with <code>/</code> are commands; a body without any commands gets the reply <code>ack: &lt;text&gt;</code>. Every tool call goes through the <code>steadmesh-tools</code> binary, the same path and authority a real harness has.</p>
+<h2 id="fake-harness">Try the delivery flow with scripted tasks</h2>
+<p>The <code>fake</code> harness never calls a model. It reads each message body as a small script, for deterministic infrastructure tests and the run-from-source walkthrough. Lines that start with <code>/</code> are commands; a body without any commands gets the reply <code>ack: &lt;text&gt;</code>. Every tool call goes through the <code>steadmesh-tools</code> binary, the same path and authority a real harness has.</p>
 <table>
 <tr><th>Command</th><th>Effect</th></tr>
 <tr><td><code>/tool &lt;name&gt; [json]</code></td><td>Calls a platform tool and records the result as output.</td></tr>
@@ -215,8 +215,8 @@
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/tools.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

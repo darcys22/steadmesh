@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Architecture · Steadmesh</title>
-<meta name="description" content="Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.">
+<meta name="description" content="Explore how Terraform, Kubernetes and the Steadmesh platform work together to run persistent agent teams.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/architecture.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Architecture · Steadmesh">
-<meta property="og:description" content="Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.">
+<meta property="og:description" content="Explore how Terraform, Kubernetes and the Steadmesh platform work together to run persistent agent teams.">
 <meta property="og:url" content="https://steadmesh.com/architecture.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,20 +66,20 @@
       <li><a href="architecture.html" aria-current="page">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Architecture</h1>
-<p class="lede">Components, ownership, the seat Pod contract, authentication and fencing, messaging, the gateway and the readiness flow.</p>
-<p>This page is the binding description of how the components fit together: who owns what, the contract every seat Pod follows, and how messages, tools and readiness work. The design rationale is in <a href="decisions.html">Design decisions</a>.</p>
+<p class="lede">See how a persistent team runs: where its context lives, how messages reach seats, and how the platform handles tools, restarts and access.</p>
+<p>Use this reference when you need to understand a deployment, diagnose a runtime issue or extend the platform. It covers component ownership, the seat Pod contract, message delivery, tool calls and readiness. For the trade-offs behind these choices, see <a href="decisions.html">Design decisions</a>.</p>
 
-<h2 id="components">Components</h2>
+<h2 id="components">Follow the main components</h2>
 <table>
 <tr><th>Component</th><th>Code</th><th>Responsibility</th></tr>
 <tr><td>Specification and compiler</td><td><code>pkg/spec</code>, <code>pkg/compile</code></td><td>The schema, plus the single validator used by both the provider and the controller. Resolves templates, applies versioned defaults, expands grants and routes, and computes per-seat revisions.</td></tr>
@@ -93,7 +93,7 @@
 </table>
 <p>The controller and the platform service never execute agent-written code inside their own processes. Agents run only in seat sandboxes.</p>
 
-<h2 id="ownership">Ownership</h2>
+<h2 id="ownership">Know which component owns each change</h2>
 <p>Each piece of configuration has exactly one writer:</p>
 <ul>
 <li>The provider owns the declared fields of an <code>AgentOrganization</code>.</li>
@@ -150,7 +150,7 @@
 <li><strong>Environment.</strong> <code>STEADMESH_PLATFORM_URL</code>, <code>STEADMESH_TOKEN_FILE</code>, <code>STEADMESH_ORG_ID</code>, <code>STEADMESH_SEAT_ID</code>, <code>STEADMESH_SEAT_KEY</code>, <code>STEADMESH_CONFIG_REVISION</code>, <code>STEADMESH_HARNESS</code>, <code>STEADMESH_MANIFEST_DIR</code>, and <code>POD_UID</code> from the downward API.</li>
 <li><strong>Probes.</strong> <code>:8081/healthz</code>; <code>:8081/readyz</code> reports ready once the runner holds the lease and has loaded its bootstrap.</li>
 <li><strong>Termination.</strong> Grace period 300s. On SIGTERM the runner enters Quiescing: it lets the turn finish (interrupting it after 240s), checkpoints, reports Stopped and releases the lease.</li>
-<li><strong>Network.</strong> Ingress is denied. By default, egress is allowed only to the platform Pods on TCP 8080 and to DNS. A seat whose access profiles name hosts, such as GitHub for sandbox delivery or sites for the browser, can also reach the <a href="sandbox.html#egress-gateway">egress gateway</a>, which allows only those hosts. The controller proves the isolation with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
+<li><strong>Network.</strong> Ingress is denied. By default, egress is allowed only to the platform Pods on TCP 8080 and to DNS. A seat whose access profiles name hosts, such as GitHub for sandbox delivery or sites for the browser, can also reach the <a href="sandbox.html#egress-gateway">egress gateway</a>, which allows only those hosts. The controller checks isolation with a probe Pod before reporting <code>SandboxEnforced</code>, and never starts a seat without it.</li>
 <li><strong>Restarts.</strong> The StatefulSet uses the <code>OnDelete</code> update strategy, so only the controller decides when a Pod restarts.</li>
 </ul>
 
@@ -170,7 +170,7 @@
 <li><strong>Ingress.</strong> A Slack event is authorised from the verified team and user IDs matching a channel binding. It is stored before the event is acknowledged, and deduplicated by connection and event ID. The request handler never waits for a model.</li>
 <li><strong>Inbox.</strong> <code>GET /v1/inbox/next</code> long-polls, then atomically leases the oldest eligible delivery. Order is preserved within a conversation, and the call creates an execution record with the seat's configuration revision. A delivery lease lasts 15 minutes. If it expires, the message is requeued with backoff (1s, 8s, 64s, then 5m), and after 5 attempts it is dead-lettered so it never blocks the seat. Each seat holds at most 1000 pending internal messages.</li>
 <li><strong>Outbox.</strong> Replies to humans are written to an outbox in the same transaction as the reply. Each send is recorded as a connector operation, and an ambiguous send is marked unknown rather than resent.</li>
-<li><strong>Probes.</strong> The runner checks a workspace write and read. A harness with a model then proves itself with a real turn: it must reach the model through the proxy (<code>model</code>), call the platform <code>self</code> tool through its tool bridge (<code>tool</code>) and complete the turn (<code>turn</code>). A harness without a model calls <code>self</code> through <code>steadmesh-tools</code> instead. See <a href="harnesses.html#readiness">Harnesses and models</a>.</li>
+<li><strong>Probes.</strong> The runner checks a workspace write and read. A harness with a model then runs a probe turn: it must reach the model through the proxy (<code>model</code>), call the platform <code>self</code> tool through its tool bridge (<code>tool</code>) and complete the turn (<code>turn</code>). A harness without a model calls <code>self</code> through <code>steadmesh-tools</code> instead. See <a href="harnesses.html#readiness">Harnesses and models</a>.</li>
 </ul>
 
 <h2 id="gateway">Gateway and operation ledger</h2>
@@ -234,7 +234,7 @@
 </table>
 <p>The wire types are in <code>pkg/runtimeapi</code>. Errors are JSON <code>{code, message}</code>, with codes unauthenticated, forbidden, fenced, conflict, not_found, invalid, blocked and unavailable. <code>/healthz</code> (liveness) and <code>/readyz</code> (database reachable) are separate, and <code>/metrics</code> serves Prometheus.</p>
 
-<h2 id="data">Durable data model</h2>
+<h2 id="data">Find the team's durable records</h2>
 <p>All durable data is in Postgres (migrations in <code>services/store/migrations</code>), scoped by organisation in every query and index:</p>
 <ul>
 <li>organizations, seats (immutable IDs; one active key per organisation; retired rows kept)</li>
@@ -259,8 +259,8 @@
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/architecture.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

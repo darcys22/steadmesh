@@ -26,6 +26,19 @@ into the demo page template in `tests/e2e/demo_test.go`.
 To add a page: create it with the markers (copy `docs/faq.html`), add it to
 `NAV` (or `PAGES` if it is not in the sidebar), and sync.
 
+## Writing and examples
+
+Lead with what someone can do with a team: a useful first task, the roles it
+needs and the next step to try. Use plain, direct language in guides and
+reference pages. Keep deployment, credential, retention and compatibility
+warnings next to the actions they affect.
+
+The homepage introduces possible workflows, not performance claims. Label
+illustrative teams and suggested prompts as examples; do not present them as
+recorded conversations or completed results. Link to the run record and
+status page for test details, keeping pass/skip tables and benchmark-style
+numbers off the landing page. Preserve recorded results when changing copy.
+
 ## Demo results
 
 `docs/demo-results.html` and `docs/demo/*.json` are the demo's evidence,

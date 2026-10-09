@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Run from source · Steadmesh</title>
-<meta name="description" content="Run the example organisation on your laptop with deterministic fakes and talk to a representative, in about fifteen minutes.">
+<meta name="description" content="Explore a Steadmesh organisation locally with scripted models and services, without account credentials.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/from-source.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="Run from source · Steadmesh">
-<meta property="og:description" content="Run the example organisation on your laptop with deterministic fakes and talk to a representative, in about fifteen minutes.">
+<meta property="og:description" content="Explore a Steadmesh organisation locally with scripted models and services, without account credentials.">
 <meta property="og:url" content="https://steadmesh.com/from-source.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,19 +66,19 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Run from source</h1>
-<p class="lede">Build Steadmesh from this repository and run the example organisation on a local kind cluster with deterministic fakes. No accounts or API keys needed.</p>
+<p class="lede">Explore how a team receives messages, delegates work and picks up again after idle time. Build Steadmesh locally and use scripted fakes, with no accounts or API keys needed.</p>
 <div class="callout"><p>To install a published release into your own cluster without cloning the repository, use the <a href="quickstart.html">Quickstart</a> instead. This page is for working on Steadmesh itself, or for trying it with no accounts at all.</p></div>
-<p>This walkthrough deploys the example organisation to a local <a href="https://kind.sigs.k8s.io/">kind</a> cluster: two human representatives and an engineering team of three. Slack and Linear are replaced by deterministic fake servers from the repository, and seats run the <code>fake</code> harness. That harness executes scripted commands instead of calling a model, so it needs no accounts or API keys.</p>
+<p>You'll run two human representatives and an engineering team of three on a local <a href="https://kind.sigs.k8s.io/">kind</a> cluster. Slack and Linear use the repository's deterministic fake servers, and seats use the <code>fake</code> harness. Replies and delegated tasks follow scripts rather than model reasoning, so this is a way to learn the platform's mechanics before connecting live services.</p>
 
 <div class="callout"><p>Every command pins the kubectl context <code>kind-steadmesh</code>. Nothing here uses or changes your current kubectl context. If a <code>steadmesh</code> kind cluster already exists from an earlier run, inspect it before reusing or deleting it: see <a href="faq.html#clean-cluster">How do I know whether my kind cluster is clean?</a></p></div>
 
@@ -92,7 +92,7 @@
 <tr><td>Terraform</td><td>1.5 or later</td><td>Tested with 1.5.7. <code>terraform init</code> needs network access for the kubernetes, helm and random providers.</td></tr>
 </table>
 
-<h2>Run it</h2>
+<h2>Start a local team</h2>
 <ol class="steps">
 <li>
 <p><strong>Get the source.</strong> Clone the repository and check out the release this page documents. Every later command runs from the repository root.</p>
@@ -149,7 +149,7 @@ curl -s localhost:8090/_test/dm -d '{"user":"U0SEAN","text":"hello from sean"}'
 sleep 20   <span class="c"># a sleeping seat takes a few seconds to wake</span>
 curl -s localhost:8090/_test/posted | jq -r '.[] | "\(.channel): \(.text)"'</code></pre>
 <pre><code>D0SEAN: ack: hello from sean</code></pre>
-<p>That reply went from the message, through the platform's durable inbox, to Sean's representative seat, which woke up, ran a turn and replied through the outbox to Slack. No manual command was involved.</p>
+<p>The message travelled through the platform's durable inbox to Sean's representative. The seat woke, ran a scripted turn and sent the reply through the outbox to fake Slack. A model-backed seat uses the same delivery path.</p>
 </li>
 <li>
 <p><strong>Or chat from a terminal.</strong> A human can reach their representative from a terminal instead of Slack. Put Sean on the terminal connection, which generates his token in the Secret <code>terminal-credentials</code>, and re-apply:</p>
@@ -171,7 +171,7 @@ enter send · alt+enter new line · ↑ history · ctrl+c quit</code></pre>
 <p><code>orgctl chat</code> port-forwards to the platform and reads the token from the connection's Secret; pass <code>--token</code> for a Vault reference. The representative's replies are rendered as markdown, in colour matched to a light or dark terminal. When input or output is not a terminal, for example when piping a message in, it falls back to plain lines. The representative can message you at any time with <code>messages.reply</code>. Anything it sends while no terminal is open waits in the platform's memory, up to 200 messages, and appears when you next connect. Those queued messages are lost if the platform restarts, and the oldest are dropped beyond 200; this is not durable delivery. See <a href="faq.html#chat">How do I chat with my representative?</a></p>
 </li>
 <li>
-<p><strong>Delegate work and create a tracker project.</strong> The fake harness runs lines that start with <code>/</code> as commands (see <a href="tools.html#fake-harness">the script language</a>). This message asks the representative to delegate to the engineering lead. The lead creates a Linear project and the result comes back to Sean:</p>
+<p><strong>Try a delegation.</strong> The fake harness runs lines that start with <code>/</code> as commands (see <a href="tools.html#fake-harness">the script language</a>). This message asks the representative to delegate to the engineering lead. The lead creates a Linear project and the result comes back to Sean:</p>
 <pre><code>curl -s localhost:8090/_test/dm -d @- &lt;&lt;'JSON'
 {"user":"U0SEAN","text":"/delegate eng_lead /task\n/tool connections.invoke {\"connection\":\"linear\",\"operation\":\"project.create\",\"params\":{\"name\":\"Onboarding checklist\"}}"}
 JSON
@@ -184,7 +184,7 @@ tool connections.invoke: {"id":"…","connection":"linear","operation":"project.
 curl -s localhost:8091/_test/state | jq '.projects[].name'</code></pre>
 </li>
 <li>
-<p><strong>Watch the seats.</strong> After a minute without work, seats scale to zero and keep their workspace and memory. The next message wakes them.</p>
+<p><strong>Leave the team idle, then return.</strong> After a minute without work, seats scale to zero and keep their workspace and memory. The next message wakes them.</p>
 <pre><code>make -C examples status
 kubectl --context kind-steadmesh -n steadmesh-example get agentseats -w</code></pre>
 </li>
@@ -195,12 +195,12 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseats -w</code></
 <pre><code>make -C examples teardown   <span class="c"># destroy organisation, platform and foundation</span>
 make kind-down              <span class="c"># delete the kind cluster</span></code></pre>
 
-<div class="callout"><p>The same flow, with many more checks, is automated by <code>make e2e</code>. That suite covers replayed events, lost API responses, Pod kills, sleeping seats, control-plane restarts and credential leaks. See <a href="status.html">Acceptance status</a>.</p></div>
+<div class="callout"><p>If you are changing Steadmesh itself, run <code>make e2e</code> to check this flow alongside replayed events, lost API responses, Pod kills, sleeping seats, control-plane restarts and credential leaks. The current coverage and gaps are listed in <a href="status.html">Status and limits</a>.</p></div>
 
 <h2>Next steps</h2>
 <ul>
-<li>Learn what each part of the declaration does in the <a href="tutorial.html">tutorial</a>.</li>
-<li>Use real Slack, Linear and model endpoints: <a href="real-services.html">Connect real services</a>.</li>
+<li>Adapt the roles, memory and routes to your own workflow in the <a href="tutorial.html">tutorial</a>.</li>
+<li>Move from scripted replies to a model-backed team: <a href="real-services.html">Connect real services</a> covers Slack, Linear and model endpoints.</li>
 </ul>
 <!-- shell:pager -->
 <nav class="pager" aria-label="Previous and next page"><a class="previous" href="quickstart.html" rel="prev"><small>Previous</small>Quickstart</a><a class="next" href="tutorial.html" rel="next"><small>Next</small>Tutorial</a></nav>
@@ -215,8 +215,8 @@ make kind-down              <span class="c"># delete the kind cluster</span></co
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/from-source.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>

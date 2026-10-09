@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FAQ · Steadmesh</title>
-<meta name="description" content="Plain-English answers about Steadmesh setup, models, chat, representatives, memory, GitHub access, data and teardown.">
+<meta name="description" content="Find a first task for your agent team, connect models and services, and understand memory, access, storage and teardown.">
 <link rel="stylesheet" href="assets/style.css">
 <!-- shell:meta -->
 <link rel="canonical" href="https://steadmesh.com/faq.html">
@@ -14,7 +14,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Steadmesh">
 <meta property="og:title" content="FAQ · Steadmesh">
-<meta property="og:description" content="Plain-English answers about Steadmesh setup, models, chat, representatives, memory, GitHub access, data and teardown.">
+<meta property="og:description" content="Find a first task for your agent team, connect models and services, and understand memory, access, storage and teardown.">
 <meta property="og:url" content="https://steadmesh.com/faq.html">
 <meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
 <meta property="og:image:width" content="1200">
@@ -31,7 +31,7 @@
   <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
   <nav class="topnav" aria-label="Site">
     <a href="./#how-it-works">How it works</a>
-    <a href="./#demo">Demo</a>
+    <a href="./#possibilities">What you can do</a>
     <a href="docs/">Docs</a>
     <a href="faq.html" aria-current="page">FAQ</a>
     <a href="https://github.com/darcys22/steadmesh">GitHub</a>
@@ -66,28 +66,33 @@
       <li><a href="architecture.html">Architecture</a></li>
       <li><a href="decisions.html">Design decisions</a></li>
     </ul>
-    <div class="nav-group">Evidence</div>
+    <div class="nav-group">Project</div>
     <ul>
-      <li><a href="status.html">Acceptance status</a></li>
-      <li><a href="demo-results.html">Demo results</a></li>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
     </ul>
   </nav>
 </aside>
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Frequently asked questions</h1>
-<p class="lede">Plain-English answers to the questions people ask most while setting up, running and taking down a Steadmesh organisation. Each answer links to the reference that covers it in depth.</p>
+<p class="lede">Find a useful first task, get connected and understand what stays with your team between conversations. The setup, access and teardown answers below link to the detailed guides.</p>
 
 <div class="callout"><p><strong>Version scope.</strong> Answers describe v0.5.0 and were checked against its source. Where an answer describes a choice in a particular setup rather than product behaviour, it says so. Commands that are still awaiting a clean-install check are marked <span class="tag pending">not yet clean-install tested</span>.</p></div>
 
 <nav class="toc" aria-label="Questions on this page">
+<p><strong>Working with a team</strong></p>
+<ul>
+<li><a href="#first-task">What can I ask the team to do?</a></li>
+<li><a href="#follow-ups">Can it follow up later?</a></li>
+</ul>
 <p><strong>Setup and models</strong></p>
 <ul>
 <li><a href="#api-keys">Where do API keys go, and which stage creates them?</a></li>
 <li><a href="#pi-key">Where is the Pi key?</a></li>
 <li><a href="#which-llm">Which LLM does it use?</a></li>
 </ul>
-<p><strong>Talking to the team and watching it</strong></p>
+<p><strong>Talking to the team and following the work</strong></p>
 <ul>
 <li><a href="#chat">How do I chat with my representative?</a></li>
 <li><a href="#watch">How do I see the organisation working?</a></li>
@@ -113,6 +118,18 @@
 </ul>
 </nav>
 
+<section id="working-together" aria-labelledby="working-together-h">
+<h2 id="working-together-h">Working with a team</h2>
+
+<h3 id="first-task">What can I ask the team to do?</h3>
+<p>Start with a task that has a clear outcome and uses the access you have configured. The <a href="quickstart.html#example">example engineering team</a> is a good place to try a small repository change: ask for updated test instructions, a regression test or a focused fix, with a reviewer checking the result. You can also ask seats to save project decisions in shared memory or organise longer work with owners and dependencies.</p>
+<p>Tell your representative what you need, what matters and how you want the result reviewed. The team works from its instructions, declared message routes and grants. Connecting a service does not give every seat access to it, and a request in chat cannot add permissions. See the <a href="tutorial.html">tutorial</a> to adapt the team to your work.</p>
+
+<h3 id="follow-ups">Can it follow up later?</h3>
+<p>Yes. A seat can create a one-off reminder, a follow-up or a recurring check using <a href="tools.html#automations">automations</a>. The platform stores the schedule and wakes that seat with the instruction, using its own harness, model and permissions. Be specific about what to check, when to check it and when to stop.</p>
+<p>Schedules survive restarts, but a busy seat handles a queued run after its current work. Overlapping occurrences are skipped, and downtime produces one catch-up run rather than a replay of every missed occurrence. Delivery still depends on the channel: terminal replies have the <a href="#chat">in-memory queue limits</a> described below.</p>
+</section>
+
 <section id="setup" aria-labelledby="setup-h">
 <h2 id="setup-h">Setup and models</h2>
 
@@ -120,22 +137,22 @@
 <p>A model connection refers to a Kubernetes Secret in the platform namespace, or to a supported external secret-store reference. The platform's model proxy uses the real key. The seat talks to the proxy and doesn't need the provider key.</p>
 <p>Which Terraform stage creates the Secret is a choice made by each setup. The <a href="https://github.com/darcys22/steadmesh-example">example organisation</a> creates its model, GitHub and terminal Secrets in the <strong>organisation</strong> stage, from <code>TF_VAR_</code> variables in <code>.env</code>. The repository's quickstart modules create the Slack, terminal, model and Linear Secrets in the <strong>platform</strong> stage, from <code>model_api_keys</code> and related variables. You can also create the Secrets yourself and pass <code>existing_secret_refs</code>.</p>
 <div class="callout warn"><p><strong>Terraform state holds secrets that Terraform creates.</strong> Secrets created by Terraform are stored in that stage's state, even when the variables are marked sensitive. Keep state private, and keep key values out of instructions, screenshots and source control.</p></div>
-<p>Not every credential stays behind the proxy. With GitHub <em>sandbox</em> delivery, the seat receives a credential it can read, and browser-session delivery has its own boundary (see <a href="#filesystem-github">below</a> and <a href="sandbox.html">Sandbox access</a>). Changing the value behind a supported secret reference makes the platform refresh the credential without a Terraform run (<a href="operations.html#credential-rotation">credential rotation</a>). The recorded real-services demo skipped its key-rotation step, so that run doesn't prove rotation with real providers.</p>
+<p>GitHub and browser access have a separate credential boundary. With GitHub <em>sandbox</em> delivery, the seat receives a credential it can read, and browser-session delivery has its own boundary (see <a href="#filesystem-github">below</a> and <a href="sandbox.html">Sandbox access</a>). Changing the value behind a supported secret reference makes the platform refresh the credential without a Terraform run (<a href="operations.html#credential-rotation">credential rotation</a>). Key rotation against real providers remains unrecorded: the real-services demo skipped that step.</p>
 
 <h3 id="pi-key">Where is the Pi key?</h3>
-<p>There isn't one. Pi is an agent <em>harness</em>: the program that reads files, runs tools and edits code. It isn't a model provider. You pick Pi as a seat's harness and then give the seat a model connection to use. Steadmesh's Pi adapter points Pi at the seat's local model proxy with a placeholder key, and the platform adds the real provider credential. A setup where every seat runs Pi still needs the credentials of whichever model provider those seats use.</p>
+<p>Use the key for the model provider you choose. Pi is an agent <em>harness</em>, the program that reads files, runs tools and edits code, rather than a model provider. Choose Pi for a seat and give that seat a model connection. Steadmesh's Pi adapter points Pi at the seat's local model proxy with a placeholder key, and the platform adds the real provider credential. A setup where every seat runs Pi still needs the credentials of whichever model provider those seats use.</p>
 <p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/CONTRACT.md">harnesses/pi/CONTRACT.md</a>, <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/pi.go">harnesses/pi/pi.go</a>.</p>
 
 <h3 id="which-llm">Which LLM does it use?</h3>
 <p>The one you configure. Each seat has a model: a connection, a model ID and an API, and the harness must support that API. The Pi adapter speaks Anthropic Messages, OpenAI Responses and OpenAI Chat Completions. Claude Code and Codex support narrower sets, listed in the <a href="harnesses.html">harness matrix</a>. The quickstart defaults every seat to Claude Code with <code>claude-sonnet-5-5</code> on Anthropic. You can override this per seat with <code>seat_harnesses</code>.</p>
-<p>Matching the API shape doesn't prove that every provider, model, tool-call format or feature works. Declare the endpoint, model ID, credential reference and API together, and set context-window and other settings to match the real model. Then check readiness, which runs a probe turn through each seat's own harness and model (<a href="harnesses.html#readiness">harness readiness</a>). Changing only the API label isn't a compatibility test.</p>
+<p>API compatibility is a starting point; tool calling and other features still need checking with your chosen provider and model. Declare the endpoint, model ID, credential reference and API together, and set context-window and other settings to match the real model. Then check readiness, which runs a probe turn through each seat's own harness and model (<a href="harnesses.html#readiness">harness readiness</a>). Changing only the API label isn't a compatibility test.</p>
 </section>
 
 <section id="chat-visibility" aria-labelledby="chat-visibility-h">
-<h2 id="chat-visibility-h">Talking to the team and watching it</h2>
+<h2 id="chat-visibility-h">Talking to the team and following the work</h2>
 
 <h3 id="chat">How do I chat with my representative?</h3>
-<p>Through a communication connector with a channel binding that maps your external user ID to your representative seat. The <a href="quickstart.html#example">example organisation</a> uses the terminal connector only, with one user, <code>me</code>. The <a href="quickstart.html#slack">quickstart modules</a> support Slack, the terminal, or both: for the terminal, list your user ID in <code>terminal_users</code>, and the platform stage creates a token for you in a Secret. Either way, you connect with:</p>
+<p>Send a Slack DM or use the terminal, depending on your setup. A channel binding maps your external user ID to your representative seat. The <a href="quickstart.html#example">example organisation</a> uses the terminal connector only, with one user, <code>me</code>. The <a href="quickstart.html#slack">quickstart modules</a> support Slack, the terminal, or both: for the terminal, list your user ID in <code>terminal_users</code>, and the platform stage creates a token for you in a Secret. Either way, you connect with:</p>
 <pre><code>orgctl chat --context &lt;kube-context&gt; --user &lt;your-terminal-user-id&gt;</code></pre>
 <p><span class="tag pending">not yet clean-install tested</span> <code>orgctl</code> always needs an explicit <code>--context</code> and never uses your current one. It reaches the platform through <code>kubectl port-forward</code> and reads your token from the connection's Secret, unless you pass <code>--token</code>. This is a local tool for your own cluster, not a hosted chat service.</p>
 <div class="callout warn"><p><strong>Reconnecting doesn't guarantee delivery.</strong> While you're disconnected, the terminal connector keeps up to 200 replies per user <em>in memory</em>. When that fills, it drops the oldest, and it loses the whole queue if the connector is rebuilt or the platform restarts. A connected stream that falls behind can also drop messages. The organisation's own message history is stored durably in Postgres and is separate from this delivery queue.</p></div>
@@ -155,20 +172,20 @@ kubectl --context &lt;kube-context&gt; -n &lt;organisation-namespace&gt; get age
 
 <h3 id="run">What is a run?</h3>
 <p>A run is a recorded execution of a seat handling a delivered message: one turn of work. It isn't the lifetime of the pod or the whole native harness conversation. Retries and recovery can create more than one run for the same original message.</p>
-<p>A run's detail shows the triggering message, seat, configuration revision, harness, lease generation, timing, recorded steps and connector operations. Operations the platform records are separate from shell activity inside the sandbox and from harness-specific telemetry, so treat a run as a strong record, not a complete audit trail of everything the harness did. Redaction helps, but screenshots and exported traces still need a privacy review before you share them. See <a href="architecture.html">Architecture</a>.</p>
+<p>A run's detail shows the triggering message, seat, configuration revision, harness, lease generation, timing, recorded steps and connector operations. Operations the platform records are separate from shell activity inside the sandbox and from harness-specific telemetry, so a run is useful for following the work but is not a complete audit trail of everything the harness did. Redaction helps, but screenshots and exported traces still need a privacy review before you share them. See <a href="architecture.html">Architecture</a>.</p>
 </section>
 
 <section id="representatives-memory" aria-labelledby="representatives-memory-h">
 <h2 id="representatives-memory-h">Representatives and memory</h2>
 
 <h3 id="representative">What does the representative do, and how is it different?</h3>
-<p>A representative is an ordinary seat with a human channel binding. It's not a separate model or harness. The compiler marks the seat as a representative and grants it permission to reply to that bound identity. A seat can represent only one human, so binding it to a different external user ID fails validation, because representatives keep separate private histories. An external identity can also be bound only once.</p>
-<p>The representative is a person's stable point of contact. A typical setup has it clarify requests, remember preferences, brief a lead, follow replies and shared notes, schedule check-ins and report results. Choices such as giving it no GitHub access, read-only shared memory or a route only to the lead are design decisions for each setup, not product rules. You can bind a lead seat directly if that suits you. Delegation still depends on declared routes and grants, and instructions in a prompt never grant access.</p>
+<p>Your representative is the seat you keep coming back to with questions, requests and preferences. Technically, it is an ordinary seat with a human channel binding, using the harness and model you choose. The compiler marks the seat as a representative and grants it permission to reply to that bound identity. A seat can represent only one human, so binding it to a different external user ID fails validation, because representatives keep separate private histories. An external identity can also be bound only once.</p>
+<p>Give it instructions to clarify requests, remember preferences, brief a lead, follow replies and shared notes, schedule check-ins and report results. Choices such as giving it no GitHub access, read-only shared memory or a route only to the lead are design decisions for each setup, not product rules. You can bind a lead seat directly if that suits you. Delegation still depends on declared routes and grants, and instructions in a prompt never grant access.</p>
 <p>Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/pkg/compile/compile.go">pkg/compile/compile.go</a>, <a href="tools.html">Agent tools</a>.</p>
 
 <h3 id="context">Does each agent keep its context between messages?</h3>
-<p>Partly, and how depends on the harness. Pi, for example, can continue the same native session across runs, and its session files live on the seat's persistent workspace. That lets it resume after the runner stops or the pod is replaced, as long as those files are still there. Compaction summarises older context and isn't perfect recall.</p>
-<p>Native conversation context is separate from what Steadmesh stores durably: private and shared memory, work items, message history and workspace files. Write important decisions to the right store or handoff. When a seat changes harness and the native session can't be converted, the runner starts a new session seeded from a portable handoff. That isn't a full transcript conversion. Test whether data survives a lifecycle operation with your own release, storage and retention settings. See <a href="operations.html">Operating an organisation</a>, and the source in <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/pi.go">harnesses/pi/pi.go</a> and <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/harness.go">harnesses/harness.go</a>.</p>
+<p>Seats retain durable memory and files; continuity of the native conversation depends on the harness. Pi, for example, can continue the same native session across runs, and its session files live on the seat's persistent workspace. That lets it resume after the runner stops or the pod is replaced, as long as those files are still there. Compaction summarises older context and isn't perfect recall.</p>
+<p>Native conversation context is separate from what Steadmesh stores durably: private and shared memory, work items, message history and workspace files. Ask the team to record important decisions in the right store or handoff so later work can find them. When a seat changes harness and the native session can't be converted, the runner starts a new session seeded from a portable handoff. That isn't a full transcript conversion. Test whether data survives a lifecycle operation with your own release, storage and retention settings. See <a href="operations.html">Operating an organisation</a>, and the source in <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/pi/pi.go">harnesses/pi/pi.go</a> and <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/harnesses/harness.go">harnesses/harness.go</a>.</p>
 </section>
 
 <section id="github-sandbox" aria-labelledby="github-sandbox-h">
@@ -185,7 +202,7 @@ kubectl --context &lt;kube-context&gt; -n &lt;organisation-namespace&gt; get age
 <p>See <a href="sandbox.html#github">Sandbox access: GitHub</a> and <a href="sandbox.html#egress-gateway">the egress gateway</a>. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/connectors/github/github.go">connectors/github/github.go</a>.</p>
 
 <h3 id="repo-discovery">Where is the repository configured, and how do agents find it?</h3>
-<p>The repository is a target on a GitHub access grant, usually a team grant to engineering. A seat calls <code>connections.list</code> to see the connections, operations and targets it may use. Tell the engineers in their instructions to discover the granted repository that way and clone it into their workspace. Don't rely on the model to guess the step. Then check that the returned targets are what you expect.</p>
+<p>The repository is a target on a GitHub access grant, usually a team grant to engineering. A seat calls <code>connections.list</code> to see the connections, operations and targets it may use. Tell the engineers in their instructions to discover the granted repository that way and clone it into their workspace. Include that setup step in the role instructions, and check that the returned targets are the ones you intended.</p>
 <p>Leaving the representative without a GitHub grant, so the lead sends it pull request links, is a configuration choice, not a product rule. With sandbox git, what a seat can actually reach also depends on the credential's real GitHub scope (see <a href="#filesystem-github">the PAT caveat above</a>). Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/services/tools/seat.go">services/tools/seat.go</a>, <a href="tutorial.html#grants">Tutorial: grants</a>.</p>
 </section>
 
@@ -243,8 +260,8 @@ kubectl --context kind-&lt;name&gt; get agentorganizations --all-namespaces</cod
     <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
     <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
     <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
-    <a href="status.html">Acceptance status</a>
-    <a href="demo-results.html">Demo results</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/faq.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
   <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
