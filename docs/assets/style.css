@@ -62,6 +62,10 @@
 
 * { box-sizing: border-box; }
 html { scroll-padding-top: 16px; }
+@media (min-width: 861px) {
+  /* Add header clearance to the root's 16px gap while the topbar is sticky. */
+  main[id], main [id] { scroll-margin-top: 64px; }
+}
 body {
   margin: 0;
   background: var(--bg);

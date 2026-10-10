@@ -15,6 +15,13 @@ Test under a path prefix too (links must be relative): serve the repository's
 parent directory and open `/steadmesh/docs/`-style paths, or symlink `docs`
 into an empty directory as `steadmesh`.
 
+For anchor changes, open `faq.html#api-keys` directly, then follow a link
+from its table of contents and use Back/Forward. Check a section target too
+(`faq.html#setup`). At desktop widths (861px and wider), targets must clear
+the sticky header; at 860px and narrower, keep the normal 16px gap because
+the header scrolls away. Repeat with JavaScript disabled, and check the
+homepage's `#how-it-works` link, which has its own section offset.
+
 ## Shared header, sidebar, pager, footer and metadata
 
 Every page carries blocks between `<!-- shell:NAME -->` and
