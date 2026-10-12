@@ -146,7 +146,7 @@ def footer(page):
     <a href="{L('status.html')}">Status and limits</a>
     <a href="{L('demo-results.html')}">Example run</a>
   </nav>{edit}
-  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
 </footer>"""
 
 
