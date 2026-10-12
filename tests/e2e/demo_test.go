@@ -636,7 +636,7 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
     <a href="demo-results.html">Example run</a>
   </nav>
   <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/tests/e2e/demo_test.go">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
-  <p>Steadmesh is open-source software. This site has no analytics or tracking.</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
 </footer>
 <!-- /shell:footer -->
 <script src="assets/site.js"></script>
