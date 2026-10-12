@@ -121,10 +121,10 @@ cd steadmesh-example</code></pre>
 <pre><code>kind create cluster --name steadmesh</code></pre>
 </li>
 <li>
-<p><strong>Add your keys.</strong> Fill in <code>.env</code>: the kubectl context (<code>kind-steadmesh</code> for the cluster above), the model endpoint, and the GitHub repository and token. Read the state warning above first.</p>
+<p><strong>Add your keys.</strong> Fill in <code>.env</code>: <code>TF_VAR_kube_context</code> (<code>kind-steadmesh</code> for the cluster above), the model endpoint, and the GitHub repository and token. Read the state warning above first.</p>
 <pre><code>cp .env.example .env     <span class="c"># then edit .env</span>
 set -a; source .env; set +a</code></pre>
-<p>Terraform reads each <code>TF_VAR_&lt;name&gt;</code> environment variable as the variable <code>&lt;name&gt;</code>. Run the <code>source</code> line again in any new terminal. Terraform only ever uses the context you name, never your current one.</p>
+<p>Terraform reads each <code>TF_VAR_&lt;name&gt;</code> environment variable as the variable <code>&lt;name&gt;</code>. Run the <code>source</code> line again from the <code>steadmesh-example</code> directory in any new terminal. The commands below use the same <code>TF_VAR_kube_context</code> value for kubectl and <code>orgctl</code>. Terraform only ever uses the context you name, never your current one.</p>
 </li>
 <li>
 <p><strong>Install the platform.</strong></p>
@@ -160,8 +160,9 @@ you&gt; Add a CONTRIBUTING.md to the repo explaining how to run the tests.</code
 <p>Use a test repository and review proposed changes before merging. Your instructions guide the work; the declared grants and sandbox access determine what the team can actually reach.</p>
 
 <h3 id="example-watch">Follow the work</h3>
-<p>The example enables the read-only <a href="operations.html">console</a>. In another terminal:</p>
-<pre><code>kubectl --context "$TF_VAR_kube_context" get agentseats -A
+<p>The example enables the read-only <a href="operations.html">console</a>. In another terminal, change to the cloned <code>steadmesh-example</code> directory and load <code>.env</code> again:</p>
+<pre><code>set -a; source .env; set +a
+kubectl --context "$TF_VAR_kube_context" get agentseats -A
 kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy/steadmesh-console 8090
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
 <p>The console shows seats, messages, runs, work items and readiness; it cannot change the organisation. See <a href="faq.html#watch">How do I see the organisation working?</a> and <a href="faq.html#lease">What does lease held mean?</a></p>
@@ -202,8 +203,9 @@ terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.5.
 <pre><code>cd platform
 cp terraform.tfvars.example terraform.tfvars
 terraform init
-terraform apply</code></pre>
-<p>This creates the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces, Postgres, the platform chart (the CRDs, the controller and the platform service) and the credential Secrets. It finishes with <code>Apply complete!</code> once the platform's pods are running.</p>
+terraform apply
+export TF_VAR_kube_context="$(terraform output -raw kube_context)"</code></pre>
+<p>This creates the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces, Postgres, the platform chart (the CRDs, the controller and the platform service) and the credential Secrets. It finishes with <code>Apply complete!</code> once the platform's pods are running. The export reads the installed platform's context into <code>TF_VAR_kube_context</code>, so the kubectl and <code>orgctl</code> commands below use the same cluster.</p>
 </li>
 <li>
 <p><strong>Declare your organisation.</strong> Set your Slack workspace ID and the people who get a representative.</p>
@@ -214,22 +216,23 @@ terraform apply</code></pre>
 <p>This stage reads the cluster, namespace, images and secret references from the platform stage's state, so keep both directories together. <code>terraform apply</code> returns once every seat has passed its readiness checks; the first time takes a few minutes while the seat images are pulled.</p>
 </li>
 <li>
-<p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM, usually within a minute; delegated work takes longer, and the representative reports back when the team replies. Start by sharing a preference you want it to remember, giving engineering a specific question to investigate, or asking it to create a small project with Linear connected. If nothing arrives, check <code>kubectl --context &lt;your-context&gt; get agentseats -A</code> and the console.</p>
+<p><strong>Talk to your representative.</strong> In Slack, open the app and send it a direct message. Your representative replies in the same DM, usually within a minute; delegated work takes longer, and the representative reports back when the team replies. Start by sharing a preference you want it to remember, giving engineering a specific question to investigate, or asking it to create a small project with Linear connected. If nothing arrives, check <code>kubectl --context "$TF_VAR_kube_context" get agentseats -A</code> and the console.</p>
 </li>
 </ol>
 
 <h3 id="slack-watch">Follow the work from the console</h3>
-<p>Set <code>enable_console = true</code> in <code>platform/terraform.tfvars</code> and apply that stage. Then forward the console:</p>
-<pre><code>kubectl --context &lt;your-context&gt; -n steadmesh-system port-forward deploy/steadmesh-console 8090
+<p>Set <code>enable_console = true</code> in <code>platform/terraform.tfvars</code> and apply that stage. From the quickstart's <code>steadmesh</code> directory, load the context and forward the console. Load the context this way in any new terminal before running kubectl or <code>orgctl</code>:</p>
+<pre><code>export TF_VAR_kube_context="$(terraform -chdir=platform output -raw kube_context)"
+kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy/steadmesh-console 8090
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
-<p>With <code>orgctl</code> installed, <code>orgctl console --context &lt;your-context&gt;</code> does the same.</p>
+<p>With <code>orgctl</code> installed, <code>orgctl console --context "$TF_VAR_kube_context"</code> does the same.</p>
 
 <h3 id="slack-shape">Choose the people, roles and access</h3>
 <table>
 <tr><th>To change</th><th>Edit</th></tr>
 <tr><td>How everyone works</td><td><code>instructions/culture.md</code></td></tr>
 <tr><td>How representatives behave</td><td><code>instructions/representative.md</code></td></tr>
-<tr><td>Who has a representative</td><td><code>humans</code> in <code>terraform.tfvars</code>. One Slack app serves them all. To chat from a terminal instead, set <code>channel = "terminal"</code> for that person, add their key to <code>terminal_users</code> in <code>platform/terraform.tfvars</code>, and run <code>orgctl chat --context &lt;your-context&gt; --user &lt;key&gt;</code>.</td></tr>
+<tr><td>Who has a representative</td><td><code>humans</code> in <code>terraform.tfvars</code>. One Slack app serves them all. To chat from a terminal instead, set <code>channel = "terminal"</code> for that person, add their key to <code>terminal_users</code> in <code>platform/terraform.tfvars</code>, and run <code>orgctl chat --context "$TF_VAR_kube_context" --user &lt;key&gt;</code>.</td></tr>
 <tr><td>The team</td><td><code>local.engineering</code> in <code>main.tf</code>, for example <code>reviewer = { role = "reviewer", display_name = "Reviewer" }</code>. Then add a route under <code>message_routes</code>: seats can only message along declared routes.</td></tr>
 <tr><td>What agents may do</td><td><code>grants</code>: a connection is usable only through a grant.</td></tr>
 </table>
