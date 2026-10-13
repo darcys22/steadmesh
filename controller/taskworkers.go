@@ -88,6 +88,11 @@ func (r *SeatReconciler) reconcileTaskWorkers(ctx context.Context, s *seatruntim
 		if !time.Now().Before(t.Deadline) {
 			continue
 		}
+		// Platform sync can commit a new revision before this reconciler observes
+		// the matching manifest. Never start a worker under an older image/runtime.
+		if t.ConfigRevision != s.ConfigRevision {
+			continue
+		}
 		desired, sa, np, err := kube.RenderTaskWorker(s, t, backend.Options())
 		if err != nil {
 			return err

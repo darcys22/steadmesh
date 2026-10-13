@@ -101,3 +101,20 @@ func TestTaskWorkerClaimedPodNeverRestarts(t *testing.T) {
 		t.Fatal("claimed worker restarted")
 	}
 }
+
+func TestTaskWorkerWaitsForMatchingParentManifest(t *testing.T) {
+	scheme := kruntime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+	_ = networkingv1.AddToScheme(scheme)
+	c := fake.NewClientBuilder().WithScheme(scheme).Build()
+	api := &taskPlatform{run: runtimeapi.TaskRun{ID: "id", ServiceAccount: "task-id", State: runtimeapi.TaskPending, ConfigRevision: "new-policy", Deadline: time.Now().Add(time.Minute)}}
+	r := &SeatReconciler{Client: c, Live: c, Backend: kube.New(c, c, kube.Options{}), Platform: api}
+	if err := r.reconcileTaskWorkers(context.Background(), &seatruntime.Seat{Namespace: "acme", SeatID: "parent", ConfigRevision: "old-policy"}, true); err != nil {
+		t.Fatal(err)
+	}
+	var pods corev1.PodList
+	_ = c.List(context.Background(), &pods)
+	if len(pods.Items) != 0 || len(api.actions) != 0 {
+		t.Fatal("pending worker launched or failed under stale parent revision")
+	}
+}
