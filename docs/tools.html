@@ -96,6 +96,15 @@
 <tr><td><code>handoff.update</code></td><td><code>objective</code>, <code>unresolved[]</code>, <code>record_ids[]</code>, <code>pending_message_ids[]</code>, <code>operation_ids[]</code>, <code>notes</code></td><td>Replaces the seat's portable handoff, which is restored after restarts and harness changes.</td></tr>
 </table>
 
+<h2 id="task-workers">Delegate to a disposable worker</h2>
+<p>Keep a persistent seat's identity and workspace while a separate, bounded Pod handles an explicit task. Workers receive fresh workspaces and sessions, the parent's model and sandbox limits, and no tools by default. Results do not apply themselves. See the <a href="task-workers.md">task-worker API and security contract</a>.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>tasks.start</code></td><td><code>request_id</code> (UUID), <code>prompt</code>, <code>timeout_seconds?</code>, <code>tool_names[]?</code>, <code>input_files[]?</code>, <code>artifact_paths[]?</code></td><td>Starts an idempotent child run during an active parent execution. At most four workers with cleanup outstanding and sixteen per parent execution; default timeout ten minutes, maximum twenty.</td></tr>
+<tr><td><code>tasks.get</code></td><td><code>id</code>, <code>artifact_path?</code></td><td>Reads parent-scoped state, bounded output and returned artifact names. A single small file can be requested by path; use the runtime API for full files.</td></tr>
+<tr><td><code>tasks.cancel</code></td><td><code>id</code></td><td>Revokes the child and requests removal of its temporary workspace. Durable results are retained. Cleanup produces a deduplicated parent notification.</td></tr>
+</table>
+
 <h2 id="memory">Keep decisions and working notes</h2>
 <p>Use personal stores for a seat's own context and shared stores for plans, decisions and notes the team needs. The platform enforces access to each store. Records are addressed like files: each has a path that is unique among the store's live records, for example <code>notes/plan.md</code> or <code>decisions/auth.md</code>. Agents decide how to organise them. Search and listing are authorised <em>before</em> they run, so counts, paths and snippets from stores a seat cannot read are never revealed.</p>
 <table>

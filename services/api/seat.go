@@ -34,6 +34,7 @@ type seatReq struct {
 	// Set only by trusted task-run authentication, never by caller headers.
 	budgetExecution string
 	budgetChild     bool
+	task            *runtimeapi.TaskRun
 }
 
 // fence returns the request's fence, or false if the generation header is
@@ -80,6 +81,9 @@ func (s *server) seatAuth(next seatHandler) http.Handler {
 				return
 			}
 			q.gen, q.hasGen = gen, true
+		}
+		if p.TaskRunID != "" && !s.authorizeTaskWorker(w, r, q) {
+			return
 		}
 		annotate(r.Context(), "organization_id", seat.OrganizationID, "seat_id", seat.ID, "seat", seat.Key)
 		if q.execution != "" {
@@ -164,11 +168,15 @@ func (s *server) self(w http.ResponseWriter, _ *http.Request, q *seatReq) {
 }
 
 func (s *server) listTools(w http.ResponseWriter, _ *http.Request, q *seatReq) {
-	writeJSON(w, http.StatusOK, s.Tools.List(q.seat, q.org))
+	writeJSON(w, http.StatusOK, s.taskTools(q))
 }
 
 func (s *server) callTool(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	name := r.PathValue("name")
+	if q.task != nil && !taskToolAllowed(q.task, name) {
+		writeError(w, http.StatusForbidden, "forbidden", "tool is not delegated to this worker")
+		return
+	}
 	var req runtimeapi.ToolCallRequest
 	if !decodeBody(w, r, &req) {
 		return

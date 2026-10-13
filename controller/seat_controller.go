@@ -34,6 +34,7 @@ import (
 // SeatReconciler operates one seat's backend and lifecycle.
 type SeatReconciler struct {
 	Client   client.Client
+	Live     client.Reader
 	Backend  seatruntime.Backend
 	Platform platform.API
 	Pollers  *Pollers
@@ -227,6 +228,12 @@ func (r *SeatReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	case seat.Status.LastError != "" && !action.Fence:
 		seat.Status.LastError = ""
 	}
+	if err := r.reconcileTaskWorkers(ctx, s, eligible && !retiring); err != nil {
+		return ctrl.Result{}, err
+	}
+	// Task creation does not alter the parent's runtime view; periodically poll
+	// for new children even when the persistent seat is otherwise idle.
+	requeue = minDuration(requeue, 5*time.Second)
 	return ctrl.Result{RequeueAfter: requeue}, r.writeStatus(ctx, orig, &seat)
 }
 
@@ -452,6 +459,9 @@ func (r *SeatReconciler) retire(ctx context.Context, seat, orig *v1alpha1.AgentS
 	s := backendSeat(seat, compile.SeatManifest{})
 	if s.OrgKey == "" {
 		return ctrl.Result{}, errors.New("seat lacks organisation label")
+	}
+	if err := r.reconcileTaskWorkers(ctx, s, false); err != nil {
+		return ctrl.Result{}, err
 	}
 	done, err := r.Backend.Cleanup(ctx, s, seatruntime.RetainData)
 	if err != nil {

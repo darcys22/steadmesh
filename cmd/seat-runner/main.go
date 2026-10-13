@@ -39,6 +39,8 @@ func main() {
 	switch cmd {
 	case "run":
 		os.Exit(runMain())
+	case "task-worker":
+		os.Exit(taskWorkerMain())
 	case "netprobe":
 		os.Exit(netprobeMain(args, os.Stdout, os.Stderr, "/dev/termination-log"))
 	case "help", "-h", "--help":

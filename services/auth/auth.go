@@ -31,8 +31,9 @@ const PodUIDExtra = "authentication.kubernetes.io/pod-uid"
 
 // Seat is an authenticated seat principal.
 type Seat struct {
-	SeatID string
-	PodUID string
+	SeatID    string
+	PodUID    string
+	TaskRunID string
 }
 
 // Authenticator verifies bearer tokens.
@@ -49,6 +50,11 @@ type Authenticator interface {
 // SeatResolver maps a verified ServiceAccount to its active seat id.
 type SeatResolver interface {
 	SeatByServiceAccount(ctx context.Context, namespace, serviceAccount string) (string, error)
+}
+
+// TaskRunResolver optionally resolves a disposable worker's separate identity.
+type TaskRunResolver interface {
+	TaskRunByServiceAccount(ctx context.Context, namespace, serviceAccount string) (seatID, taskRunID string, err error)
 }
 
 // TokenReview is the production Authenticator.
@@ -121,6 +127,12 @@ func (a *TokenReview) Seat(ctx context.Context, token string) (Seat, error) {
 	}
 	id, err := a.seats.SeatByServiceAccount(ctx, ns, sa)
 	if err != nil {
+		if tasks, ok := a.seats.(TaskRunResolver); ok {
+			parent, run, taskErr := tasks.TaskRunByServiceAccount(ctx, ns, sa)
+			if taskErr == nil {
+				return Seat{SeatID: parent, TaskRunID: run, PodUID: r.podUID}, nil
+			}
+		}
 		return Seat{}, fmt.Errorf("%w: %s is not an active seat", ErrForbidden, r.username)
 	}
 	return Seat{SeatID: id, PodUID: r.podUID}, nil
