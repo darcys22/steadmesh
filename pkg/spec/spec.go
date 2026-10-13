@@ -62,6 +62,9 @@ type OrganizationSpec struct {
 	MessageRoutes map[string]MessageRoute `json:"message_routes,omitempty"`
 	// +optional
 	ChannelBindings map[string]ChannelBinding `json:"channel_bindings,omitempty"`
+	// ModelBudgets optionally limits cumulative generated output tokens at the model proxy.
+	// +optional
+	ModelBudgets *ModelBudgets `json:"model_budgets,omitempty"`
 	// WorkPublication optionally publishes work items to a tracker so people
 	// can follow progress there. Internal coordination never depends on it.
 	// +optional

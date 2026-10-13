@@ -56,7 +56,17 @@ func keyed(desc string, attrs map[string]schema.Attribute) schema.MapNestedAttri
 // key, display_name and data_retention, which are resource attributes).
 func specAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
-		"timezone":     optStr("IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC."),
+		"timezone": optStr("IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC."),
+		"model_budgets": schema.SingleNestedAttribute{
+			Optional:    true,
+			Description: "Enforced cumulative output-token budgets. Input tokens and dollar costs are not capped. Daily windows reset at 00:00 UTC. Zero scope limits are unlimited; at least one must be positive.",
+			Attributes: map[string]schema.Attribute{
+				"organization_daily_output_tokens": optInt("Output tokens per UTC day across the organisation."),
+				"seat_daily_output_tokens":         optInt("Output tokens per UTC day for each seat."),
+				"execution_output_tokens":          optInt("Output tokens across all requests in each execution."),
+				"max_request_output_tokens":        optInt("Maximum reserved output tokens per request, default 4096. Lowered to available budget headroom."),
+			},
+		},
 		"culture_refs": strList("Ordered organisation culture instruction references (configmap:<name>/<key>#sha256:<digest>)."),
 		"team_templates": keyed("Reusable team templates. Resolved by the provider before the object is written.", map[string]schema.Attribute{
 			"extends":          optStr("Template this template extends."),

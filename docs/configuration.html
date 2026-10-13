@@ -260,6 +260,26 @@
 </table>
 <p>Each work item becomes one issue, titled <code>&lt;store&gt;/W-&lt;n&gt;: &lt;objective&gt;</code>, with its status, owner, plan, acceptance criteria and evidence in the description. Later changes update the same issue. Publication runs in the background and is retried while the tracker is unavailable. Its state is shown per item in the console's Work view, separately from the work itself. A crash between creating an issue and recording it is resolved by reading the issue back, never by creating a duplicate. This is outward only: edits made in the tracker do not change work items, although agents can read them with <code>task.read</code> and <code>comment.read</code>.</p>
 
+<h2 id="model-budgets">Cumulative model output budgets</h2>
+<p><code>spec.model_budgets</code> is optional. These are enforced output-token limits at the platform model proxy, shared by all platform replicas. They do not cap input tokens or dollar cost. Use a provider-side spending limit for a monetary ceiling.</p>
+<pre><code>model_budgets = {
+  organization_daily_output_tokens = 1000000
+  seat_daily_output_tokens         = 200000
+  execution_output_tokens          = 20000
+  max_request_output_tokens        = 4096
+}</code></pre>
+<ul>
+<li>Daily counters reset at 00:00 UTC, regardless of the organisation's display time zone. Seat limits apply separately to each durable seat identity. Execution limits span all calls in that execution and do not reset at midnight.</li>
+<li>Zero or omitted cumulative limits are unlimited; at least one cumulative limit must be positive. The per-request ceiling defaults to 4096. Values must be integers between zero and 1,000,000,000,000. Removing the block disables enforcement; prior counters are retained. Calls made while disabled are not accounted.</li>
+<li>The proxy atomically reserves the requested output ceiling, or the configured default, before contacting the provider. It lowers the request's ceiling to the smallest available headroom. Concurrent requests therefore cannot reserve the same tokens. The response header <code>X-Steadmesh-Output-Token-Limit</code> reports the effective ceiling.</li>
+<li>Complete responses with valid output usage refund the unused reservation. Missing usage, interrupted streams, upstream errors, client cancellation and platform crashes keep the full reservation charged. Reservations never expire into free quota. A failed settlement is conservative too. Credential refresh retries share one reservation.</li>
+<li>Exhaustion returns HTTP 429 with code <code>budget_exhausted</code> before dispatch. Daily exhaustion supplies <code>Retry-After</code> with the next UTC midnight. Increase the declared limit to resume sooner. A retry of the same execution keeps its counter; new executions get separate counters and continue sharing daily caps. Policy edits and restarts do not clear counters or cancel requests already admitted.</li>
+<li>A budgeted request needs the current seat lease generation. Execution-limited requests also need a valid running execution ID; arbitrary or completed IDs cannot open new quota. <code>GET /v1/model-budgets</code> with the seat token and optional execution header returns policy, charged counters and the daily reset time. Charged counters include pending and uncertain reservations.</li>
+<li>Supported generation endpoints are synchronous Anthropic Messages, OpenAI Responses and Chat Completions (including SSE). The proxy sets <code>max_tokens</code>, <code>max_output_tokens</code> or <code>max_completion_tokens</code>; explicit legacy Chat <code>max_tokens</code> is preserved. A legacy Chat backend must receive an explicit <code>max_tokens</code> from its harness; omitted limits use the modern <code>max_completion_tokens</code> protocol. Multiple completions, background Responses and other generation paths are rejected while budgets are enabled. The configured endpoint must honor the protocol's output ceiling and report truthful usage.</li>
+<li>Model listings, Anthropic token-count requests and connection readiness checks do not generate budgeted seat output. Direct provider calls made with separately granted credentials are outside this proxy's boundary. Existing network policy and credential restrictions remain important.</li>
+<li>This version has no work-item budget: the existing execution model does not bind each call to a work item. Input, cached-input and money totals remain unbounded. Existing 20-minute turn timeouts and CPU/memory sandbox limits remain unchanged.</li>
+</ul>
+
 <h2>Limits</h2>
 <ul>
 <li>The serialised specification is limited to 256 KiB. Reference large documents by digest instead of inlining them.</li>

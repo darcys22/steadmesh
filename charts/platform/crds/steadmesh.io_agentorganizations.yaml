@@ -423,6 +423,34 @@ spec:
                   - to
                   type: object
                 type: object
+              model_budgets:
+                description: ModelBudgets optionally limits cumulative generated output
+                  tokens at the model proxy.
+                properties:
+                  execution_output_tokens:
+                    description: ExecutionOutputTokens applies across all model calls
+                      in one execution.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  max_request_output_tokens:
+                    description: |-
+                      MaxRequestOutputTokens is the maximum reservation per model request.
+                      Defaults to 4096; the proxy lowers it to available scope headroom.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  organization_daily_output_tokens:
+                    format: int64
+                    minimum: 0
+                    type: integer
+                  seat_daily_output_tokens:
+                    description: SeatDailyOutputTokens applies separately to each
+                      durable seat identity.
+                    format: int64
+                    minimum: 0
+                    type: integer
+                type: object
               sandbox_profiles:
                 additionalProperties:
                   properties:
