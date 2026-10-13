@@ -327,19 +327,21 @@ type RetiringSeat struct {
 
 // SeatRuntime is the platform's view of one seat, used for wake and idle decisions.
 type SeatRuntime struct {
-	SeatID            string     `json:"seat_id"`
-	SeatKey           string     `json:"seat_key"`
-	PendingDeliveries int        `json:"pending_deliveries"`
-	OldestPendingAge  float64    `json:"oldest_pending_age_seconds"`
-	LeaseGeneration   int64      `json:"lease_generation"`
-	LeaseHolder       string     `json:"lease_holder,omitempty"`
-	LeaseExpiresAt    time.Time  `json:"lease_expires_at"`
-	State             string     `json:"state"`
-	StateDetail       string     `json:"state_detail,omitempty"`
-	AdoptedRevision   string     `json:"adopted_revision,omitempty"`
-	LastActivity      *time.Time `json:"last_activity,omitempty"`
-	LatestCheckpoint  string     `json:"latest_checkpoint,omitempty"`
-	DeadDeliveries    int        `json:"dead_deliveries"`
+	SeatID            string `json:"seat_id"`
+	SeatKey           string `json:"seat_key"`
+	PendingDeliveries int    `json:"pending_deliveries"`
+	// TaskWorkers keeps the parent warm until children and cleanup finish.
+	TaskWorkers      int        `json:"task_workers"`
+	OldestPendingAge float64    `json:"oldest_pending_age_seconds"`
+	LeaseGeneration  int64      `json:"lease_generation"`
+	LeaseHolder      string     `json:"lease_holder,omitempty"`
+	LeaseExpiresAt   time.Time  `json:"lease_expires_at"`
+	State            string     `json:"state"`
+	StateDetail      string     `json:"state_detail,omitempty"`
+	AdoptedRevision  string     `json:"adopted_revision,omitempty"`
+	LastActivity     *time.Time `json:"last_activity,omitempty"`
+	LatestCheckpoint string     `json:"latest_checkpoint,omitempty"`
+	DeadDeliveries   int        `json:"dead_deliveries"`
 	// RetireBy is set while the seat is retiring: removed from the
 	// declaration and winding down until then.
 	RetireBy *time.Time `json:"retire_by,omitempty"`

@@ -135,3 +135,38 @@ func TestConsoleAuthentication(t *testing.T) {
 		t.Fatalf("console accepted with no console identity configured: %v", err)
 	}
 }
+
+type workerResolver struct{ active bool }
+
+func (*workerResolver) SeatByServiceAccount(context.Context, string, string) (string, error) {
+	return "", errors.New("not a persistent seat")
+}
+func (s *workerResolver) TaskRunByServiceAccount(_ context.Context, ns, sa string) (string, string, error) {
+	if s.active && ns == "acme" && sa == "task-one" {
+		return "parent", "task-one", nil
+	}
+	return "", "", errors.New("revoked")
+}
+func TestWorkerTokenHasSeparateIdentityAndUncachedRevocation(t *testing.T) {
+	cs := fake.NewClientset()
+	reviews := 0
+	cs.PrependReactor("create", "tokenreviews", func(a k8stesting.Action) (bool, runtime.Object, error) {
+		reviews++
+		tr := a.(k8stesting.CreateAction).GetObject().(*authnv1.TokenReview)
+		tr.Status = authnv1.TokenReviewStatus{Authenticated: true, Audiences: []string{"steadmesh-gateway"}, User: authnv1.UserInfo{Username: "system:serviceaccount:acme:task-one", Extra: map[string]authnv1.ExtraValue{auth.PodUIDExtra: {"child-pod"}}}}
+		return true, tr, nil
+	})
+	resolver := &workerResolver{active: true}
+	a := auth.NewTokenReview(cs, resolver, controllerUser, consoleUser)
+	p, err := a.Seat(context.Background(), "worker")
+	if err != nil || p.SeatID != "parent" || p.TaskRunID != "task-one" || p.PodUID != "child-pod" {
+		t.Fatalf("principal: %+v %v", p, err)
+	}
+	resolver.active = false
+	if _, err = a.Seat(context.Background(), "worker"); !errors.Is(err, auth.ErrForbidden) {
+		t.Fatalf("revoked worker authenticated: %v", err)
+	}
+	if reviews != 1 {
+		t.Fatalf("did not exercise cached token review: %d", reviews)
+	}
+}

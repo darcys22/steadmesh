@@ -342,3 +342,17 @@ func TestDecideIsDeterministic(t *testing.T) {
 		t.Fatalf("%+v != %+v", a, b)
 	}
 }
+
+func TestTaskWorkersKeepParentWarmWithoutOverridingSuspension(t *testing.T) {
+	in := base(func(in *Input) {
+		in.Backend = backend(1, readyPod("parent"))
+		in.Runtime = rt(func(r *runtimeapi.SeatRuntime) { r.LastActivity = ago(time.Hour); r.TaskWorkers = 2 })
+	})
+	if got := Decide(in); got.Replicas != 1 || got.DeletePod != "" {
+		t.Fatalf("idle stopped parent with live children: %+v", got)
+	}
+	in.AdminSuspended = true
+	if got := Decide(in); got.Replicas != 0 && got.DeletePod == "" {
+		t.Fatalf("workers bypassed suspension: %+v", got)
+	}
+}

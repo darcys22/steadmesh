@@ -115,12 +115,15 @@ func SetupReconcilers(mgr ctrl.Manager, cfg Config) (*Reconcilers, error) {
 	}
 
 	seatR := &SeatReconciler{
-		Client: c, Backend: backend, Platform: cfg.Platform, Pollers: pollers, Recorder: rec, Now: cfg.Now,
+		Client: c, Live: mgr.GetAPIReader(), Backend: backend, Platform: cfg.Platform, Pollers: pollers, Recorder: rec, Now: cfg.Now,
 		ProbeTimeout: 5 * time.Minute, ProbeRetry: time.Minute,
 	}
 	podToSeat := handler.EnqueueRequestsFromMapFunc(func(_ context.Context, o client.Object) []reconcile.Request {
 		l := o.GetLabels()
 		org, seat := l[v1alpha1.LabelOrganization], l[v1alpha1.LabelSeat]
+		if parent := l[kube.LabelParentSeat]; parent != "" {
+			seat = parent
+		}
 		if org == "" || seat == "" {
 			return nil
 		}

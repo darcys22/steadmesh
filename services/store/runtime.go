@@ -23,7 +23,8 @@ func (s *Store) SeatRuntimes(ctx context.Context, orgID string, keys []string) (
 				WHERE d.seat_id = s.id AND d.state IN ('pending', 'leased')), 0)::float8,
 			(SELECT count(*) FROM deliveries d WHERE d.seat_id = s.id AND d.state = 'dead'),
 			COALESCE((SELECT checkpoint_ref FROM sessions ss WHERE ss.seat_id = s.id ORDER BY updated_at DESC LIMIT 1), ''),
-			CASE WHEN s.retiring_at IS NOT NULL THEN s.retire_by END
+			CASE WHEN s.retiring_at IS NOT NULL THEN s.retire_by END,
+   (SELECT count(*) FROM task_runs t WHERE t.parent_seat_id=s.id AND t.cleaned_at IS NULL)
 		FROM seats s JOIN execution_leases l ON l.seat_id = s.id
 		WHERE s.organization_id = $1 AND s.retired_at IS NULL AND (cardinality($2::text[]) = 0 OR s.key = ANY($2))`,
 		orgID, nonNil(keys))
@@ -36,7 +37,7 @@ func (s *Store) SeatRuntimes(ctx context.Context, orgID string, keys []string) (
 		var r runtimeapi.SeatRuntime
 		if err := rows.Scan(&r.SeatID, &r.SeatKey, &r.LeaseGeneration, &r.LeaseHolder, &r.LeaseExpiresAt, &r.State,
 			&r.StateDetail, &r.AdoptedRevision, &r.LastActivity, &r.PendingDeliveries, &r.OldestPendingAge,
-			&r.DeadDeliveries, &r.LatestCheckpoint, &r.RetireBy); err != nil {
+			&r.DeadDeliveries, &r.LatestCheckpoint, &r.RetireBy, &r.TaskWorkers); err != nil {
 			return nil, err
 		}
 		out[r.SeatKey] = r

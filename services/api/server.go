@@ -67,6 +67,7 @@ func New(cfg Config) http.Handler {
 	mux.Handle("GET /metrics", promhttp.HandlerFor(cfg.Gatherer, promhttp.HandlerOpts{}))
 
 	seat := func(pattern string, h seatHandler) { mux.Handle(pattern, s.seatAuth(h)) }
+	s.registerTaskRuns(seat)
 	seat("POST "+runtimeapi.PathLeaseAcquire, s.leaseAcquire)
 	seat("POST "+runtimeapi.PathLeaseRenew, s.leaseRenew)
 	seat("POST "+runtimeapi.PathLeaseRelease, s.leaseRelease)
@@ -93,6 +94,8 @@ func New(cfg Config) http.Handler {
 	mux.HandleFunc(runtimeapi.PathChannels+"{org}/{connection}/{rest...}", s.channel)
 
 	internal := func(pattern string, h http.HandlerFunc) { mux.Handle(pattern, s.controllerAuth(h)) }
+	internal("GET "+runtimeapi.PathInternalSeats+"{id}/task-runs", s.internalTaskRuns)
+	internal("POST "+runtimeapi.PathInternalSeats+"{id}/task-runs/{task}/{action}", s.internalTaskAction)
 	internal("POST "+runtimeapi.PathInternalSync, s.sync)
 	internal("GET "+runtimeapi.PathInternalOrgs+"{id}/runtime", s.runtime)
 	internal("POST "+runtimeapi.PathInternalOrgs+"{id}/verify", s.verify)

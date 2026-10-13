@@ -163,6 +163,8 @@ func Decide(in Input) Action {
 		switch {
 		case in.ProbePending:
 			a.Replicas, wakeReason = 1, ReasonProbe
+		case rt != nil && rt.TaskWorkers > 0:
+			a.Replicas, wakeReason = 1, "TaskWorkers"
 		case rt != nil && rt.PendingDeliveries > 0:
 			a.Replicas, wakeReason = 1, ReasonPendingDeliveries
 		case current == 1 && rt != nil && rt.State == string(v1alpha1.StateWarm) && in.IdleTimeout > 0 && runnerReady(st):
