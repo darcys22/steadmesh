@@ -1,0 +1,25 @@
+name: model budget checks
+on:
+  pull_request:
+    paths: ["services/**", "pkg/**", "provider/**", "go.mod", "go.sum", ".github/workflows/model-budgets.yml"]
+  push:
+    branches: [main]
+    paths: ["services/**", "pkg/**", "provider/**", "go.mod", "go.sum", ".github/workflows/model-budgets.yml"]
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Budget unit tests and compiler/provider contracts
+        run: go test -race ./services/api ./pkg/compile ./provider ./pkg/spec ./pkg/runtimeapi
+      - name: Atomic PostgreSQL accounting and proxy integration
+        run: go test -race -count=1 -tags integration -run ModelBudget -timeout 10m ./services/store ./services/platform
+      - name: Vet budget packages
+        run: go vet ./services/api ./services/store ./pkg/compile ./provider

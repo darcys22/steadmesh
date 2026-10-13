@@ -427,13 +427,15 @@ const EventModelRequest = "model_request"
 
 // ModelRequest records what a seat actually asked of which endpoint.
 type ModelRequest struct {
-	Connection   string `json:"connection"`
-	API          string `json:"api"`
-	Model        string `json:"model,omitempty"`
-	UpstreamHost string `json:"upstream_host"`
-	Status       int    `json:"status"`
-	Stream       bool   `json:"stream,omitempty"`
-	DurationMS   int64  `json:"duration_ms"`
+	BudgetReservationID  string `json:"budget_reservation_id,omitempty"`
+	ReservedOutputTokens int64  `json:"reserved_output_tokens,omitempty"`
+	Connection           string `json:"connection"`
+	API                  string `json:"api"`
+	Model                string `json:"model,omitempty"`
+	UpstreamHost         string `json:"upstream_host"`
+	Status               int    `json:"status"`
+	Stream               bool   `json:"stream,omitempty"`
+	DurationMS           int64  `json:"duration_ms"`
 	// Usage is the token usage the endpoint reported, when it did.
 	Usage map[string]int64 `json:"usage,omitempty"`
 	// Rejected is why the platform refused the request before sending it.

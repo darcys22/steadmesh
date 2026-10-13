@@ -416,6 +416,8 @@ func (s *Store) DeleteOrganization(ctx context.Context, orgID string, purge bool
 func purgeOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	seatScoped := `seat_id IN (SELECT id FROM seats WHERE organization_id = $1)`
 	for _, q := range []string{
+		`DELETE FROM model_budget_reservations WHERE organization_id = $1`,
+		`DELETE FROM model_budget_counters WHERE organization_id = $1`,
 		`DELETE FROM execution_events WHERE execution_id IN (SELECT e.id FROM executions e JOIN seats s ON s.id = e.seat_id WHERE s.organization_id = $1)`,
 		`DELETE FROM executions WHERE ` + seatScoped,
 		`DELETE FROM deliveries WHERE ` + seatScoped,

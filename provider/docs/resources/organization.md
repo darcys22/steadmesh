@@ -191,6 +191,7 @@ Optional:
 - `harness_profiles` (Attributes Map) Harness profiles. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--harness_profiles))
 - `memory_stores` (Attributes Map) Memory stores. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--memory_stores))
 - `message_routes` (Attributes Map) Permitted message routes. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--message_routes))
+- `model_budgets` (Attributes) Enforced cumulative output-token budgets. Input tokens and dollar costs are not capped. Daily windows reset at 00:00 UTC. Zero scope limits are unlimited; at least one must be positive. (see [below for nested schema](#nestedatt--spec--model_budgets))
 - `sandbox_profiles` (Attributes Map) Sandbox profiles. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--sandbox_profiles))
 - `seats` (Attributes Map) Seats: persistent agent identities. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--seats))
 - `shared_workspaces` (Attributes Map) Shared workspaces. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--shared_workspaces))
@@ -420,6 +421,17 @@ Optional:
 
 - `bidirectional` (Boolean) Permit both directions.
 - `reply` (Boolean) Recipient may reply within conversations opened on this route.
+
+
+<a id="nestedatt--spec--model_budgets"></a>
+### Nested Schema for `spec.model_budgets`
+
+Optional:
+
+- `execution_output_tokens` (Number) Output tokens across all requests in each execution.
+- `max_request_output_tokens` (Number) Maximum reserved output tokens per request, default 4096. Lowered to available budget headroom.
+- `organization_daily_output_tokens` (Number) Output tokens per UTC day across the organisation.
+- `seat_daily_output_tokens` (Number) Output tokens per UTC day for each seat.
 
 
 <a id="nestedatt--spec--sandbox_profiles"></a>

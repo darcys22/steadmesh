@@ -31,6 +31,9 @@ type seatReq struct {
 	gen       int64
 	hasGen    bool
 	execution string
+	// Set only by trusted task-run authentication, never by caller headers.
+	budgetExecution string
+	budgetChild     bool
 }
 
 // fence returns the request's fence, or false if the generation header is
@@ -389,6 +392,38 @@ func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) 
 			return
 		}
 	}
+	var reservation *store.ModelReservation
+	if api != "models" && path != "/v1/messages/count_tokens" {
+		prepared := prepareBudgetRequest(path, body)
+		execution := q.budgetExecution
+		if execution == "" {
+			execution = q.execution
+		}
+		reservation, err = s.Store.ReserveModelOutput(r.Context(), q.seat.OrganizationID,
+			store.Fence{SeatID: q.seat.ID, Generation: q.gen}, execution, q.budgetChild, prepared.requested, prepared.invalid)
+		if err != nil {
+			var exhausted *store.BudgetExhausted
+			switch {
+			case errors.As(err, &exhausted):
+				if !exhausted.ResetsAt.IsZero() {
+					w.Header().Set("Retry-After", exhausted.ResetsAt.Format(http.TimeFormat))
+				}
+				reject(http.StatusTooManyRequests, "budget_exhausted", err.Error())
+			case errors.Is(err, store.ErrFenced):
+				reject(http.StatusConflict, "fenced", "model budgets require a current lease generation")
+			case errors.Is(err, store.ErrInvalid):
+				reject(http.StatusBadRequest, "invalid", err.Error())
+			default:
+				reject(http.StatusServiceUnavailable, "unavailable", "model budget accounting unavailable")
+			}
+			return
+		}
+		if reservation != nil {
+			body = prepared.withLimit(reservation.OutputTokens)
+			rec.BudgetReservationID, rec.ReservedOutputTokens = reservation.ID, reservation.OutputTokens
+			w.Header().Set("X-Steadmesh-Output-Token-Limit", strconv.FormatInt(reservation.OutputTokens, 10))
+		}
+	}
 	forward := func(dst http.ResponseWriter, m connectors.Model) {
 		out := r.Clone(r.Context())
 		out.Header.Del("Authorization")
@@ -405,6 +440,16 @@ func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) 
 	defer func() {
 		mw.done()
 		rec.Status, rec.Usage = mw.status, mw.usage
+		if reservation != nil {
+			output, known := mw.outputTokens(api)
+			// A disconnected caller must not cancel durable accounting. A crash
+			// or settlement failure leaves the entire reservation charged.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 5*time.Second)
+			defer cancel()
+			if err := s.Store.SettleModelOutput(ctx, q.seat.OrganizationID, reservation.ID, output, known); err != nil {
+				annotate(r.Context(), "model_budget_settlement_error", err.Error())
+			}
+		}
 	}()
 	hold := &holdUnauthorized{ResponseWriter: mw, header: http.Header{}}
 	forward(hold, upstream)

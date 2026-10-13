@@ -202,6 +202,9 @@ func (c *compiler) checkOrganization(o *spec.OrganizationSpec) {
 	if o.DataRetention != "" && o.DataRetention != "retain" && o.DataRetention != "delete" {
 		c.errf("data_retention", "must be retain or delete")
 	}
+	if o.ModelBudgets != nil && !o.ModelBudgets.Valid() {
+		c.errf("model_budgets", "set at least one cumulative output-token limit; values must be between 0 and 1000000000000")
+	}
 	c.checkTimezone("timezone", o.Timezone)
 	for i, r := range o.CultureRefs {
 		c.checkInstructionRef(fmt.Sprintf("culture_refs[%d]", i), r)
