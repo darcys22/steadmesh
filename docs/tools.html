@@ -105,6 +105,15 @@
 <tr><td><code>tasks.cancel</code></td><td><code>id</code></td><td>Revokes the child and requests removal of its temporary workspace. Durable results are retained. Cleanup produces a deduplicated parent notification.</td></tr>
 </table>
 
+<h2 id="run-branches">Compare independent alternatives</h2>
+<p>Start several approaches from the same explicit handoff and text files, compare their separate results, then deliberately choose one. This is a portable context snapshot, not a clone of process memory or a working tree. No parent secrets or tool grants are copied. See the <a href="run-branches.md">branching workflow and safety contract</a>.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>branches.start</code></td><td><code>request_id</code> (UUID), <code>handoff</code>, <code>alternatives[]</code> (name and prompt), <code>input_files[]?</code>, <code>artifact_paths[]?</code>, <code>timeout_seconds?</code></td><td>Creates two to four independent disposable runs atomically. Identical retries reuse the group; changed payloads conflict. Existing worker limits still apply.</td></tr>
+<tr><td><code>branches.compare</code></td><td><code>id</code></td><td>Reads this parent's group with current states, bounded output and error previews, artifact counts and complete-result hashes. Retrieve full results before choosing.</td></tr>
+<tr><td><code>branches.select</code></td><td><code>id</code>, <code>task_run_id</code>, <code>expected_revision</code>, <code>expected_result_sha256</code></td><td>Records a completed group member as the chosen result with revision and digest checks. Keeps choice history. Never applies files, merges a branch or cancels siblings.</td></tr>
+</table>
+
 <h2 id="memory">Keep decisions and working notes</h2>
 <p>Use personal stores for a seat's own context and shared stores for plans, decisions and notes the team needs. The platform enforces access to each store. Records are addressed like files: each has a path that is unique among the store's live records, for example <code>notes/plan.md</code> or <code>decisions/auth.md</code>. Agents decide how to organise them. Search and listing are authorised <em>before</em> they run, so counts, paths and snippets from stores a seat cannot read are never revealed.</p>
 <table>

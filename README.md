@@ -18,6 +18,12 @@ and the [acceptance status](https://steadmesh.com/status.html). The design is in
 and acceptance status is tracked in
 [`tests/acceptance/RESULTS.md`](tests/acceptance/RESULTS.md).
 
+## Explore alternatives with disposable runs
+
+[Run branching](docs/run-branches.md) starts independent alternatives from an
+explicit handoff, compares their status and results, and records a chosen
+result without automatically applying files or changing the working tree.
+
 ## Fastest start: the example organisation
 
 [darcys22/steadmesh-example](https://github.com/darcys22/steadmesh-example) is a

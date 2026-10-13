@@ -79,6 +79,7 @@ func New(d Deps) *Registry {
 	r.tools = append(r.tools, r.automationTools()...)
 	r.tools = append(r.tools, r.connectionTools()...)
 	r.tools = append(r.tools, r.taskTools()...)
+	r.tools = append(r.tools, r.branchTools()...)
 	return r
 }
 
