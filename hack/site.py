@@ -39,6 +39,9 @@ NAV = [
     ("Operate", [
         ("real-services.html", "Connect real services"),
         ("operations.html", "Operating an organisation"),
+        ("model-budgets.html", "Model output budgets"),
+        ("task-workers.html", "Disposable task workers"),
+        ("run-branches.html", "Compare run alternatives"),
         ("sandbox.html", "Sandbox access"),
     ]),
     ("Reference", [

@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -246,6 +249,10 @@
 <li>wake schedules and connection checks</li>
 </ul>
 <p>Uniqueness and optimistic concurrency are enforced by database constraints, not only by application code.</p>
+<h2 id="bounded-delegation">Bounded delegation and accounting</h2>
+<p>Persistent seats can create <a href="task-workers.html">disposable task workers</a>. The platform persists their requests and results, and the controller creates and removes separate short-lived Pods, identities and network policies. Workers have fresh, size-limited temporary volumes, no parent PVC or sandbox credentials, and only an explicitly narrowed read-only tool allowlist. Result files stay in Postgres after Pod cleanup.</p>
+<p><a href="run-branches.html">Run branching</a> adds an atomic group of those workers with an explicit shared text snapshot and revision-checked choice history. It does not snapshot a live process, session or working tree. Selecting an alternative is metadata only.</p>
+<p><a href="model-budgets.html">Output-token accounting</a> reserves capacity transactionally before proxying a model request. Parent and child calls share organisation, seat and original execution counters across platform replicas. Only complete, valid usage refunds unused reservation; unknown outcomes remain charged.</p>
 <!-- shell:pager -->
 <nav class="pager" aria-label="Previous and next page"><a class="previous" href="tools.html" rel="prev"><small>Previous</small>Agent tools</a><a class="next" href="decisions.html" rel="next"><small>Next</small>Design decisions</a></nav>
 <!-- /shell:pager -->

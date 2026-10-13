@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -97,7 +100,7 @@
 </table>
 
 <h2 id="task-workers">Delegate to a disposable worker</h2>
-<p>Keep a persistent seat's identity and workspace while a separate, bounded Pod handles an explicit task. Workers receive fresh workspaces and sessions, the parent's model and sandbox limits, and no tools by default. Results do not apply themselves. See the <a href="task-workers.md">task-worker API and security contract</a>.</p>
+<p>Keep a persistent seat's identity and workspace while a separate, bounded Pod handles an explicit task. Workers receive fresh workspaces and sessions, the parent's model and sandbox limits, and no tools by default. Results do not apply themselves. See the <a href="task-workers.html">task-worker API and security contract</a>.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>tasks.start</code></td><td><code>request_id</code> (UUID), <code>prompt</code>, <code>timeout_seconds?</code>, <code>tool_names[]?</code>, <code>input_files[]?</code>, <code>artifact_paths[]?</code></td><td>Starts an idempotent child run during an active parent execution. At most four workers with cleanup outstanding and sixteen per parent execution; default timeout ten minutes, maximum twenty.</td></tr>
@@ -106,7 +109,7 @@
 </table>
 
 <h2 id="run-branches">Compare independent alternatives</h2>
-<p>Start several approaches from the same explicit handoff and text files, compare their separate results, then deliberately choose one. This is a portable context snapshot, not a clone of process memory or a working tree. No parent secrets or tool grants are copied. See the <a href="run-branches.md">branching workflow and safety contract</a>.</p>
+<p>Start several approaches from the same explicit handoff and text files, compare their separate results, then deliberately choose one. This is a portable context snapshot, not a clone of process memory or a working tree. No parent secrets or tool grants are copied. See the <a href="run-branches.html">branching workflow and safety contract</a>.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>branches.start</code></td><td><code>request_id</code> (UUID), <code>handoff</code>, <code>alternatives[]</code> (name and prompt), <code>input_files[]?</code>, <code>artifact_paths[]?</code>, <code>timeout_seconds?</code></td><td>Creates two to four independent disposable runs atomically. Identical retries reuse the group; changed payloads conflict. Existing worker limits still apply.</td></tr>

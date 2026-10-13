@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare run alternatives · Steadmesh</title>
+<meta name="description" content="Start independent runs from explicit context, compare complete results and record a revision-checked choice without applying files.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/run-branches.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Compare run alternatives · Steadmesh">
+<meta property="og:description" content="Start independent runs from explicit context, compare complete results and record a revision-checked choice without applying files.">
+<meta property="og:url" content="https://steadmesh.com/run-branches.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#possibilities">What you can do</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html" aria-current="page">Compare run alternatives</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Project</div>
+    <ul>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1 id="compare-independent-run-alternatives">Compare independent run alternatives</h1>
+<p class="lede">Run branching builds on <a href="task-workers.html">disposable task workers</a>. It starts 2–4 independent runs with the same explicit handoff and optional text files, then lets the parent compare their results and deliberately select one.</p>
+<p>This is a portable handoff snapshot, not a clone of process RAM, a harness session, or a Git working tree. It does not discover or copy local files, credentials, browser sessions, environment variables, or parent tool grants. Supply only the non-secret context and files that each alternative needs. Every child uses the disposable-worker model, runtime and sandbox boundaries.</p>
+<p>Introduced in v0.6.0. Follow the <a href="operations.html#upgrade">upgrade notes</a> before trying it on an older deployment.</p>
+<nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#start-alternatives">Start alternatives</a></li><li><a href="#compare-and-review">Compare and review</a></li><li><a href="#explicit-selection">Explicit selection</a></li><li><a href="#limits-and-recovery">Limits and recovery</a></li></ul></nav>
+<h2 id="start-alternatives">Start alternatives</h2>
+<p>Call <code>branches.start</code> through <code>steadmesh-tools</code>, MCP (<code>branches_start</code>), or the normal <code>POST /v1/tools/branches.start</code> endpoint. The caller must have a current seat lease and a running parent execution; the normal runner supplies both headers. Run the following illustrative commands inside that active seat. Replace the example UUID for each new branch group, and use the IDs and digests returned by your own calls.</p>
+<pre><code>steadmesh-tools call branches.start '{
+  "request_id": "b8b66951-bab1-4519-b58b-4c54b6096370",
+  "handoff": "Implement a formatter. Preserve all lines and avoid new dependencies. Write your proposed output to result.txt, and explain your tradeoffs.",
+  "input_files": [{"path": "fixture.txt", "content": "beta\nalpha\n"}],
+  "artifact_paths": ["result.txt"],
+  "timeout_seconds": 600,
+  "alternatives": [
+    {"name": "direct", "prompt": "Try direct string processing"},
+    {"name": "table-driven", "prompt": "Try a table-driven approach"}
+  ]
+}'</code></pre>
+<p>Use a fresh UUID for a new request and reuse that UUID with the identical payload when retrying a lost response. A changed payload conflicts instead of launching more work. The whole group is transactional: if any alternative is invalid or a worker limit is reached, no group or partial set of workers is created. Workers with runtime cleanup outstanding count against the same four-worker limit, including completed or cancelled workers awaiting cleanup. Branching does not bypass per-parent execution limits.</p>
+<p>The returned <code>id</code> identifies the durable group. <code>snapshot_sha256</code> identifies the shared handoff and exact input files. The alternatives each have their own <code>task_run_id</code>, prompt, fresh workspace containing only the explicit input files, and lifecycle. Their original request and results remain available after their disposable Pods are removed.</p>
+<p>Alternatives share the parent's model, organisation-daily, seat-daily and original parent-execution <a href="model-budgets.html">output budgets</a>. There is no new quota for each branch, and the request cannot choose different models or copy the parent's tools.</p>
+<h2 id="compare-and-review">Compare and review</h2>
+<pre><code>steadmesh-tools call branches.compare '{"id":"GROUP_ID"}'</code></pre>
+<p>Comparison reports each alternative in the original order with:</p>
+<ul>
+<li>its name, task-run ID and current state</li>
+<li>UTF-8-safe output and error previews, with explicit truncation flags</li>
+<li>artifact count and total content bytes</li>
+<li>the SHA-256 of the complete result, including artifact names and contents</li>
+<li>the current group <code>revision</code>, any selection, and <code>all_terminal</code></li>
+</ul>
+<p>Previews are deliberately bounded to fit the platform tool-result limit. Use <code>tasks.get</code> to inspect a task, including its artifact list, and the authenticated <code>GET /v1/task-runs/TASK_RUN_ID</code> API to retrieve its complete immutable request and result. Review full output and artifacts before making a choice. Technical completion alone does not mean the generated work is correct.</p>
+<h2 id="explicit-selection">Explicit selection</h2>
+<pre><code>steadmesh-tools call branches.select '{
+  "id": "GROUP_ID",
+  "task_run_id": "CHOSEN_TASK_RUN_ID",
+  "expected_revision": 1,
+  "expected_result_sha256": "RESULT_SHA256_FROM_COMPARISON"
+}'</code></pre>
+<p>Only a completed alternative belonging to this group and this parent seat can be selected. Failed, cancelled, timed-out and unfinished runs cannot be chosen. A stale group revision or incorrect result digest conflicts, so reread and review before retrying. Choosing the same current result is a no-op; choosing a different completed result creates a new revision and preserves choice history in the store.</p>
+<p>Selection is <strong>a durable choice record only</strong>. It does not apply artifacts, modify the parent's working tree or handoff, merge a Git branch, send messages, grant permissions, or cancel other alternatives. <code>all_terminal</code> and <code>selection</code> are independent: a result may be chosen while another alternative still runs. Cancel unwanted siblings explicitly with <code>tasks.cancel</code>. Apply reviewed files through a separate, explicitly authorized workflow, including any normal working-tree conflict checks.</p>
+<h2 id="limits-and-recovery">Limits and recovery</h2>
+<ul>
+<li>Two to four alternatives; names are unique ignoring case and up to 64 bytes</li>
+<li>Shared handoff and each alternative prompt are at most 8 KiB of UTF-8 text</li>
+<li>Shared text files and artifact paths use the task-worker validation and bounds</li>
+<li>Default deadline 600 seconds; configurable from 1 to 1,200 seconds</li>
+<li>No platform tools are delegated by branching in this first version</li>
+<li>The authenticated parent seat owns the group; another seat cannot inspect or select it</li>
+<li>Creation and selection are fenced by the parent's current lease generation</li>
+<li>Read-only comparison is a consistent database snapshot; it cannot observe half a group</li>
+<li>Ending the parent turn does not cancel children while its lease generation remains valid; the parent stays warm until child cleanup completes</li>
+<li>Parent restarts retain group records and selections; worker cancellation and cleanup follow the disposable-worker lifecycle</li>
+</ul>
+<p>The platform release includes the model-budget, disposable-worker and run-branch database migrations in order (<code>00002</code>, <code>00003</code>, <code>00004</code>). They run automatically when the platform opens its database. Upgrade the complete release; do not deploy an isolated feature branch or skip its lower-numbered migrations. Branching needs no extra credentials or Terraform resources beyond the disposable-worker platform support.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="task-workers.html" rel="prev"><small>Previous</small>Disposable task workers</a><a class="next" href="sandbox.html" rel="next"><small>Next</small>Sandbox access</a></nav>
+<!-- /shell:pager -->
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/run-branches.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

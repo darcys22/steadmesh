@@ -56,6 +56,9 @@
     <ul>
       <li><a href="../real-services.html">Connect real services</a></li>
       <li><a href="../operations.html">Operating an organisation</a></li>
+      <li><a href="../model-budgets.html">Model output budgets</a></li>
+      <li><a href="../task-workers.html">Disposable task workers</a></li>
+      <li><a href="../run-branches.html">Compare run alternatives</a></li>
       <li><a href="../sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -102,6 +105,7 @@
 <li><strong>Take a repository change through review.</strong> Give an engineer and reviewer access to a test repository, ask for a small improvement, and follow the pull request from your representative. Start with the <a href="../quickstart.html#example">example organisation</a>.</li>
 <li><strong>Keep project context between conversations.</strong> Use personal memory for each representative and shared memory for team decisions, plans and working notes. Add <a href="../tools.html">work items</a> when ownership and dependencies help.</li>
 <li><strong>Return to work on a schedule.</strong> Ask a seat to set a reminder or a recurring check on a service it can access. <a href="../tools.html#automations">Automations</a> wake the seat with your instruction, using its existing tools and permissions.</li>
+<li><strong>Try several approaches without changing your workspace.</strong> Use <a href="../task-workers.html">disposable workers</a> for an explicit text task, or <a href="../run-branches.html">run alternatives</a> to compare two to four approaches and record a reviewed choice. Their output shares the parent's <a href="../model-budgets.html">model budgets</a>; result files are not applied automatically.</li>
 <li><strong>Give different roles different tools.</strong> Combine Claude Code, Codex and Pi seats, with a model and access profile suited to each role. See <a href="../harnesses.html">Harnesses and models</a> and <a href="../sandbox.html">Sandbox access</a>.</li>
 </ul>
 <p>These are starting points for your own instructions and configuration. Begin with a bounded task, review what the team produces, and expand its access as needed.</p>
@@ -170,7 +174,7 @@
 </ul>
 
 <h2 id="status">Release and test coverage</h2>
-<div class="callout"><p><strong>As of 8 October 2026, release v0.5.0.</strong> Local end-to-end tests cover the flow from apply to conversation using deterministic fakes. The mixed-harness demo has a recorded run with real model endpoints for Claude Code, Codex and Pi seats and a real GitHub repository; Slack and Linear were fakes in that run, and its key-rotation step was skipped. For the checks run, results and remaining gaps, see <a href="../status.html">Status and limits</a> and <a href="../demo-results.html">Example run</a>.</p></div>
+<div class="callout"><p><strong>Recorded coverage from 8 October 2026 (v0.5.0).</strong> Local end-to-end tests cover the flow from apply to conversation using deterministic fakes. The mixed-harness demo has a recorded run with real model endpoints for Claude Code, Codex and Pi seats and a real GitHub repository; Slack and Linear were fakes in that run, and its key-rotation step was skipped. These historical results do not establish a new full live run for v0.6.0. For focused new-feature checks, recorded results and remaining gaps, see <a href="../status.html">Status and limits</a> and <a href="../demo-results.html">Example run</a>.</p></div>
 <!-- shell:pager -->
 <nav class="pager" aria-label="Previous and next page"><span></span><a class="next" href="../quickstart.html" rel="next"><small>Next</small>Quickstart</a></nav>
 <!-- /shell:pager -->

@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -261,6 +264,7 @@
 <p>Each work item becomes one issue, titled <code>&lt;store&gt;/W-&lt;n&gt;: &lt;objective&gt;</code>, with its status, owner, plan, acceptance criteria and evidence in the description. Later changes update the same issue. Publication runs in the background and is retried while the tracker is unavailable. Its state is shown per item in the console's Work view, separately from the work itself. A crash between creating an issue and recording it is resolved by reading the issue back, never by creating a duplicate. This is outward only: edits made in the tracker do not change work items, although agents can read them with <code>task.read</code> and <code>comment.read</code>.</p>
 
 <h2 id="model-budgets">Cumulative model output budgets</h2>
+<p>For a step-by-step example, response semantics and troubleshooting, see <a href="model-budgets.html">Model output budgets</a>. Introduced in v0.6.0.</p>
 <p><code>spec.model_budgets</code> is optional. These are enforced output-token limits at the platform model proxy, shared by all platform replicas. They do not cap input tokens or dollar cost. Use a provider-side spending limit for a monetary ceiling.</p>
 <pre><code>model_budgets = {
   organization_daily_output_tokens = 1000000
@@ -269,6 +273,7 @@
   max_request_output_tokens        = 4096
 }</code></pre>
 <ul>
+<li>Disposable workers and run alternatives debit the parent's organisation, seat and original execution counters, even after that parent turn finishes. They do not get independent quota.</li>
 <li>Daily counters reset at 00:00 UTC, regardless of the organisation's display time zone. Seat limits apply separately to each durable seat identity. Execution limits span all calls in that execution and do not reset at midnight.</li>
 <li>Zero or omitted cumulative limits are unlimited; at least one cumulative limit must be positive. The per-request ceiling defaults to 4096. Values must be integers between zero and 1,000,000,000,000. Removing the block disables enforcement; prior counters are retained. Calls made while disabled are not accounted.</li>
 <li>The proxy atomically reserves the requested output ceiling, or the configured default, before contacting the provider. It lowers the request's ceiling to the smallest available headroom. Concurrent requests therefore cannot reserve the same tokens. The response header <code>X-Steadmesh-Output-Token-Limit</code> reports the effective ceiling.</li>

@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disposable task workers · Steadmesh</title>
+<meta name="description" content="Delegate a bounded task to an isolated worker, review its text artifacts and understand permissions, budgets and cleanup.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/task-workers.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Disposable task workers · Steadmesh">
+<meta property="og:description" content="Delegate a bounded task to an isolated worker, review its text artifacts and understand permissions, budgets and cleanup.">
+<meta property="og:url" content="https://steadmesh.com/task-workers.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#possibilities">What you can do</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html" aria-current="page">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Project</div>
+    <ul>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1 id="disposable-task-workers">Disposable task workers</h1>
+<p class="lede">A persistent seat can delegate a bounded piece of work to a fresh worker, then inspect its output and explicitly chosen artifacts. The parent keeps its identity, workspace, memory, harness session and one-turn lease. A worker is a separate short-lived Kubernetes Pod, not another persistent seat.</p>
+<p>Introduced in v0.6.0. Install matching platform, controller and seat images before trying these tools. See <a href="operations.html#upgrade">upgrade notes</a>.</p>
+<nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#start-inspect-and-cancel">Start, inspect and cancel</a></li><li><a href="#bounds-and-authority">Bounds and authority</a></li><li><a href="#shared-model-budgets">Shared model budgets</a></li><li><a href="#completion-and-cleanup">Completion and cleanup</a></li><li><a href="#what-is-not-copied">What is not copied</a></li></ul></nav>
+<h2 id="start-inspect-and-cancel">Start, inspect and cancel</h2>
+<p>During an active parent turn, call <code>tasks.start</code> with a unique UUID <code>request_id</code>, a <code>prompt</code>, optional <code>input_files</code> (<code>path</code>, <code>content</code>), and <code>artifact_paths</code> to return. Repeating an identical request ID returns the same run; reusing it for different input fails. Use <code>tasks.get</code> with its <code>id</code> to inspect state, bounded output and artifact names, and <code>tasks.cancel</code> to stop it. When runtime cleanup completes, a durable, deduplicated system message wakes the parent with the task ID and parent execution correlation. That message reports technical completion, not business success.</p>
+<p>Run this illustrative example <strong>inside an active seat</strong>, where the runner supplies its token, lease generation and execution ID. <code>steadmesh-tools</code> is not an unauthenticated operator command. Generate a new UUID for each new job; the UUID below is only an example.</p>
+<pre><code>steadmesh-tools call tasks.start '{
+  "request_id": "814cdd22-73ed-4d55-8bb7-02b685291dbb",
+  "prompt": "Review input.txt and write a short critique to review.txt",
+  "timeout_seconds": 300,
+  "input_files": [{"path": "input.txt", "content": "An explicit draft to review"}],
+  "artifact_paths": ["review.txt"]
+}'
+
+# Use the id returned by tasks.start
+steadmesh-tools call tasks.get '{"id":"TASK_RUN_ID"}'
+steadmesh-tools call tasks.get '{"id":"TASK_RUN_ID","artifact_path":"review.txt"}'
+
+# Cancel only if this run is no longer needed
+steadmesh-tools call tasks.cancel '{"id":"TASK_RUN_ID"}'</code></pre>
+<p>The runtime API also offers <code>POST /v1/task-runs</code>, <code>GET /v1/task-runs</code>, <code>GET /v1/task-runs/{id}</code>, and <code>POST /v1/task-runs/{id}/cancel</code>. Creation requires the current generation and a real running parent execution in the existing runtime headers. Reads are scoped to the parent seat. The full GET returns the explicit input and result files; tool results retain the existing 16 KiB limit. <code>tasks.get</code> with <code>artifact_path</code> returns a single small artifact; use the runtime API for larger files.</p>
+<h2 id="bounds-and-authority">Bounds and authority</h2>
+<ul>
+<li>At most four workers with runtime cleanup outstanding per seat, and   sixteen creations per parent execution, enforced in a serialized transaction</li>
+<li>Default deadline 600 seconds, maximum 1,200, including provisioning time;   the Pod also has an active deadline and never restarts</li>
+<li>Prompt at most 32 KiB; at most 64 UTF-8 files totaling 256 KiB in each   direction, including path bytes; output at most 16 KiB; paths must be safe,   relative, unique and no more than 240 bytes</li>
+<li>Only requested regular-file artifacts are returned; missing, binary,   oversized or escaping paths fail the run. <code>.git</code> input paths are rejected</li>
+<li>Fresh, size-limited <code>emptyDir</code> workspace, home and scratch, with no parent   PVC, manifest mount, session, shared workspace or sandbox credentials</li>
+<li>Same pinned harness image, model selection, resource limits, security   context and RuntimeClass as the parent; no runtime downgrade</li>
+<li>Dedicated ServiceAccount and gateway-audience, Pod-bound projected token;   no Kubernetes API token or additional RBAC. Worker tokens cannot acquire   the parent lease, read its bootstrap, checkpoint, send messages, obtain   credentials, spawn workers or call arbitrary tools</li>
+<li>Default no platform tools. <code>tool_names</code> may select only <code>memory.stores</code>,   <code>memory.list</code>, <code>memory.read</code>, <code>memory.search</code>, <code>memory.history</code>, <code>work.get</code>   and <code>work.list</code>; the current parent's read/search permissions still apply</li>
+<li>Separate default-deny network-policy selector allows only platform and   DNS traffic, never the parent's extra network or egress-gateway access</li>
+</ul>
+<h2 id="shared-model-budgets">Shared model budgets</h2>
+<p>Worker model calls debit the parent's organisation-daily, seat-daily and original parent-execution counters. Siblings share those counters even if the parent turn has finished. A worker cannot obtain extra budget by supplying another execution ID. Requests retain the same per-request cap and conservative accounting for unknown usage. See <a href="model-budgets.html">model output budgets</a>.</p>
+<h2 id="completion-and-cleanup">Completion and cleanup</h2>
+<p>States are <code>pending</code>, <code>running</code>, <code>completed</code>, <code>failed</code>, <code>cancelled</code> and <code>timed_out</code>. A terminal state does not mean cleanup has finished: <code>cleaned_at</code> is populated only after the controller confirms removal. The completion message is delivered after cleanup if the parent is still active; a retiring or retired parent is not woken for a result.</p>
+<p>Outstanding workers keep an otherwise idle parent runtime warm until cleanup finishes, so a completion notification cannot cause an idle restart that revokes still-running siblings. This does not bypass suspension or blocking.</p>
+<p>Changing the parent's configuration revision or lease generation, retiring it, or reaching the task deadline revokes worker authentication. Suspending or blocking the parent causes the controller to cancel its workers. A claimed worker whose Pod disappears fails rather than silently repeating external work. Cancellation is immediate at the API boundary; Pod removal remains asynchronous. Capacity is reusable only after the controller confirms Pod absence and deletes its identity and policy.</p>
+<p>Results remain durable after cleanup. Nothing copies results into the parent workspace or changes shared memory automatically. The parent decides what to use. Deleting an organisation with data deletion also removes its worker records. No production cluster or credentials are needed to run the unit and PostgreSQL integration tests.</p>
+<h2 id="what-is-not-copied">What is not copied</h2>
+<p>This first implementation uses explicit text snapshots and artifacts. It does not clone repositories, copy live files automatically, resume worker sessions, delegate credential access or support nested workers.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="model-budgets.html" rel="prev"><small>Previous</small>Model output budgets</a><a class="next" href="run-branches.html" rel="next"><small>Next</small>Compare run alternatives</a></nav>
+<!-- /shell:pager -->
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/task-workers.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

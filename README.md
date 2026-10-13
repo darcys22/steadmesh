@@ -18,11 +18,22 @@ and the [acceptance status](https://steadmesh.com/status.html). The design is in
 and acceptance status is tracked in
 [`tests/acceptance/RESULTS.md`](tests/acceptance/RESULTS.md).
 
-## Explore alternatives with disposable runs
+## Operate and delegate bounded work
 
-[Run branching](docs/run-branches.md) starts independent alternatives from an
-explicit handoff, compares their status and results, and records a chosen
-result without automatically applying files or changing the working tree.
+Introduced in v0.6.0:
+
+- [Inspect, watch, pause and resume seats](docs/operations.html#operator-cli)
+  by their stable declaration key, with an explicit Kubernetes context
+- [Enforce cumulative model output budgets](docs/model-budgets.html) per
+  organisation, seat and execution. These do not cap input tokens or dollar cost
+- [Delegate a task to a disposable worker](docs/task-workers.html) with
+  explicit text inputs, narrow permissions and reviewed result files
+- [Compare independent run alternatives](docs/run-branches.html) from a
+  shared handoff and record a chosen result. Selection does not apply files
+  or change the working tree
+
+See the [upgrade notes](docs/operations.html#upgrade) before using these
+features on an older deployment.
 
 ## Fastest start: the example organisation
 
@@ -254,7 +265,7 @@ One-time setup:
 | `charts/platform` | Helm chart: CRDs, controller, platform service and console |
 | `modules/`, `bundles/` | Terraform modules (platform install, Postgres, team templates, representatives) and instruction bundles |
 | `examples/` | Foundation → platform → organisation deployment roots built from source, and `make plan/apply/status/teardown` |
-| `cmd/orgctl` | Status, fresh readiness verification, `orgctl chat` and `orgctl console` |
+| `cmd/orgctl` | Status, readiness verification, stable-key seat inspection/watch/pause/resume, terminal chat and console access |
 
 ## License
 
