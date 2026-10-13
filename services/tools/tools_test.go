@@ -88,8 +88,20 @@ func TestDescriptorsAreFilteredAndValid(t *testing.T) {
 	if rep := names("rep_b"); rep["work.create"] || rep["work.list"] {
 		t.Errorf("seat without a shared store offered work tools: %v", rep)
 	}
-	if len(r.tools) != 35 {
-		t.Errorf("registry has %d tools, want the 35 of docs/tools.html", len(r.tools))
+	for _, name := range []string{"branches.start", "branches.compare", "branches.select"} {
+		if !lead[name] || !reviewer[name] {
+			t.Errorf("missing branch tool %s", name)
+		}
+	}
+	if len(r.tools) != 38 {
+		t.Errorf("registry has %d tools, want the 38 of docs/tools.html", len(r.tools))
+	}
+	seen := map[string]bool{}
+	for _, tool := range r.tools {
+		if seen[tool.name] {
+			t.Errorf("duplicate tool %s", tool.name)
+		}
+		seen[tool.name] = true
 	}
 }
 
