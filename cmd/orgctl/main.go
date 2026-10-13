@@ -1,6 +1,7 @@
 // Command orgctl reports organisation status, runs a fresh readiness
-// verification (design §5.4), opens the optional Steadmesh Console and chats
-// with a representative over a terminal connection. It is
+// verification (design §5.4), inspects and controls seats by stable key,
+// opens the optional Steadmesh Console and chats with a representative over
+// a terminal connection. It is
 // used by the deployment workflow after every apply, including applies with
 // no Terraform changes (A25).
 package main
@@ -11,7 +12,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"sort"
+	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -42,31 +46,52 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: orgctl status|verify|console|chat [--context ctx] [--namespace ns] [--name org] [--user id]")
+		return errors.New("usage: orgctl status|verify|console|chat|inspect|watch|pause|resume [--context ctx] [--namespace ns] [--name org] [--seat key] [--user id]")
 	}
 	cmd := args[0]
+	switch cmd {
+	case "status", "verify", "console", "chat", "inspect", "watch", "pause", "resume":
+	default:
+		return fmt.Errorf("unknown command %q", cmd)
+	}
 	fs := flag.NewFlagSet(cmd, flag.ContinueOnError)
 	kubeconfig := fs.String("kubeconfig", "", "kubeconfig path (default: standard loading rules)")
 	kctx := fs.String("context", os.Getenv("STEADMESH_KUBE_CONTEXT"), "kubeconfig context (required)")
-	ns := fs.String("namespace", "", "organisation namespace (default: all)")
-	name := fs.String("name", "", "organisation name (default: all in namespace)")
+	ns := fs.String("namespace", "", "organisation namespace (required for seat commands; otherwise all)")
+	name := fs.String("name", "", "organisation object name (required for seat commands; otherwise all in namespace)")
 	timeout := fs.Duration("timeout", 10*time.Minute, "verify timeout")
 	systemNS := fs.String("system-namespace", "steadmesh-system", "control-plane namespace (console, chat)")
 	port := fs.Int("port", 8090, "local port for the console")
 	user := fs.String("user", "", "chat: your external user ID on the terminal connection")
 	connection := fs.String("connection", "", "chat: terminal connection key (default: the one binding --user)")
 	token := fs.String("token", os.Getenv("STEADMESH_TERMINAL_TOKEN"), "chat: terminal token (default: read from the connection's Kubernetes Secret)")
+	seatKey := fs.String("seat", "", "inspect, watch, pause, resume: stable seat key (required)")
+	output := fs.String("output", "text", "seat commands: text or json (watch emits one JSON object per change)")
+	interval := fs.Duration("interval", 2*time.Second, "watch: polling interval")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
-	if *kctx == "" {
+	if fs.NArg() != 0 {
+		return fmt.Errorf("unexpected positional arguments %q; seat commands take their stable key through --seat", fs.Args())
+	}
+	if strings.TrimSpace(*kctx) == "" {
 		return errors.New("--context is required; orgctl never uses the ambient context")
+	}
+	seatOpts := seatOptions{kctx: *kctx, namespace: *ns, organization: *name, key: *seatKey, output: *output, interval: *interval}
+	if isSeatCommand(cmd) {
+		if err := seatOpts.validate(); err != nil {
+			return err
+		}
 	}
 	c, err := newClient(*kubeconfig, *kctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("context %q: %w", *kctx, err)
 	}
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if isSeatCommand(cmd) {
+		return seatCommand(ctx, c, cmd, seatOpts, os.Stdout)
+	}
 	if cmd == "console" {
 		return openConsole(ctx, c, *kubeconfig, *kctx, *systemNS, *port)
 	}
