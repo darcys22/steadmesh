@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html" aria-current="page">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -169,6 +172,9 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-nam
 <p>Agents can change the organisation only the way people do: through the infrastructure repository and its deployment workflow, and only if you grant them access to that repository. Seat credentials have no access to the Kubernetes API.</p>
 
 <h2 id="operator-cli">Administrative controls</h2>
+<p>The stable-key seat commands were introduced in v0.6.0. Install <code>orgctl</code> from the same release as your platform (Go 1.27.1 or newer), or build <code>make orgctl</code> from that release's source:</p>
+<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.5.0</code></pre>
+<p>Use the installed <code>orgctl</code> in place of <code>bin/orgctl</code> in the source-tree examples below. The <code>--name</code> value is the Kubernetes organisation object's name; <code>--seat</code> is its declaration key, not the generated seat name or durable UUID.</p>
 <p>Use <code>orgctl</code> to inspect, watch, pause or resume a seat by its stable declaration key, without looking up its generated Kubernetes name. All four commands require an explicit <code>--namespace</code>, <code>--name</code> (the <code>AgentOrganization</code> object name) and <code>--seat</code>. As with the other commands, supply <code>--context</code> or <code>STEADMESH_KUBE_CONTEXT</code>; the ambient Kubernetes context is never used. To change the direction of a seat's work, talk to your representative.</p>
 <pre><code><span class="c"># Inspect the representative_sean seat in this organisation</span>
 bin/orgctl inspect --context kind-steadmesh --namespace steadmesh-example \
@@ -184,10 +190,16 @@ bin/orgctl pause --context kind-steadmesh --namespace steadmesh-example \
 bin/orgctl resume --context kind-steadmesh --namespace steadmesh-example \
   --name example-company --seat representative_sean</code></pre>
 <p>Use your organisation's object name and seat key from <code>orgctl status</code>. Inspection includes the durable seat ID, requested suspension, execution state, configured and adopted revisions, observed generation, readiness conditions, probe, workspace claim, checkpoint and retirement deadline when present. Add <code>--output json</code> for structured spec/status data. A JSON watch emits one object per change. Watch polls the selected object (every two seconds by default) and stops with an error if access is lost, the object disappears or its identity changes.</p>
+<p>Pausing or blocking a parent also causes its disposable workers to be cancelled. Their Pod cleanup remains asynchronous, and completed results remain durable; see <a href="task-workers.html#completion-and-cleanup">worker completion and cleanup</a>.</p>
 <p><code>pause</code> and <code>resume</code> change only <code>spec.adminSuspended</code> using your existing Kubernetes credentials and permissions. Repeating the same request is a no-op. A concurrent update is rejected rather than overwritten: inspect the seat and retry. These commands report the requested control value immediately; controller reconciliation is asynchronous, so use <code>watch</code> to see the resulting execution state and observed generation. A pause can interrupt execution; it does not retire the seat or delete its workspace. Resume clears administrative suspension only: a retired seat or another blocked dependency will not become runnable just because suspension was cleared.</p>
 <p>You need <code>get</code> access to <code>agentorganizations</code> and <code>agentseats</code>, plus <code>patch</code> access to <code>agentseats</code> for pause/resume. These commands do not read Secrets, mint credentials or require the optional console. Inspect/watch show Kubernetes spec/status, not live model activity, message bodies or logs.</p>
 <pre><code><span class="c"># For logs, use the Object and Backend shown by inspect</span>
 kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-object-name&gt;-0</code></pre>
+
+<h2 id="upgrade">Upgrade to a matching release</h2>
+<p>Back up Postgres, seat workspace volumes and your Terraform state before upgrading. Keep the platform chart, controller, platform service, seat images, Terraform provider and <code>orgctl</code> on the same release. Update module <code>?ref=</code> pins, <code>steadmesh_version</code> and the provider version together; apply <code>platform/</code> before <code>organisation/</code>, then check readiness with <code>orgctl verify</code> using your explicit context and organisation selection.</p>
+<p>v0.6.0 includes database migrations <code>00002_model_budgets.sql</code>, <code>00003_task_runs.sql</code> and <code>00004_run_branches.sql</code>. The platform applies pending migrations automatically when it opens the database. Deploy the complete release in order; do not deploy a standalone feature branch or add a missing lower-numbered migration after later ones have run. If migration fails, inspect the platform logs and migration history before proceeding. There is no built-in backup/restore or documented automatic rollback.</p>
+<p>Worker support also depends on the matching controller, chart RBAC and seat image. A provider-only upgrade is not enough. The new <a href="model-budgets.html">model budgets</a> are opt-in; disposable-worker and branch tools are available to active seats without extra Terraform grants, but workers receive no platform tools by default. Read their <a href="task-workers.html#bounds-and-authority">authority and cleanup limits</a> before use.</p>
 
 <h2>Retention and deletion</h2>
 <ul>
@@ -260,7 +272,7 @@ vault kv put secret/steadmesh/linear api_key=lin_api_new</code></pre>
 <tr><td>An external operation shows <code>unknown</code></td><td>The external API may have applied it, but the response was lost and could not be confirmed. The platform does not replay it automatically. The agent sees it in its recovery context so it can check the external result.</td></tr>
 </table>
 <!-- shell:pager -->
-<nav class="pager" aria-label="Previous and next page"><a class="previous" href="real-services.html" rel="prev"><small>Previous</small>Connect real services</a><a class="next" href="sandbox.html" rel="next"><small>Next</small>Sandbox access</a></nav>
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="real-services.html" rel="prev"><small>Previous</small>Connect real services</a><a class="next" href="model-budgets.html" rel="next"><small>Next</small>Model output budgets</a></nav>
 <!-- /shell:pager -->
 </main>
 </div>

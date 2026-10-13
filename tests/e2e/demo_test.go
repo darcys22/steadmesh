@@ -511,7 +511,7 @@ func keepShellMarkers(page string) string {
 
 var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
 	"marker": func(s string) template.HTML { return template.HTML("<!-- " + s + " -->") },
-	"stamp": func(t time.Time) string { return t.Format("2006-01-02 15:04 UTC") },
+	"stamp":  func(t time.Time) string { return t.Format("2006-01-02 15:04 UTC") },
 	"pretty": func(b json.RawMessage) string {
 		var v any
 		if json.Unmarshal(b, &v) != nil {
@@ -578,6 +578,9 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>

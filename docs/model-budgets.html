@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model output budgets · Steadmesh</title>
+<meta name="description" content="Configure cumulative output-token limits and understand shared worker budgets, conservative charging and provider compatibility.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/model-budgets.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Model output budgets · Steadmesh">
+<meta property="og:description" content="Configure cumulative output-token limits and understand shared worker budgets, conservative charging and provider compatibility.">
+<meta property="og:url" content="https://steadmesh.com/model-budgets.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#possibilities">What you can do</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.5.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html" aria-current="page">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Project</div>
+    <ul>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1>Model output budgets</h1>
+<p class="lede">Put a cumulative ceiling on the output a team can generate, including its disposable workers and alternative runs. Start with limits for a small task, then adjust the declaration as you learn its needs.</p>
+<p>Introduced in v0.6.0. Enforcement is optional and lives at the platform model proxy, with atomic reservations in Postgres shared by all platform replicas.</p>
+<div class="callout warn"><p><strong>This is an output-token limit, not a spending limit.</strong> Input and cached-input tokens, provider charges and infrastructure costs are not capped. Use a provider-side monetary limit for a dollar ceiling. Calls using separately granted credentials outside the model proxy are outside this boundary.</p></div>
+<nav class="toc" aria-label="On this page"><strong>On this page</strong><ul>
+<li><a href="#configure">Declare limits</a></li>
+<li><a href="#accounting">How requests are charged</a></li>
+<li><a href="#exhaustion">Inspect and recover from exhaustion</a></li>
+<li><a href="#compatibility">Provider compatibility</a></li>
+</ul></nav>
+<h2 id="configure">Declare limits</h2>
+<p>Add <code>model_budgets</code> inside the organisation resource's <code>spec</code> in Terraform, then plan and apply the organisation stage. These numbers are illustrative, not a recommended spend allowance:</p>
+<pre><code>model_budgets = {
+  organization_daily_output_tokens = 1000000
+  seat_daily_output_tokens         = 200000
+  execution_output_tokens          = 20000
+  max_request_output_tokens        = 4096
+}</code></pre>
+<table>
+<tr><th>Field</th><th>Scope</th></tr>
+<tr><td><code>organization_daily_output_tokens</code></td><td>All seats in this organisation, resetting at 00:00 UTC</td></tr>
+<tr><td><code>seat_daily_output_tokens</code></td><td>Each durable seat identity separately, resetting at 00:00 UTC</td></tr>
+<tr><td><code>execution_output_tokens</code></td><td>All calls in one recorded execution, with no midnight reset</td></tr>
+<tr><td><code>max_request_output_tokens</code></td><td>The maximum reservation for one request; zero or omitted uses 4096</td></tr>
+</table>
+<p>Zero or omitted cumulative limits are unlimited; at least one of the first three must be positive. All values must be integers from zero through 1,000,000,000,000. The organisation's display time zone does not affect daily accounting. The full schema is in the <a href="configuration.html#model-budgets">configuration reference</a>.</p>
+<p><a href="task-workers.html">Workers</a> and <a href="run-branches.html">run alternatives</a> share the parent's organisation-daily, seat-daily and original parent-execution counters. Their calls still debit that execution after its parent turn ends, while their worker authority remains valid. Spawning a child does not create fresh quota.</p>
+<h2 id="accounting">How requests are charged</h2>
+<ol>
+<li>Before contacting the provider, the proxy reserves the smaller of the request's output ceiling, the configured request cap and the remaining cumulative headroom. If the request omits a ceiling, it starts with the configured cap.</li>
+<li>It writes that effective ceiling into the supported provider request. Concurrent calls cannot reserve the same tokens. The response header <code>X-Steadmesh-Output-Token-Limit</code> exposes the ceiling.</li>
+<li>After a complete response with valid output usage, it refunds unused reserved tokens. Otherwise the full reservation stays charged.</li>
+</ol>
+<p>Missing usage, interrupted streams, upstream errors, client cancellation, failed settlement and platform crashes keep the full reservation. An uncertain request never expires into free quota, and a credential-refresh retry shares the same reservation. Charged usage may therefore be higher than the output you received.</p>
+<p>Policy edits and platform restarts retain counters and do not cancel requests already admitted. Removing the block disables enforcement; calls made while disabled are not counted. Re-enabling it uses retained counters for the relevant scope and window.</p>
+<h2 id="exhaustion">Inspect and recover from exhaustion</h2>
+<p>Exhaustion returns HTTP <code>429</code> with code <code>budget_exhausted</code> before dispatch to the provider. Daily exhaustion includes <code>Retry-After</code> until the next UTC midnight. You can wait for that reset or raise the declared limit and apply. An execution limit does not reset at midnight: raise it to continue that same execution. New executions have their own execution counters but still share the daily caps.</p>
+<p><code>GET /v1/model-budgets</code> on the platform, authenticated with the seat token and optional execution header, returns policy, charged counters and daily reset time. This is a runtime API, not an <code>orgctl</code> budget command. Charged counters include pending and uncertain reservations. Avoid rapid automatic retries when a scope is exhausted.</p>
+<p>Budgeted seat requests require the current lease generation. With an execution limit, they also require a real running execution belonging to that seat; a missing, arbitrary or completed execution ID cannot open quota. Authenticated workers use their recorded parent execution, even after its turn completes, rather than accepting caller-supplied IDs.</p>
+<h2 id="compatibility">Provider compatibility</h2>
+<p>With budgets enabled, generation is supported only for synchronous, single-completion requests to these endpoints, including streamed SSE responses:</p>
+<table>
+<tr><th>API</th><th>Output ceiling</th></tr>
+<tr><td>Anthropic <code>POST /v1/messages</code></td><td><code>max_tokens</code></td></tr>
+<tr><td>OpenAI <code>POST /v1/responses</code></td><td><code>max_output_tokens</code></td></tr>
+<tr><td>OpenAI <code>POST /v1/chat/completions</code></td><td><code>max_completion_tokens</code>, or an explicitly supplied legacy <code>max_tokens</code></td></tr>
+</table>
+<p>Unsupported generation paths, multiple completions, background Responses and ambiguous or invalid output-limit fields are rejected before dispatch. Chat streaming requests ask for usage. A legacy Chat backend must receive an explicit <code>max_tokens</code> from its harness; an omitted limit uses <code>max_completion_tokens</code>. A compatible-looking endpoint is not enough: it must honor its output ceiling and report truthful usage.</p>
+<p>Model listings, Anthropic token-count requests and connection readiness checks are outside budgeted seat output. Readiness checks can still incur provider charges. The feature does not provide per-work-item budgets, input-token caps or cost accounting. Existing turn timeouts, CPU/memory limits, credential restrictions and network policy remain in force.</p>
+<p>For deployment order and database migrations, see <a href="operations.html#upgrade">Upgrade notes</a>. For model selection and readiness, see <a href="harnesses.html">Harnesses and models</a>.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="operations.html" rel="prev"><small>Previous</small>Operating an organisation</a><a class="next" href="task-workers.html" rel="next"><small>Next</small>Disposable task workers</a></nav>
+<!-- /shell:pager -->
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/model-budgets.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

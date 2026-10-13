@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -201,6 +204,9 @@ kubectl --context &lt;kube-context&gt; -n &lt;organisation-namespace&gt; get age
 <div class="callout warn"><p><strong>A sandbox credential can be read.</strong> With sandbox delivery, the agent and other processes in the pod can read the credential, even though the helpers avoid writing it into configuration files. A fine-grained personal access token (PAT) is passed through as it is and keeps the full scope you gave it at GitHub. Granting one repository in Steadmesh doesn't narrow a broader PAT. A GitHub App instead gets an installation token limited to the granted repositories and permissions, valid for one hour, which Steadmesh can revoke. A PAT must be rotated or revoked at GitHub. Use sandbox delivery only for work that needs it.</p></div>
 <p>See <a href="sandbox.html#github">Sandbox access: GitHub</a> and <a href="sandbox.html#egress-gateway">the egress gateway</a>. Source: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/connectors/github/github.go">connectors/github/github.go</a>.</p>
 
+<h3 id="disposable-work">Can a seat try work in a temporary environment?</h3>
+<p>Yes. From v0.6.0, <a href="task-workers.html">disposable task workers</a> run bounded tasks in fresh Pods using explicit text inputs. They share the parent's model and output budgets, have no sandbox credentials and get no platform tools by default. <a href="run-branches.html">Run alternatives</a> compare two to four independent approaches from the same handoff. Choosing one records a decision; it does not apply its files, merge a Git branch or cancel other runs.</p>
+
 <h3 id="repo-discovery">Where is the repository configured, and how do agents find it?</h3>
 <p>The repository is a target on a GitHub access grant, usually a team grant to engineering. A seat calls <code>connections.list</code> to see the connections, operations and targets it may use. Tell the engineers in their instructions to discover the granted repository that way and clone it into their workspace. Include that setup step in the role instructions, and check that the returned targets are the ones you intended.</p>
 <p>Leaving the representative without a GitHub grant, so the lead sends it pull request links, is a configuration choice, not a product rule. With sandbox git, what a seat can actually reach also depends on the credential's real GitHub scope (see <a href="#filesystem-github">the PAT caveat above</a>). Sources: <a href="https://github.com/darcys22/steadmesh/blob/v0.5.0/services/tools/seat.go">services/tools/seat.go</a>, <a href="tutorial.html#grants">Tutorial: grants</a>.</p>
@@ -208,6 +214,9 @@ kubectl --context &lt;kube-context&gt; -n &lt;organisation-namespace&gt; get age
 
 <section id="data-teardown" aria-labelledby="data-teardown-h">
 <h2 id="data-teardown-h">Data and teardown</h2>
+
+<h3 id="model-spend">Can I cap what my agents spend?</h3>
+<p>You can enforce cumulative <a href="model-budgets.html">output-token budgets</a> per organisation per UTC day, per seat per UTC day and per execution. Workers and run alternatives share their parent's counters. These limits do not cap input tokens, provider charges or infrastructure costs, so use a provider-side spending limit for a monetary ceiling. Missing or uncertain usage keeps the full reservation charged.</p>
 
 <h3 id="data">Where is the data stored, and can destroy remove Postgres?</h3>
 <p>Durable organisation records live in Postgres. Seat workspaces and native sessions live on each seat's persistent volume. On a local kind cluster, those volumes sit inside the kind node, which is a Docker container. That's Kubernetes running in Docker, not a separate Docker or SQLite mode of the product.</p>

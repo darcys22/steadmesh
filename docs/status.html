@@ -56,6 +56,9 @@
     <ul>
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
     </ul>
     <div class="nav-group">Reference</div>
@@ -77,7 +80,7 @@
 <main id="content">
 <h1>Status and limits</h1>
 <p class="lede">Test coverage, recorded runs and known limits to help you plan a Steadmesh deployment.</p>
-<p>The design defines 27 acceptance scenarios (A01–A27); A28, retiring a busy seat, was added with seat retirement, so 28 are tracked. This page shows where each one stands, as of release v0.5.0. The detailed record, with test names, is <a href="https://github.com/darcys22/steadmesh/blob/main/tests/acceptance/RESULTS.md"><code>tests/acceptance/RESULTS.md</code></a>.</p>
+<p>The design defines 27 acceptance scenarios (A01–A27); A28, retiring a busy seat, was added with seat retirement, so 28 are tracked. The acceptance table below preserves the recorded v0.5.0 results; it is not evidence of a new full end-to-end or live-services run for v0.6.0. The detailed record, with test names, is <a href="https://github.com/darcys22/steadmesh/blob/main/tests/acceptance/RESULTS.md"><code>tests/acceptance/RESULTS.md</code></a>.</p>
 
 <div class="callout warn"><p><strong>How to read the results.</strong> Tests use different environments. Check which one covers the behaviour you plan to rely on:</p>
 <ul>
@@ -85,6 +88,14 @@
 <li>Real model endpoints and real GitHub: the <a href="demo-results.html">completion demo</a> has a recorded real-services run (8 October 2026) in which a Claude Code lead, a Codex engineer and a Pi reviewer passed readiness through their own models, collaborated, and opened a pull request that reached review. Slack and Linear were the in-cluster fakes in that run, and its key-rotation step was skipped.</li>
 <li>Real Slack and Linear: no run of <code>make live</code> has been recorded yet. The scenarios marked <span class="tag pending">live</span> still need one.</li>
 </ul></div>
+
+<h2 id="new-features">v0.6.0 feature checks and boundaries</h2>
+<p>The new features have focused unit and integration suites, linked below. These supplement the recorded acceptance table; they do not imply that real-provider conformance, full-cluster or live-services tests were rerun for this release. Check the exact release commit's <a href="https://github.com/darcys22/steadmesh/actions">workflow results</a> for its validation status.</p>
+<ul>
+<li><a href="operations.html#operator-cli">Stable-key seat controls</a>: CLI unit tests cover explicit context, target identity, read-only inspection/watch and conflict-safe suspension updates in <a href="https://github.com/darcys22/steadmesh/tree/main/cmd/orgctl">cmd/orgctl</a>.</li>
+<li><a href="model-budgets.html">Model output budgets</a>: request/stream parsing and policy validation tests, plus PostgreSQL accounting and proxy tests in the <a href="https://github.com/darcys22/steadmesh/blob/main/.github/workflows/model-budgets.yml">model-budget workflow</a>. Limits do not bound input tokens or dollar cost.</li>
+<li><a href="task-workers.html">Disposable workers</a> and <a href="run-branches.html">run alternatives</a>: validation, sandbox rendering, permissions, shared budgets, idempotency, lifecycle and revision-checked selection tests in the <a href="https://github.com/darcys22/steadmesh/blob/main/.github/workflows/task-workers.yml">task-worker workflow</a>. Inputs and results are bounded text; choice records do not apply files.</li>
+</ul>
 
 <h2>Run the checks yourself</h2>
 <pre><code>make test               <span class="c"># unit tests</span>
@@ -129,7 +140,9 @@ make live               <span class="c"># real Slack, Linear and Claude (credent
 <h2>Known limitations of this release</h2>
 <ul>
 <li>Shared workspaces are validated but not yet mounted into seats.</li>
-<li>Artifact storage and backup/restore are not implemented.</li>
+<li>General artifact storage and backup/restore are not implemented. Disposable workers do retain bounded, explicitly requested UTF-8 result files in Postgres; this is not an arbitrary binary or workspace artifact store.</li>
+<li>Workers cannot clone the parent's session or working tree, delegate credentials, or spawn nested workers. Run selection records a choice only; applying results requires a separate reviewed workflow.</li>
+<li>Output budgets depend on provider-enforced output ceilings and truthful usage reporting. Unknown usage stays charged; input tokens, money and per-work-item budgets are not capped.</li>
 <li>Deleting an organisation waits for the platform to revoke its capabilities. If the platform is permanently unavailable, deletion is blocked, and there is no admin override yet.</li>
 <li>A readiness timeout on the first create taints the Terraform resource; untaint it after fixing the cause.</li>
 <li>The example foundation stage, and the quickstart platform stage when tokens are given as variables, keep credential values in their own Terraform state.</li>
