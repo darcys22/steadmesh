@@ -43,7 +43,7 @@
 <!-- shell:sidebar -->
 <aside class="sidebar">
   <nav id="docs-nav" aria-label="Documentation">
-  <div class="brand-sub">Documentation for v0.5.0</div>
+  <div class="brand-sub">Documentation for v0.6.0</div>
     <div class="nav-group">Start</div>
     <ul>
       <li><a href="docs/">Overview</a></li>
@@ -90,7 +90,7 @@
   required_providers {
     steadmesh = {
       source  = "darcys22/steadmesh"   <span class="c"># from the Terraform Registry</span>
-      version = "~> 0.1.0"
+      version = "~> 0.6.0"
     }
   }
 }
@@ -120,14 +120,14 @@ resource "steadmesh_organization" "this" {
 <h2>2. Describe how the team should work</h2>
 <p>Use instructions for the team's working habits: how to clarify a request, record decisions, ask for review and report a result. Instructions are versioned text, stored outside the organisation object and referenced by content digest, so changes can be reviewed as diffs. The <code>instruction-bundle</code> module publishes a markdown file as a ConfigMap and outputs a reference such as <code>configmap:steadmesh-culture/culture.md#sha256:9f2c…</code>.</p>
 <pre><code>module "culture" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.6.0"
   name        = "steadmesh-culture"
   namespace   = "steadmesh"
   source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.6.0"
   name        = "steadmesh-role-representative"
   namespace   = "steadmesh"
   source_path = "${path.module}/instructions/representative.md"
@@ -142,7 +142,7 @@ module "representative_role" {
 <pre><code>    harness_profiles = {
       primary = {
         adapter      = "fake"                   <span class="c"># or "claude-code", "codex", "pi"</span>
-        image_digest = "steadmesh/seat-fake:dev" <span class="c"># pin image@sha256:… in production</span>
+        image_digest = "ghcr.io/darcys22/steadmesh/seat-fake:0.6.0" <span class="c"># pin image@sha256:… in production</span>
       }
     }
 
