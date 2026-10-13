@@ -168,20 +168,26 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-nam
 
 <p>Agents can change the organisation only the way people do: through the infrastructure repository and its deployment workflow, and only if you grant them access to that repository. Seat credentials have no access to the Kubernetes API.</p>
 
-<h2>Administrative controls</h2>
-<p>Use these controls to pause or inspect a seat at the infrastructure level. To change the direction of its work, talk to your representative.</p>
-<pre><code><span class="c"># Stop a seat's execution without editing its prompt or workspace</span>
-kubectl --context kind-steadmesh -n steadmesh-example patch agentseat &lt;seat-name&gt; \
-  --type merge -p '{"spec":{"adminSuspended":true}}'
+<h2 id="operator-cli">Administrative controls</h2>
+<p>Use <code>orgctl</code> to inspect, watch, pause or resume a seat by its stable declaration key, without looking up its generated Kubernetes name. All four commands require an explicit <code>--namespace</code>, <code>--name</code> (the <code>AgentOrganization</code> object name) and <code>--seat</code>. As with the other commands, supply <code>--context</code> or <code>STEADMESH_KUBE_CONTEXT</code>; the ambient Kubernetes context is never used. To change the direction of a seat's work, talk to your representative.</p>
+<pre><code><span class="c"># Inspect the representative_sean seat in this organisation</span>
+bin/orgctl inspect --context kind-steadmesh --namespace steadmesh-example \
+  --name example-company --seat representative_sean
 
-<span class="c"># Resume it</span>
-kubectl --context kind-steadmesh -n steadmesh-example patch agentseat &lt;seat-name&gt; \
-  --type merge -p '{"spec":{"adminSuspended":false}}'
+<span class="c"># Print the initial state, then changes, until Ctrl-C</span>
+bin/orgctl watch --context kind-steadmesh --namespace steadmesh-example \
+  --name example-company --seat representative_sean --interval 2s
 
-<span class="c"># Inspect a seat</span>
-kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-name&gt; -o yaml
-kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-name&gt;-0</code></pre>
-<p>Seat object names look like <code>seat-representative-sean-bd156bfb</code>. Find them with <code>kubectl get agentseats -l steadmesh.io/seat=&lt;seat key&gt;</code>.</p>
+<span class="c"># Request an administrative pause, then clear that pause</span>
+bin/orgctl pause --context kind-steadmesh --namespace steadmesh-example \
+  --name example-company --seat representative_sean
+bin/orgctl resume --context kind-steadmesh --namespace steadmesh-example \
+  --name example-company --seat representative_sean</code></pre>
+<p>Use your organisation's object name and seat key from <code>orgctl status</code>. Inspection includes the durable seat ID, requested suspension, execution state, configured and adopted revisions, observed generation, readiness conditions, probe, workspace claim, checkpoint and retirement deadline when present. Add <code>--output json</code> for structured spec/status data. A JSON watch emits one object per change. Watch polls the selected object (every two seconds by default) and stops with an error if access is lost, the object disappears or its identity changes.</p>
+<p><code>pause</code> and <code>resume</code> change only <code>spec.adminSuspended</code> using your existing Kubernetes credentials and permissions. Repeating the same request is a no-op. A concurrent update is rejected rather than overwritten: inspect the seat and retry. These commands report the requested control value immediately; controller reconciliation is asynchronous, so use <code>watch</code> to see the resulting execution state and observed generation. A pause can interrupt execution; it does not retire the seat or delete its workspace. Resume clears administrative suspension only: a retired seat or another blocked dependency will not become runnable just because suspension was cleared.</p>
+<p>You need <code>get</code> access to <code>agentorganizations</code> and <code>agentseats</code>, plus <code>patch</code> access to <code>agentseats</code> for pause/resume. These commands do not read Secrets, mint credentials or require the optional console. Inspect/watch show Kubernetes spec/status, not live model activity, message bodies or logs.</p>
+<pre><code><span class="c"># For logs, use the Object and Backend shown by inspect</span>
+kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-object-name&gt;-0</code></pre>
 
 <h2>Retention and deletion</h2>
 <ul>
