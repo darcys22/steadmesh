@@ -58,6 +58,7 @@ func TestDemo(t *testing.T) {
 	defer d.write()
 	cfg := d.config()
 	d.env = append([]string{
+		`TF_VAR_extra_values={"credentials":{"ledgerSecretName":"steadmesh-test-ledger","ledgerSecretKey":"key"}}`,
 		"TF_VAR_slack_endpoint_ref=" + fakeSvc + ":8090",
 		"TF_VAR_linear_endpoint_ref=" + fakeSvc + ":8091",
 		"TF_VAR_seat_idle_timeout=10m",
@@ -65,6 +66,7 @@ func TestDemo(t *testing.T) {
 
 	d.run("bring up the platform and the mixed organisation", func(t *testing.T) string {
 		mustRun(t, d.env, "make", "-C", "examples", "apply-foundation")
+		configureCredentialLedger(t)
 		mustRun(t, nil, "kubectl", "--context", kctx, "apply", "-f", "tests/e2e/manifests/fakes.yaml")
 		mustRun(t, nil, "kubectl", "--context", kctx, "-n", systemNS, "rollout", "status", "deploy/steadmesh-fakes", "--timeout=180s")
 		// The port-forwards outlive this step: they belong to the demo.

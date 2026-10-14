@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -49,6 +50,7 @@ func envDuration(key string, def time.Duration) time.Duration {
 }
 
 type config struct {
+	credentialLedgerKey                                                     string
 	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace  string
 	vaultAddr, vaultRole, vaultMount, vaultJWT                              string
 	credentialRefresh, credentialGrace, credentialMaxStale, retirementGrace time.Duration
@@ -56,6 +58,8 @@ type config struct {
 
 func main() {
 	var c config
+	// Read the key only from the environment; never put a secret in process arguments.
+	c.credentialLedgerKey = os.Getenv("CREDENTIAL_LEDGER_KEY")
 	flag.StringVar(&c.databaseURL, "database-url", env("DATABASE_URL", ""), "Postgres connection string")
 	flag.StringVar(&c.listenAddr, "listen-addr", env("LISTEN_ADDR", ":8080"), "address for the API, /healthz, /readyz and /metrics")
 	flag.StringVar(&c.controllerUser, "controller-username", env("CONTROLLER_USERNAME", "system:serviceaccount:steadmesh-system:steadmesh-controller"),
@@ -96,6 +100,14 @@ func retirementGrace(d time.Duration) time.Duration {
 func run(c config, log *slog.Logger) error {
 	if c.databaseURL == "" {
 		return errors.New("DATABASE_URL is required")
+	}
+	var ledgerKey []byte
+	if c.credentialLedgerKey != "" {
+		var err error
+		ledgerKey, err = base64.StdEncoding.DecodeString(c.credentialLedgerKey)
+		if err != nil || len(ledgerKey) != 32 {
+			return errors.New("CREDENTIAL_LEDGER_KEY must be base64-encoded 32 bytes")
+		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -156,13 +168,14 @@ func run(c config, log *slog.Logger) error {
 			Tracker:       map[string]func(connectors.Config) (connectors.Tracker, error){"linear": linear.New, "github": github.New, "browser_session": browsersession.New},
 			Model:         map[string]func(connectors.Config) (connectors.Model, error){"anthropic": model.New, "openai": model.New, "model": model.New},
 		},
-		Secrets:            secretref.NewMulti(resolvers),
-		CredentialRefresh:  c.credentialRefresh,
-		CredentialGrace:    c.credentialGrace,
-		CredentialMaxStale: c.credentialMaxStale,
-		RetirementGrace:    retirementGrace(c.retirementGrace),
-		Registry:           reg,
-		Log:                log,
+		Secrets:             secretref.NewMulti(resolvers),
+		CredentialLedgerKey: ledgerKey,
+		CredentialRefresh:   c.credentialRefresh,
+		CredentialGrace:     c.credentialGrace,
+		CredentialMaxStale:  c.credentialMaxStale,
+		RetirementGrace:     retirementGrace(c.retirementGrace),
+		Registry:            reg,
+		Log:                 log,
 	})
 	if err := p.Start(ctx); err != nil {
 		return err

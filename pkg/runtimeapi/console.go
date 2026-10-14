@@ -58,10 +58,11 @@ type ConsoleSeatConfig struct {
 	RetiredAt *time.Time `json:"retired_at,omitempty"`
 }
 
-// ConsoleCapability is one resolved grant of a seat.
+// ConsoleCapability is one independent operation/target grant clause of a seat.
 type ConsoleCapability struct {
 	Resource   string   `json:"resource"`
 	Operations []string `json:"operations"`
+	Targets    []string `json:"targets,omitempty"`
 	Sources    []string `json:"sources,omitempty"`
 }
 

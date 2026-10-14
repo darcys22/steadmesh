@@ -10,20 +10,34 @@ import (
 	"github.com/darcys22/steadmesh/pkg/compile"
 )
 
-// Capability returns the seat's capability on resource (memory:<k>, connection:<k>).
+// Capability returns a resource's capability only when exactly one clause
+// exists. It returns false for an absent or ambiguous resource.
+//
+// Deprecated: use Allows or ConnectionAllowed for authorization; a resource
+// can have several independent capability clauses.
 func Capability(sm *compile.SeatManifest, resource string) (compile.Capability, bool) {
+	var found compile.Capability
+	ok := false
 	for _, c := range sm.Capabilities {
 		if c.Resource == resource {
-			return c, true
+			if ok {
+				return compile.Capability{}, false
+			}
+			found, ok = c, true
 		}
 	}
-	return compile.Capability{}, false
+	return found, ok
 }
 
-// Allows reports whether the seat holds op on resource.
+// Allows reports whether any clause grants op on resource. It does not
+// authorize a target; connection callers must use ConnectionAllowed.
 func Allows(sm *compile.SeatManifest, resource, op string) bool {
-	c, ok := Capability(sm, resource)
-	return ok && slices.Contains(c.Operations, op)
+	for _, c := range sm.Capabilities {
+		if c.Resource == resource && slices.Contains(c.Operations, op) {
+			return true
+		}
+	}
+	return false
 }
 
 // MemoryStores returns the keys of the memory stores on which the seat holds op.
@@ -34,32 +48,52 @@ func MemoryStores(sm *compile.SeatManifest, op string) []string {
 			out = append(out, key)
 		}
 	}
-	return out
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // HasMemory reports whether the seat holds op on any memory store.
 func HasMemory(sm *compile.SeatManifest, op string) bool { return len(MemoryStores(sm, op)) > 0 }
 
-// Connections returns the seat's connection capabilities keyed by connection.
-func Connections(sm *compile.SeatManifest) map[string]compile.Capability {
-	out := map[string]compile.Capability{}
+// Connections returns all connection clauses, preserving their operation/target
+// pairings. A connection can have more than one independently scoped clause.
+func Connections(sm *compile.SeatManifest) map[string][]compile.Capability {
+	out := map[string][]compile.Capability{}
 	for _, c := range sm.Capabilities {
 		if key, ok := strings.CutPrefix(c.Resource, "connection:"); ok {
-			out[key] = c
+			out[key] = append(out[key], c)
 		}
 	}
 	return out
 }
 
-// ConnectionAllowed checks a gateway call against the grant for the
-// connection: the operation must be granted, and when the grant restricts
-// targets the call's target must match one of them.
+// ConnectionAllowed checks a gateway call against independent grant clauses.
+// A single clause must grant both the operation and its target; fields from
+// different clauses must never be combined to authorize a call.
 func ConnectionAllowed(sm *compile.SeatManifest, connection, op, target string) bool {
-	c, ok := Capability(sm, "connection:"+connection)
-	if !ok || !slices.Contains(c.Operations, op) {
-		return false
+	for _, c := range sm.Capabilities {
+		if c.Resource == "connection:"+connection && slices.Contains(c.Operations, op) &&
+			(len(c.Targets) == 0 || MatchTarget(c.Targets, target)) {
+			return true
+		}
 	}
-	return len(c.Targets) == 0 || MatchTarget(c.Targets, target)
+	return false
+}
+
+// ConnectionTargetsAllowed authorizes all resources resolved by a connector.
+// An empty set denotes an account-wide or unresolved operation and requires an
+// unrestricted clause for that operation. No other operation's unrestricted
+// grant can be borrowed. Empty entries are invalid concrete targets.
+func ConnectionTargetsAllowed(sm *compile.SeatManifest, connection, op string, targets []string) bool {
+	if len(targets) == 0 {
+		return ConnectionAllowed(sm, connection, op, "")
+	}
+	for _, target := range targets {
+		if target == "" || !ConnectionAllowed(sm, connection, op, target) {
+			return false
+		}
+	}
+	return true
 }
 
 // MatchTarget matches target against grant targets. A target pattern is an

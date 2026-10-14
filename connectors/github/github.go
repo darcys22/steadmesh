@@ -62,6 +62,7 @@ type Adapter struct {
 
 var (
 	_ connectors.Tracker          = (*Adapter)(nil)
+	_ connectors.TargetResolver   = (*Adapter)(nil)
 	_ connectors.CredentialIssuer = (*Adapter)(nil)
 )
 
@@ -70,6 +71,9 @@ func New(cfg connectors.Config) (connectors.Tracker, error) { return newAdapter(
 
 func newAdapter(cfg connectors.Config) (*Adapter, error) {
 	a := &Adapter{base: strings.TrimSuffix(cfg.Endpoint, "/"), client: httpx.Client(cfg.HTTP), now: time.Now}
+	// Repository redirects can change an already-authorized owner/name. Keep
+	// them visible to the caller instead of following them with our credential.
+	a.client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	if a.base == "" {
 		a.base = DefaultEndpoint
 	}
@@ -211,7 +215,7 @@ func (a *Adapter) mint(ctx context.Context, body map[string]any) (connectors.Cre
 	if err := a.do(ctx, http.MethodPost, "/app/installations/"+url.PathEscape(a.instID)+"/access_tokens", jwt, body, &out); err != nil {
 		return connectors.Credential{}, err
 	}
-	return connectors.Credential{Username: "x-access-token", Token: out.Token, ExpiresAt: out.ExpiresAt, Revocable: true}, nil
+	return connectors.Credential{Username: "x-access-token", Token: out.Token, ExpiresAt: out.ExpiresAt, Revocable: true, Revocation: &connectors.CredentialRevocation{Kind: "github_installation", Endpoint: a.base}}, nil
 }
 
 // Verify checks the credential: GET /user for a PAT; for an App, GET /app
@@ -242,23 +246,61 @@ func retryableProbe(err error) error {
 }
 
 // IssueCredential returns a credential for the sandbox. With an App it is an
-// installation token limited to the repositories and permissions; with a PAT
-// it is the PAT.
+// installation token limited to the repositories and permissions, after
+// binding every repository owner to the installation's account. A PAT cannot
+// be scoped here and is returned unchanged.
 func (a *Adapter) IssueCredential(ctx context.Context, scope connectors.CredentialScope) (connectors.Credential, error) {
 	if !a.IsApp() {
 		return connectors.Credential{Username: "x-access-token", Token: a.pat}, nil
 	}
+	if len(scope.Repos) == 0 || len(scope.Permissions) == 0 {
+		return connectors.Credential{}, fmt.Errorf("%w: a GitHub sandbox credential requires repositories and permissions", connectors.ErrPermanent)
+	}
 	var names []string
 	for _, r := range scope.Repos {
+		if _, err := repoPath(r); err != nil {
+			return connectors.Credential{}, err
+		}
 		_, name, _ := strings.Cut(r, "/")
 		names = append(names, name)
 	}
 	perms := map[string]string{}
 	for k, v := range scope.Permissions {
+		switch k {
+		case "contents", "pull_requests", "issues", "metadata":
+		default:
+			return connectors.Credential{}, fmt.Errorf("%w: unsupported GitHub sandbox permission %q", connectors.ErrPermanent, k)
+		}
+		if (v != "read" && v != "write") || (k == "metadata" && v != "read") {
+			return connectors.Credential{}, fmt.Errorf("%w: invalid GitHub sandbox permission %q level %q", connectors.ErrPermanent, k, v)
+		}
 		perms[k] = v
 	}
 	if _, ok := perms["metadata"]; !ok {
 		perms["metadata"] = "read"
+	}
+	jwt, err := a.appJWT()
+	if err != nil {
+		return connectors.Credential{}, fmt.Errorf("%w: sign app token: %v", connectors.ErrPermanent, err)
+	}
+	var installation struct {
+		Account struct {
+			Login string `json:"login"`
+		} `json:"account"`
+	}
+	if err := a.do(ctx, http.MethodGet, "/app/installations/"+url.PathEscape(a.instID), jwt, nil, &installation); err != nil {
+		return connectors.Credential{}, retryableProbe(err)
+	}
+	if installation.Account.Login == "" {
+		return connectors.Credential{}, fmt.Errorf("%w: GitHub installation account is missing", connectors.ErrPermanent)
+	}
+	// GitHub accepts repository names relative to this installation, so it is
+	// unsafe to strip owner/name to name until every owner has been verified.
+	for _, r := range scope.Repos {
+		owner, _, _ := strings.Cut(r, "/")
+		if !strings.EqualFold(owner, installation.Account.Login) {
+			return connectors.Credential{}, fmt.Errorf("%w: repository %q is outside GitHub installation account %q", connectors.ErrUnauthorized, r, installation.Account.Login)
+		}
 	}
 	return a.mint(ctx, map[string]any{"repositories": names, "permissions": perms})
 }
@@ -300,18 +342,65 @@ func marker(id string) string { return "<!-- " + MarkerPrefix + id + " -->" }
 
 func repoPath(repo string) (string, error) {
 	owner, name, ok := strings.Cut(repo, "/")
-	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+	if !ok || !repoComponent(owner) || !repoComponent(name) {
 		return "", fmt.Errorf("%w: repo must be owner/name", connectors.ErrPermanent)
 	}
 	return "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name), nil
 }
 
-func (a *Adapter) Invoke(ctx context.Context, op string, raw json.RawMessage, operationID string) (connectors.Result, error) {
+func repoComponent(v string) bool {
+	if v == "" || v == "." || v == ".." {
+		return false
+	}
+	for _, c := range v {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' || c == '.') {
+			return false
+		}
+	}
+	return true
+}
+
+func parseParams(op string, raw json.RawMessage) (params, string, error) {
 	var p params
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return connectors.Result{}, fmt.Errorf("%w: params: %v", connectors.ErrPermanent, err)
+	if err := connectors.DecodeParams(raw, &p); err != nil {
+		return p, "", err
 	}
 	rp, err := repoPath(p.Repo)
+	if err != nil {
+		return p, "", err
+	}
+	switch op {
+	case "repo.read", "pull_request.read":
+	case "pull_request.create":
+		if p.Title == "" || p.Head == "" || p.Base == "" {
+			return p, "", fmt.Errorf("%w: pull_request.create needs title, head and base", connectors.ErrPermanent)
+		}
+	case "issue.read":
+		if p.Number <= 0 {
+			return p, "", fmt.Errorf("%w: issue.read needs number", connectors.ErrPermanent)
+		}
+	case "issue.comment":
+		if p.Number <= 0 || p.Body == "" {
+			return p, "", fmt.Errorf("%w: issue.comment needs number and body", connectors.ErrPermanent)
+		}
+	default:
+		return p, "", fmt.Errorf("%w: unknown operation %q", connectors.ErrPermanent, op)
+	}
+	return p, rp, nil
+}
+
+// OperationTargets authorizes the repository that Invoke actually uses. There
+// is deliberately no caller-supplied authorization-only target parameter.
+func (a *Adapter) OperationTargets(op string, raw json.RawMessage) ([]string, error) {
+	p, _, err := parseParams(op, raw)
+	if err != nil {
+		return nil, err
+	}
+	return []string{p.Repo}, nil
+}
+
+func (a *Adapter) Invoke(ctx context.Context, op string, raw json.RawMessage, operationID string) (connectors.Result, error) {
+	p, rp, err := parseParams(op, raw)
 	if err != nil {
 		return connectors.Result{}, err
 	}
@@ -330,22 +419,13 @@ func (a *Adapter) Invoke(ctx context.Context, op string, raw json.RawMessage, op
 		err = a.do(ctx, http.MethodGet, rp+"/pulls?"+q.Encode(), "", nil, &list)
 		return listResult(list, err, "number", "title", "state", "html_url")
 	case "pull_request.create":
-		if p.Title == "" || p.Head == "" || p.Base == "" {
-			return connectors.Result{}, fmt.Errorf("%w: pull_request.create needs title, head and base", connectors.ErrPermanent)
-		}
 		body := strings.TrimSpace(p.Body+"\n\n") + "\n\n" + marker(operationID)
 		err = a.do(ctx, http.MethodPost, rp+"/pulls", "", map[string]any{"title": p.Title, "head": p.Head, "base": p.Base, "body": strings.TrimSpace(body)}, &out)
 		return result(out, "number", err, "number", "html_url", "state")
 	case "issue.read":
-		if p.Number <= 0 {
-			return connectors.Result{}, fmt.Errorf("%w: issue.read needs number", connectors.ErrPermanent)
-		}
 		err = a.do(ctx, http.MethodGet, rp+"/issues/"+strconv.Itoa(p.Number), "", nil, &out)
 		return result(out, "number", err, "number", "title", "state", "html_url", "body")
 	case "issue.comment":
-		if p.Number <= 0 || p.Body == "" {
-			return connectors.Result{}, fmt.Errorf("%w: issue.comment needs number and body", connectors.ErrPermanent)
-		}
 		err = a.do(ctx, http.MethodPost, rp+"/issues/"+strconv.Itoa(p.Number)+"/comments", "", map[string]any{"body": p.Body + "\n\n" + marker(operationID)}, &out)
 		return result(out, "id", err, "id", "html_url")
 	}
@@ -354,11 +434,7 @@ func (a *Adapter) Invoke(ctx context.Context, op string, raw json.RawMessage, op
 
 // FindByOperation looks for a pull request or comment carrying the marker.
 func (a *Adapter) FindByOperation(ctx context.Context, op string, raw json.RawMessage, operationID string) (*connectors.Result, error) {
-	var p params
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, fmt.Errorf("%w: params: %v", connectors.ErrPermanent, err)
-	}
-	rp, err := repoPath(p.Repo)
+	p, rp, err := parseParams(op, raw)
 	if err != nil {
 		return nil, err
 	}

@@ -139,3 +139,36 @@ func TestPullRequestCreateAndReadBack(t *testing.T) {
 		t.Fatal("ReadOnly")
 	}
 }
+
+func TestTargetAndExecutionParsingAgree(t *testing.T) {
+	a := &Adapter{}
+	for _, raw := range []string{
+		`{"repo":"acme/private","target":"acme/public"}`,
+		`{"repo":"acme/private","project_id":"acme/public"}`,
+		`{"repo":"acme/public","Repo":"acme/private"}`,
+		`{"repo":"acme/public","repo":"acme/private"}`,
+		`{"repo":null}`, `null`, `[]`, `{"repo":"acme/public"} {}`,
+		`{"repo":"acme/.."}`, `{"repo":"../private"}`, `{"repo":"acme/a/b"}`,
+		`{"repo":"acme/%2e%2e"}`, `{"repo":"acme/repo?x=y"}`,
+	} {
+		t.Run(raw, func(t *testing.T) {
+			p := json.RawMessage(raw)
+			if _, err := a.OperationTargets("repo.read", p); !errors.Is(err, connectors.ErrPermanent) {
+				t.Fatalf("authorization accepted: %v", err)
+			}
+			if _, err := a.Invoke(context.Background(), "repo.read", p, "op"); !errors.Is(err, connectors.ErrPermanent) {
+				t.Fatalf("execution accepted: %v", err)
+			}
+			if _, err := a.FindByOperation(context.Background(), "pull_request.create", p, "op"); !errors.Is(err, connectors.ErrPermanent) {
+				t.Fatalf("readback accepted: %v", err)
+			}
+		})
+	}
+	for _, op := range []string{"repo.read", "pull_request.read", "pull_request.create", "issue.read", "issue.comment"} {
+		raw := json.RawMessage(`{"repo":"acme/public","number":1,"title":"New","head":"branch","base":"main","body":"Hi"}`)
+		got, err := a.OperationTargets(op, raw)
+		if err != nil || len(got) != 1 || got[0] != "acme/public" {
+			t.Fatalf("%s targets=%v err=%v", op, got, err)
+		}
+	}
+}

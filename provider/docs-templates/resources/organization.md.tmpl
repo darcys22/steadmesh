@@ -23,6 +23,12 @@ With `wait_for_ready = true` (the default), create and update return only once t
 
 A failed create leaves the resource tainted, so the next plan replaces it. After fixing the reported condition, untaint it rather than recreating the organisation: `terraform untaint steadmesh_organization.<name>`.
 
+## Permission boundaries
+
+Each grant preserves its operations and target restrictions as an independent clause. The adapter validates typed operation parameters and derives the actual execution targets; every target must be allowed. Account-wide searches require an unrestricted grant for that operation. Unknown or ambiguous fields are rejected.
+
+GitHub platform-delivery grants never broaden sandbox tokens. A single sandbox connection requires uniform effective permissions across its repositories; split differing scopes into separate connections or use platform delivery. Sandbox credential delivery also requires the platform's durable credential ledger key. See [sandbox access](https://steadmesh.com/sandbox.html#github) and the [permission-hardening rollout](https://steadmesh.com/operations.html#permission-upgrade) before upgrading existing organisations.
+
 ## Data retention
 
 `data_retention` controls what happens when the resource is destroyed. With `retain` (the default), the agents are stopped and their access revoked, but workspace volumes and platform records (conversations, memory) are kept; a seat declared later with `adopt_from` can take over a retired seat's data. With `delete`, the volumes and records are deleted too. External resources such as Slack workspaces and Linear projects are never deleted.

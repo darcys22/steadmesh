@@ -16,6 +16,7 @@ package access
 
 import (
 	"fmt"
+	"maps"
 	"net"
 	"slices"
 	"sort"
@@ -50,7 +51,9 @@ type NetworkRule struct {
 	Source   string  `json:"source"`
 }
 
-// GitHubGrant is repository access through a github connection.
+// GitHubGrant is one repository/permission/delivery clause on a github
+// connection. Multiple grants are alternatives; their fields must not be
+// independently unioned, which would grant a cross product of privileges.
 type GitHubGrant struct {
 	Connection  string            `json:"connection"`
 	Repos       []string          `json:"repos,omitempty"`
@@ -87,11 +90,21 @@ func (a *SeatAccess) PodPart() *SeatAccess {
 		return nil
 	}
 	p := &SeatAccess{Binaries: a.Binaries, Network: a.Network, Browser: a.Browser}
+	// Multiple live grant clauses need only one credential-helper wiring.
+	seen := map[struct{ connection, host string }]bool{}
 	for _, g := range a.GitHub {
-		if g.Delivery == DeliverySandbox {
+		key := struct{ connection, host string }{g.Connection, g.Host}
+		if g.Delivery == DeliverySandbox && !seen[key] {
+			seen[key] = true
 			p.GitHub = append(p.GitHub, GitHubGrant{Connection: g.Connection, Delivery: g.Delivery, Host: g.Host})
 		}
 	}
+	sort.Slice(p.GitHub, func(i, j int) bool {
+		if p.GitHub[i].Connection != p.GitHub[j].Connection {
+			return p.GitHub[i].Connection < p.GitHub[j].Connection
+		}
+		return p.GitHub[i].Host < p.GitHub[j].Host
+	})
 	if a.UsesGateway() {
 		// The proxy settings depend only on whether the gateway is used.
 		p.Egress = []EgressRule{{Host: "*", Source: "gateway"}}
@@ -128,17 +141,85 @@ func MatchHost(pattern, host string) bool {
 	return pattern == host
 }
 
-// GitHubFor returns the seat's grant on a github connection.
+// GitHubFor returns the grant on connection only when exactly one clause
+// exists. It returns nil for an absent or ambiguous connection.
+//
+// Deprecated: inspect the individual GitHub clauses for platform access, or
+// use GitHubSandboxGrant for credential delivery.
 func (a *SeatAccess) GitHubFor(connection string) *GitHubGrant {
 	if a == nil {
 		return nil
 	}
+	var found *GitHubGrant
 	for i := range a.GitHub {
 		if a.GitHub[i].Connection == connection {
-			return &a.GitHub[i]
+			if found != nil {
+				return nil
+			}
+			found = &a.GitHub[i]
 		}
 	}
-	return nil
+	return found
+}
+
+// GitHubSandboxGrant returns the exact grant expressible by one sandbox token
+// on connection. Platform-only clauses never contribute. GitHub tokens apply
+// one permission map to every selected repository: if the effective permissions
+// differ between repositories, issuance must fail rather than widen access or
+// silently omit part of the grant. A nil grant means no sandbox delivery.
+func (a *SeatAccess) GitHubSandboxGrant(connection string) (*GitHubGrant, error) {
+	if a == nil {
+		return nil, nil
+	}
+	var out *GitHubGrant
+	byRepo := map[string]map[string]string{}
+	var sources []string
+	for _, g := range a.GitHub {
+		if g.Connection != connection || g.Delivery != DeliverySandbox {
+			continue
+		}
+		if len(g.Repos) == 0 || len(g.Permissions) == 0 {
+			return nil, fmt.Errorf("github sandbox grant on %s must name repositories and permissions", connection)
+		}
+		for k, v := range g.Permissions {
+			if !slices.Contains(GitHubPermissions, k) || (v != "read" && v != "write") {
+				return nil, fmt.Errorf("invalid github sandbox permission %q on %s", k, connection)
+			}
+		}
+		if out == nil {
+			out = &GitHubGrant{Connection: connection, Delivery: DeliverySandbox, Host: g.Host}
+		} else if out.Host != g.Host {
+			return nil, fmt.Errorf("github sandbox grants on %s have different hosts", connection)
+		}
+		sources = append(sources, g.Source)
+		for _, repo := range g.Repos {
+			if !repoRe.MatchString(repo) {
+				return nil, fmt.Errorf("invalid github sandbox repository %q on %s", repo, connection)
+			}
+			perms := byRepo[repo]
+			if perms == nil {
+				perms = map[string]string{}
+				byRepo[repo] = perms
+			}
+			for k, v := range g.Permissions {
+				if v == "write" || perms[k] == "" {
+					perms[k] = v
+				}
+			}
+		}
+	}
+	if out == nil {
+		return nil, nil
+	}
+	out.Repos = slices.Sorted(maps.Keys(byRepo))
+	out.Permissions = maps.Clone(byRepo[out.Repos[0]])
+	for _, repo := range out.Repos[1:] {
+		if !maps.Equal(out.Permissions, byRepo[repo]) {
+			return nil, fmt.Errorf("github sandbox grants on %s have different repository permissions and cannot be represented by one credential; use separate connections or platform delivery", connection)
+		}
+	}
+	out.Source = strings.Join(sortedUnique(sources), ",")
+	return out, nil
 }
 
 // FieldError is a validation error at a spec path.
@@ -202,40 +283,22 @@ func (a *SeatAccess) normalize() {
 	a.Binaries = sortedUnique(a.Binaries)
 	sort.SliceStable(a.Egress, func(i, j int) bool { return a.Egress[i].Host < a.Egress[j].Host })
 	sort.SliceStable(a.Network, func(i, j int) bool { return a.Network[i].CIDR < a.Network[j].CIDR })
-	// One grant per connection: repositories and permissions combine, the
-	// stronger permission and delivery win.
-	merged := map[string]*GitHubGrant{}
-	var order []string
-	for _, g := range a.GitHub {
-		m, ok := merged[g.Connection]
-		if !ok {
-			c := g
-			c.Permissions = map[string]string{}
-			for k, v := range g.Permissions {
-				c.Permissions[k] = v
-			}
-			merged[g.Connection] = &c
-			order = append(order, g.Connection)
-			continue
-		}
-		m.Repos = append(m.Repos, g.Repos...)
-		for k, v := range g.Permissions {
-			if v == "write" || m.Permissions[k] == "" {
-				m.Permissions[k] = v
-			}
-		}
-		if g.Delivery == DeliverySandbox {
-			m.Delivery = DeliverySandbox
-		}
-		m.Source += "," + g.Source
+	// Preserve the repo/permission/delivery relationship of every clause.
+	// Profile names are unique and resolved in sorted order; Source breaks
+	// ties between grants on the same connection deterministically.
+	for i := range a.GitHub {
+		a.GitHub[i].Repos = sortedUnique(a.GitHub[i].Repos)
 	}
-	sort.Strings(order)
-	a.GitHub = nil
-	for _, c := range order {
-		g := merged[c]
-		g.Repos = sortedUnique(g.Repos)
-		a.GitHub = append(a.GitHub, *g)
-	}
+	sort.Slice(a.GitHub, func(i, j int) bool {
+		x, y := a.GitHub[i], a.GitHub[j]
+		if x.Connection != y.Connection {
+			return x.Connection < y.Connection
+		}
+		if x.Delivery != y.Delivery {
+			return x.Delivery < y.Delivery
+		}
+		return x.Source < y.Source
+	})
 }
 
 func sortedUnique(in []string) []string {

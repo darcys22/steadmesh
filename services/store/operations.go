@@ -50,8 +50,9 @@ func scanOperation(row pgx.Row) (*runtimeapi.Operation, error) {
 }
 
 // BeginOperation records a pending operation before its side effect, in a
-// fenced transaction. If the idempotency key was already used, the existing
-// operation is returned with created=false and must not be re-executed.
+// fenced transaction. A reused idempotency key returns the existing operation
+// with created=false only for the same stable seat, operation, resolved target
+// and request hash. Other reuse is a conflict and must not disclose the record.
 func (s *Store) BeginOperation(ctx context.Context, f Fence, in NewOperation) (op *runtimeapi.Operation, created bool, err error) {
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
 		if err := checkFence(ctx, tx, f); err != nil {
@@ -69,10 +70,17 @@ func (s *Store) BeginOperation(ctx context.Context, f Fence, in NewOperation) (o
 		}
 		created = tag.RowsAffected() == 1
 		op, err = scanOperation(tx.QueryRow(ctx, `SELECT `+operationColumns+` FROM connector_operations
-			WHERE organization_id = $1 AND connection = $2 AND idempotency_key = $3`,
-			in.OrganizationID, in.Connection, in.IdempotencyKey))
+			WHERE organization_id = $1 AND connection = $2 AND idempotency_key = $3
+			  AND seat_id = $4 AND operation = $5 AND target = $6 AND request_hash = $7`,
+			in.OrganizationID, in.Connection, in.IdempotencyKey, in.SeatID, in.Operation, in.Target, in.RequestHash))
+		if errors.Is(err, ErrNotFound) {
+			return ErrConflict
+		}
 		return err
 	})
+	if err != nil {
+		return nil, false, err
+	}
 	return op, created, err
 }
 

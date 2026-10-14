@@ -61,9 +61,10 @@
 <section>
   <h2>Grants</h2>
   {{if $d.Config.Capabilities}}
+  <p class="meta">Each row is an independent grant. Its operations apply only to the targets in that row.</p>
   <div class="table-wrap"><table>
-    <thead><tr><th>Resource</th><th>Operations</th><th>Granted by</th></tr></thead>
-    <tbody>{{range $d.Config.Capabilities}}<tr><td><code>{{.Resource}}</code></td><td>{{join .Operations ", "}}</td><td class="muted">{{join .Sources ", "}}</td></tr>{{end}}</tbody>
+    <thead><tr><th>Resource</th><th>Operations</th><th>Targets</th><th>Granted by</th></tr></thead>
+    <tbody>{{range $d.Config.Capabilities}}<tr><td><code>{{.Resource}}</code></td><td>{{join .Operations ", "}}</td><td>{{if .Targets}}{{join .Targets ", "}}{{else}}All targets{{end}}</td><td class="muted">{{join .Sources ", "}}</td></tr>{{end}}</tbody>
   </table></div>
   {{else}}<p class="empty">No grants.</p>{{end}}
   {{if $d.Config.SendTo}}<p class="meta">May message: {{join $d.Config.SendTo ", "}}</p>{{end}}

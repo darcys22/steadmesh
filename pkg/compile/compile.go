@@ -74,7 +74,8 @@ type InstructionSource struct {
 	Order int    `json:"order"`
 }
 
-// Capability is one entry in a seat's resolved capability manifest (§5.2).
+// Capability is one OR clause in a seat's resolved capability manifest (§5.2).
+// Operations and targets belong together; a resource may have several clauses.
 type Capability struct {
 	Resource   string   `json:"resource"` // memory:<k>, connection:<k>, workspace:<k>
 	Operations []string `json:"operations"`
@@ -931,19 +932,28 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 }
 
 func (sm *SeatManifest) addCapability(res string, ops, targets []string, source string) {
+	targets = sortedUnique(targets)
 	for i := range sm.Capabilities {
-		if sm.Capabilities[i].Resource == res {
-			c := &sm.Capabilities[i]
+		c := &sm.Capabilities[i]
+		// Combining operations is safe only when the target sets are equal.
+		// In particular, an unrestricted clause must stay unrestricted only
+		// for its own operations, not those of a scoped clause.
+		if c.Resource == res && slices.Equal(c.Targets, targets) {
 			c.Operations = sortedUnique(append(c.Operations, ops...))
-			c.Targets = sortedUnique(append(c.Targets, targets...))
 			c.Sources = sortedUnique(append(c.Sources, source))
 			return
 		}
 	}
 	sm.Capabilities = append(sm.Capabilities, Capability{
-		Resource: res, Operations: sortedUnique(ops), Targets: sortedUnique(targets), Sources: []string{source},
+		Resource: res, Operations: sortedUnique(ops), Targets: targets, Sources: []string{source},
 	})
-	sort.Slice(sm.Capabilities, func(i, j int) bool { return sm.Capabilities[i].Resource < sm.Capabilities[j].Resource })
+	sort.Slice(sm.Capabilities, func(i, j int) bool {
+		x, y := sm.Capabilities[i], sm.Capabilities[j]
+		if x.Resource != y.Resource {
+			return x.Resource < y.Resource
+		}
+		return slices.Compare(x.Targets, y.Targets) < 0
+	})
 }
 
 // expandSubject returns the seat keys denoted by seat:<k> or team:<k>.

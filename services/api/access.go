@@ -26,8 +26,8 @@ func (s *server) access(w http.ResponseWriter, r *http.Request, q *seatReq) {
 		if a.Browser != nil {
 			out.BrowserSession = a.Browser.SessionConnection
 		}
-		for _, g := range a.GitHub {
-			if g.Delivery == access.DeliverySandbox {
+		if pod := a.PodPart(); pod != nil {
+			for _, g := range pod.GitHub {
 				out.GitHub = append(out.GitHub, runtimeapi.GitHubSandbox{Connection: g.Connection, Host: g.Host})
 			}
 		}
@@ -46,7 +46,7 @@ func (s *server) credential(w http.ResponseWriter, r *http.Request, q *seatReq) 
 		writeError(w, http.StatusServiceUnavailable, "unavailable", "credential delivery is not configured")
 		return
 	}
-	c, err := s.Credentials.Issue(r.Context(), q.seat.OrganizationID, q.seat.Key, q.seat.Manifest.Access, conn)
+	c, err := s.Credentials.Issue(r.Context(), q.seat.OrganizationID, q.seat.ID, q.seat.Manifest.Access, conn)
 	if errors.Is(err, credentials.ErrForbidden) {
 		s.accessEvent(r, q, runtimeapi.EventCredentialDenied, map[string]any{"connection": conn, "reason": err.Error()})
 		writeError(w, http.StatusForbidden, "forbidden", err.Error())
@@ -61,7 +61,7 @@ func (s *server) credential(w http.ResponseWriter, r *http.Request, q *seatReq) 
 	if !c.ExpiresAt.IsZero() {
 		data["expires_at"] = c.ExpiresAt
 	}
-	if g := q.seat.Manifest.Access.GitHubFor(conn); g != nil {
+	if g, err := q.seat.Manifest.Access.GitHubSandboxGrant(conn); err == nil && g != nil {
 		data["repos"], data["permissions"] = g.Repos, g.Permissions
 	}
 	s.accessEvent(r, q, runtimeapi.EventCredentialIssued, data)
@@ -102,7 +102,7 @@ func (s *server) reconcileCredentials(r *http.Request, orgID string, m *compile.
 	}
 	for _, rv := range s.Credentials.Reconcile(context.WithoutCancel(r.Context()), orgID, seats) {
 		if rv.Err != nil {
-			s.Log.Warn("credential not revoked; it expires on its own", "seat", rv.Seat, "connection", rv.Connection, "err", rv.Err)
+			s.Log.Warn("credential revocation remains pending and will be retried", "seat", rv.Seat, "connection", rv.Connection, "err", rv.Err)
 		}
 	}
 }

@@ -47,6 +47,7 @@ func TestE2E(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := []string{
+		`TF_VAR_extra_values={"credentials":{"ledgerSecretName":"steadmesh-test-ledger","ledgerSecretKey":"key"}}`,
 		"TF_VAR_slack_endpoint_ref=" + fakeSvc + ":8090",
 		"TF_VAR_linear_endpoint_ref=" + fakeSvc + ":8091",
 		"TF_VAR_seat_idle_timeout=1m",
@@ -71,6 +72,7 @@ func TestE2E(t *testing.T) {
 	step(t, "apply foundation", func(t *testing.T) {
 		mustRun(t, env, "make", "-C", "examples", "apply-foundation")
 		configureVault(t)
+		configureCredentialLedger(t)
 		mustRun(t, nil, "kubectl", "--context", kctx, "apply", "-f", "tests/e2e/manifests/fakes.yaml")
 		mustRun(t, nil, "kubectl", "--context", kctx, "-n", systemNS, "rollout", "status", "deploy/steadmesh-fakes", "--timeout=180s")
 	})

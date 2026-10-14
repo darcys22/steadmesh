@@ -71,7 +71,7 @@ func (l *Loop) Tick(ctx context.Context) {
 			continue
 		}
 		if l.Credentials != nil {
-			l.Credentials.RevokeSeat(context.WithoutCancel(ctx), r.OrganizationID, r.Key)
+			l.Credentials.RevokeSeat(context.WithoutCancel(ctx), r.OrganizationID, r.SeatID)
 		}
 		outcome := "finished"
 		if r.Overdue {

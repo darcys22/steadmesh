@@ -87,12 +87,21 @@ type CredentialScope struct {
 	Permissions map[string]string
 }
 
+// CredentialRevocation is a provider-specific, non-secret revocation route.
+// It is encrypted with the issued token so removal or rotation of the source
+// connection does not prevent revocation. Never send it to the sandbox.
+type CredentialRevocation struct {
+	Kind     string `json:"kind"`
+	Endpoint string `json:"endpoint"`
+}
+
 // Credential is a credential delivered to a sandbox.
 type Credential struct {
-	Username  string
-	Token     string
-	ExpiresAt time.Time
-	Revocable bool
+	Username   string
+	Token      string
+	ExpiresAt  time.Time
+	Revocable  bool
+	Revocation *CredentialRevocation
 	// Data is a non-token credential, e.g. a browser storage state.
 	Data json.RawMessage
 }
@@ -170,6 +179,16 @@ type Tracker interface {
 	FindByOperation(ctx context.Context, operation string, params json.RawMessage, operationID string) (*Result, error)
 	// ReadOnly reports whether an operation has no side effects.
 	ReadOnly(operation string) bool
+}
+
+// TargetResolver binds authorization to the resources an operation actually
+// uses. Implementations must use the same typed parameter parsing and defaults
+// as Invoke, without performing I/O. Every returned target must be authorized;
+// an empty result means the operation is not bounded to concrete resources
+// (for example, an account-wide search). The gateway rejects target-restricted
+// calls when the adapter does not implement this interface or returns no targets.
+type TargetResolver interface {
+	OperationTargets(operation string, params json.RawMessage) ([]string, error)
 }
 
 // Model is a model-serving connection. The platform proxies inference so the

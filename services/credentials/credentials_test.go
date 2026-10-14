@@ -13,9 +13,12 @@ import (
 )
 
 type issuer struct {
-	revocable bool
-	n         int
-	revoked   []string
+	revocable  bool
+	n          int
+	revoked    []string
+	revokeErr  error
+	afterIssue func()
+	revocation *connectors.CredentialRevocation
 }
 
 func (i *issuer) Verify(context.Context) error { return nil }
@@ -32,11 +35,15 @@ func (i *issuer) IssueCredential(_ context.Context, s connectors.CredentialScope
 	if i.revocable {
 		c.ExpiresAt = time.Now().Add(time.Hour)
 	}
+	c.Revocation = i.revocation
+	if i.afterIssue != nil {
+		i.afterIssue()
+	}
 	return c, nil
 }
 func (i *issuer) RevokeCredential(_ context.Context, tok string) error {
 	i.revoked = append(i.revoked, tok)
-	return nil
+	return i.revokeErr
 }
 
 type conns map[string]connectors.Tracker
@@ -54,18 +61,19 @@ func grant(delivery string) *access.SeatAccess {
 
 func TestIssueOnlyWhenGranted(t *testing.T) {
 	gh := &issuer{revocable: true}
-	r := &Registry{Connections: conns{"github": gh}}
+	r, l := testRegistry(gh)
 	ctx := context.Background()
-	c, err := r.Issue(ctx, "org", "engineer", grant(access.DeliverySandbox), "github")
+	_ = l
+	c, err := r.Issue(ctx, "org", "engineer-identity", grant(access.DeliverySandbox), "github")
 	if err != nil || c.Token != "tok-1-[acme/a]" || !c.Revocable {
 		t.Fatalf("issue %+v %v", c, err)
 	}
 	for name, a := range map[string]*access.SeatAccess{"platform delivery": grant(access.DeliveryPlatform), "no access": nil} {
-		if _, err := r.Issue(ctx, "org", "engineer", a, "github"); !errors.Is(err, ErrForbidden) {
+		if _, err := r.Issue(ctx, "org", "engineer-identity", a, "github"); !errors.Is(err, ErrForbidden) {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
-	if _, err := r.Issue(ctx, "org", "engineer", grant(access.DeliverySandbox), "other"); !errors.Is(err, ErrForbidden) {
+	if _, err := r.Issue(ctx, "org", "engineer-identity", grant(access.DeliverySandbox), "other"); !errors.Is(err, ErrForbidden) {
 		t.Errorf("other connection: %v", err)
 	}
 	if r.Outstanding("org", "engineer") != 1 {
@@ -75,14 +83,15 @@ func TestIssueOnlyWhenGranted(t *testing.T) {
 
 func TestReconcileRevokesLostGrants(t *testing.T) {
 	gh := &issuer{revocable: true}
-	r := &Registry{Connections: conns{"github": gh}}
+	r, l := testRegistry(gh)
 	ctx := context.Background()
 	for _, seat := range []string{"engineer", "reviewer"} {
-		if _, err := r.Issue(ctx, "org", seat, grant(access.DeliverySandbox), "github"); err != nil {
+		if _, err := r.Issue(ctx, "org", seat+"-identity", grant(access.DeliverySandbox), "github"); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// The reviewer keeps its grant; the engineer loses it; another org is untouched.
+	l.seats["engineer"].Manifest.Access = nil
 	out := r.Reconcile(ctx, "org", map[string]*access.SeatAccess{"reviewer": grant(access.DeliverySandbox), "engineer": nil})
 	if len(out) != 1 || out[0].Seat != "engineer" || len(gh.revoked) != 1 || gh.revoked[0] != "tok-1-[acme/a]" {
 		t.Fatalf("revoked %+v %v", out, gh.revoked)
@@ -91,6 +100,7 @@ func TestReconcileRevokesLostGrants(t *testing.T) {
 		t.Fatal("registry state after reconcile")
 	}
 	// A retired seat (missing from the manifest) loses its credentials.
+	delete(l.seats, "reviewer")
 	r.Reconcile(ctx, "org", map[string]*access.SeatAccess{})
 	if len(gh.revoked) != 2 {
 		t.Fatalf("revoked %v", gh.revoked)
@@ -99,8 +109,8 @@ func TestReconcileRevokesLostGrants(t *testing.T) {
 
 func TestUnrevocableCredentialsAreNotTracked(t *testing.T) {
 	pat := &issuer{}
-	r := &Registry{Connections: conns{"github": pat}}
-	if _, err := r.Issue(context.Background(), "org", "engineer", grant(access.DeliverySandbox), "github"); err != nil {
+	r, _ := testRegistry(pat)
+	if _, err := r.Issue(context.Background(), "org", "engineer-identity", grant(access.DeliverySandbox), "github"); err != nil {
 		t.Fatal(err)
 	}
 	if r.Outstanding("org", "engineer") != 0 || len(r.Reconcile(context.Background(), "org", nil)) != 0 {

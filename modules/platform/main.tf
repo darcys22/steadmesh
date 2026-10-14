@@ -76,6 +76,10 @@ resource "helm_release" "platform" {
       secretName = module.postgres.database_secret
       secretKey  = "url"
     }
+    credentials = {
+      ledgerSecretName = var.credential_ledger_secret_name
+      ledgerSecretKey  = var.credential_ledger_secret_key
+    }
     controller = {
       # The NetworkPolicy enforcement probe runs the fake seat image.
       netprobeImage = "${local.images.seat_fake}:${local.tag}"

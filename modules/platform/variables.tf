@@ -78,3 +78,15 @@ variable "extra_values" {
   type        = any
   default     = {}
 }
+
+variable "credential_ledger_secret_name" {
+  description = "Existing Secret in the platform namespace containing the stable credential-ledger encryption key. Empty disables sandbox credential delivery only. The key is created outside Terraform; only its Secret name is stored here."
+  type        = string
+  default     = ""
+}
+
+variable "credential_ledger_secret_key" {
+  description = "Key within credential_ledger_secret_name containing a base64-encoded 32-byte encryption key. All platform replicas must share the same key."
+  type        = string
+  default     = "key"
+}

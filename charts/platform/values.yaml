@@ -19,6 +19,11 @@ database:
 # grace, then the connection becomes unavailable. A credential whose secret
 # cannot be read stays in use for maxStale.
 credentials:
+  # Existing Secret containing a stable base64-encoded 32-byte key. All
+  # platform replicas must share it. Empty disables sandbox credential
+  # delivery only; broker operations continue. Do not place the key in values.
+  ledgerSecretName: ""
+  ledgerSecretKey: key
   refreshInterval: 60s
   grace: 10m
   maxStale: 24h
