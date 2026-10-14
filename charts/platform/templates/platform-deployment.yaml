@@ -1,3 +1,4 @@
+{{- include "steadmesh.representativeGateway.validate" . -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -22,6 +23,9 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
+        {{- if .Values.representativeGateway.enabled }}
+        fsGroup: 65532
+        {{- end }}
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -36,6 +40,12 @@ spec:
                   key: {{ .Values.database.secretKey }}
             - name: LISTEN_ADDR
               value: ":8080"
+            {{- if .Values.representativeGateway.enabled }}
+            - name: REPRESENTATIVE_LISTEN_ADDR
+              value: {{ printf ":%d" (int .Values.representativeGateway.port) | quote }}
+            - name: REPRESENTATIVE_CONFIG_FILE
+              value: /etc/steadmesh/representative/gateway.json
+            {{- end }}
             - name: CONTROLLER_USERNAME
               value: "system:serviceaccount:{{ .Release.Namespace }}:steadmesh-controller"
             {{- if .Values.console.enabled }}
@@ -74,6 +84,16 @@ spec:
             {{- end }}
           ports:
             - {name: http, containerPort: 8080}
+            {{- if .Values.representativeGateway.enabled }}
+            - name: representative
+              containerPort: {{ .Values.representativeGateway.port }}
+          volumeMounts:
+            # Mount the directory, not a subPath: projected Secret updates
+            # must be visible to per-request authentication and revocation.
+            - name: representative-config
+              mountPath: /etc/steadmesh/representative
+              readOnly: true
+            {{- end }}
           livenessProbe:
             httpGet: {path: /healthz, port: http}
             periodSeconds: 20
@@ -84,6 +104,18 @@ spec:
             {{- toYaml .Values.platform.resources | nindent 12 }}
           securityContext:
             {{- include "steadmesh.securityContext" . | nindent 12 }}
+      {{- if .Values.representativeGateway.enabled }}
+      volumes:
+        - name: representative-config
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ .Values.representativeGateway.existingSecret | quote }}
+                  items:
+                    - key: gateway.json
+                      path: gateway.json
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

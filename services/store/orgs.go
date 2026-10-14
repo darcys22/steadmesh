@@ -223,14 +223,15 @@ func checkAdoption(ctx context.Context, tx pgx.Tx, orgID string, sm compile.Seat
 }
 
 // transferSeatData attaches the retired seat's personal stores, private
-// conversation history and portable handoff to the adopting identity.
+// conversation history and portable handoff to the adopting identity. External
+// conversations remain bound to their original immutable representative identity.
 func transferSeatData(ctx context.Context, tx pgx.Tx, orgID, oldID, newID string) error {
 	if _, err := tx.Exec(ctx, `UPDATE memory_stores SET owner_seat_id = $1, policy_revision = policy_revision + 1
 		WHERE owner_seat_id = $2 AND organization_id = $3`, newID, oldID, orgID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE conversations SET participants = array_replace(participants, $2::uuid, $1::uuid)
-		WHERE organization_id = $3 AND $2::uuid = ANY(participants)`, newID, oldID, orgID); err != nil {
+		WHERE organization_id = $3 AND kind <> 'external' AND $2::uuid = ANY(participants)`, newID, oldID, orgID); err != nil {
 		return err
 	}
 	_, err := tx.Exec(ctx, `INSERT INTO handoffs (seat_id, objective, unresolved, record_ids, pending_message_ids, operation_ids, notes, lease_generation)

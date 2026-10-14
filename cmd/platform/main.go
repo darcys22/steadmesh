@@ -32,6 +32,7 @@ import (
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
 	"github.com/darcys22/steadmesh/services/platform"
+	"github.com/darcys22/steadmesh/services/representative"
 	"github.com/darcys22/steadmesh/services/store"
 )
 
@@ -51,6 +52,7 @@ func envDuration(key string, def time.Duration) time.Duration {
 
 type config struct {
 	credentialLedgerKey                                                     string
+	representativeConfigFile, representativeListenAddr                      string
 	databaseURL, listenAddr, controllerUser, consoleUser, secretsNamespace  string
 	vaultAddr, vaultRole, vaultMount, vaultJWT                              string
 	credentialRefresh, credentialGrace, credentialMaxStale, retirementGrace time.Duration
@@ -60,6 +62,8 @@ func main() {
 	var c config
 	// Read the key only from the environment; never put a secret in process arguments.
 	c.credentialLedgerKey = os.Getenv("CREDENTIAL_LEDGER_KEY")
+	flag.StringVar(&c.representativeConfigFile, "representative-config-file", env("REPRESENTATIVE_CONFIG_FILE", ""), "projected Secret JSON file; empty disables the external MCP listener")
+	flag.StringVar(&c.representativeListenAddr, "representative-listen-addr", env("REPRESENTATIVE_LISTEN_ADDR", ":8082"), "dedicated external representative MCP listener address")
 	flag.StringVar(&c.databaseURL, "database-url", env("DATABASE_URL", ""), "Postgres connection string")
 	flag.StringVar(&c.listenAddr, "listen-addr", env("LISTEN_ADDR", ":8080"), "address for the API, /healthz, /readyz and /metrics")
 	flag.StringVar(&c.controllerUser, "controller-username", env("CONTROLLER_USERNAME", "system:serviceaccount:steadmesh-system:steadmesh-controller"),
@@ -107,6 +111,17 @@ func run(c config, log *slog.Logger) error {
 		ledgerKey, err = base64.StdEncoding.DecodeString(c.credentialLedgerKey)
 		if err != nil || len(ledgerKey) != 32 {
 			return errors.New("CREDENTIAL_LEDGER_KEY must be base64-encoded 32 bytes")
+		}
+	}
+	var externalAuth *representative.FileAuthenticator
+	if c.representativeConfigFile != "" {
+		var err error
+		externalAuth, err = representative.NewFileAuthenticator(c.representativeConfigFile)
+		if err != nil {
+			return fmt.Errorf("representative gateway configuration: %w", err)
+		}
+		if c.representativeListenAddr == "" || c.representativeListenAddr == c.listenAddr {
+			return errors.New("representative gateway requires a separate listener")
 		}
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -181,20 +196,26 @@ func run(c config, log *slog.Logger) error {
 		return err
 	}
 	srv := &http.Server{Addr: c.listenAddr, Handler: p.Handler, ReadHeaderTimeout: 10 * time.Second}
-	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
+	servers := []*http.Server{srv}
+	if externalAuth != nil {
+		servers = append(servers, &http.Server{Addr: c.representativeListenAddr, Handler: representative.New(st, externalAuth), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 20 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10})
+	}
+	errc := make(chan error, len(servers))
+	for _, server := range servers {
+		go func() { errc <- server.ListenAndServe() }()
+	}
 	log.Info("platform listening", "addr", c.listenAddr)
 
 	select {
-	case err := <-errc:
+	case err = <-errc:
 		stop()
-		p.Wait()
-		return err
 	case <-ctx.Done():
 	}
 	shutdown, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err = srv.Shutdown(shutdown)
+	for _, server := range servers {
+		err = errors.Join(err, server.Shutdown(shutdown))
+	}
 	p.Wait()
 	return err
 }

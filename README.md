@@ -35,6 +35,17 @@ Introduced in v0.6.0:
 See the [upgrade notes](docs/operations.html#upgrade) before using these
 features on an older deployment.
 
+## External representative MCP gateway
+
+The source tree includes an opt-in [representative MCP gateway](docs/representative-gateway.md)
+for an external agent to send durable messages, check their status and read its
+own representative conversation. It uses a separate authenticated listener;
+the internal platform API is never its public endpoint. It is disabled by
+default and requires an approved compatible deployment and HTTPS host.
+ChatGPT/dot connections require an existing OAuth provider; compatible MCP
+clients can also use a locally generated private bearer key. The setup guide
+covers Secret-based configuration, permissions, rotation and smoke tests.
+
 ## Fastest start: the example organisation
 
 [darcys22/steadmesh-example](https://github.com/darcys22/steadmesh-example) is a

@@ -35,6 +35,7 @@ type Message struct {
 	Binding          string    `json:"binding,omitempty"`
 	Participants     []string  `json:"-"`
 	Origin           string    `json:"origin"`
+	ExternalCallerID string    `json:"external_caller_id,omitempty"`
 	SenderSeatID     string    `json:"-"`
 	SenderSeat       string    `json:"sender_seat,omitempty"`
 	RecipientSeatID  string    `json:"-"`
@@ -46,7 +47,7 @@ type Message struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
-const messageColumns = `m.id, m.conversation_id, c.kind, c.binding, c.participants::text[], m.origin,
+const messageColumns = `m.id, m.conversation_id, c.kind, c.binding, c.participants::text[], m.origin, m.origin_external_caller,
 	COALESCE(m.sender_seat_id::text, ''), COALESCE(ss.key, ''), COALESCE(m.recipient_seat_id::text, ''), COALESCE(rs.key, ''),
 	m.recipient_binding, COALESCE(m.parent_id::text, ''), COALESCE(m.correlation_id::text, ''), m.body, m.created_at
 	FROM messages m JOIN conversations c ON c.id = m.conversation_id
@@ -54,7 +55,7 @@ const messageColumns = `m.id, m.conversation_id, c.kind, c.binding, c.participan
 
 func scanMessage(row pgx.Row) (*Message, error) {
 	m := &Message{}
-	err := row.Scan(&m.ID, &m.ConversationID, &m.ConversationKind, &m.Binding, &m.Participants, &m.Origin,
+	err := row.Scan(&m.ID, &m.ConversationID, &m.ConversationKind, &m.Binding, &m.Participants, &m.Origin, &m.ExternalCallerID,
 		&m.SenderSeatID, &m.SenderSeat, &m.RecipientSeatID, &m.RecipientSeat, &m.RecipientBinding,
 		&m.ParentID, &m.CorrelationID, &m.Body, &m.CreatedAt)
 	if err != nil {

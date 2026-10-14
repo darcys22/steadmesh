@@ -201,18 +201,20 @@ type Envelope struct {
 	MessageID      string `json:"message_id"`
 	OrganizationID string `json:"organization_id"`
 	ConversationID string `json:"conversation_id"`
-	Origin         string `json:"origin"` // human, seat, system, schedule, probe
+	Origin         string `json:"origin"` // human, external_agent, seat, system, schedule, probe
 	// For human origin: the binding key and verified external user.
-	Binding        string    `json:"binding,omitempty"`
-	ExternalUserID string    `json:"external_user_id,omitempty"`
-	SenderSeat     string    `json:"sender_seat,omitempty"`
-	SenderSeatID   string    `json:"sender_seat_id,omitempty"`
-	RecipientSeat  string    `json:"recipient_seat"`
-	ParentID       string    `json:"parent_id,omitempty"`
-	CorrelationID  string    `json:"correlation_id,omitempty"`
-	Body           string    `json:"body"`
-	CreatedAt      time.Time `json:"created_at"`
-	// ReplyRoute describes how to reply: "binding:<key>" or "seat:<key>".
+	Binding        string `json:"binding,omitempty"`
+	ExternalUserID string `json:"external_user_id,omitempty"`
+	// For external_agent origin: the authenticated caller, never a human identity.
+	ExternalCallerID string    `json:"external_caller_id,omitempty"`
+	SenderSeat       string    `json:"sender_seat,omitempty"`
+	SenderSeatID     string    `json:"sender_seat_id,omitempty"`
+	RecipientSeat    string    `json:"recipient_seat"`
+	ParentID         string    `json:"parent_id,omitempty"`
+	CorrelationID    string    `json:"correlation_id,omitempty"`
+	Body             string    `json:"body"`
+	CreatedAt        time.Time `json:"created_at"`
+	// ReplyRoute describes how to reply: "binding:<key>", "seat:<key>", or "external:<message_id>".
 	ReplyRoute string `json:"reply_route,omitempty"`
 }
 

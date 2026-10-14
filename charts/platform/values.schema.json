@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "representativeGateway": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "existingSecret": {"type": "string"},
+        "port": {"type": "integer"},
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {"type": "boolean"},
+            "className": {"type": "string"},
+            "annotations": {"type": "object", "additionalProperties": {"type": "string"}},
+            "host": {"type": "string"},
+            "tlsSecretName": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

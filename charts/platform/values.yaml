@@ -62,6 +62,23 @@ platform:
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: "2", memory: 512Mi}
 
+# External representative MCP gateway. Disabled unless explicitly enabled.
+# Runs on a separate platform listener; never expose the platform's :8080
+# runtime/internal/metrics API. The chart only references a user-managed
+# Secret with a gateway.json key; credentials must not go in Helm values or
+# Terraform state. See docs/representative-gateway.md for OAuth and key setup.
+representativeGateway:
+  enabled: false
+  existingSecret: ""
+  port: 8082
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    host: ""
+    # Existing TLS Secret for the approved host. Required if ingress enabled.
+    tlsSecretName: ""
+
 # Egress gateway: the proxy through which seats with egress access profiles
 # reach the hosts they are allowed (docs/sandbox.html). Off by default; the
 # platform stage turns it on with enable_egress. Without it, seats reach only

@@ -146,13 +146,13 @@ func (s *Store) LeaseNext(ctx context.Context, f Fence) (*runtimeapi.InboxDelive
 func envelope(ctx context.Context, q pgx.Tx, msgID string) (*runtimeapi.Envelope, error) {
 	e := &runtimeapi.Envelope{}
 	var binding string
-	err := q.QueryRow(ctx, `SELECT m.id, m.organization_id, m.conversation_id, m.origin, c.binding, m.origin_external_user,
+	err := q.QueryRow(ctx, `SELECT m.id, m.organization_id, m.conversation_id, m.origin, c.binding, m.origin_external_user, m.origin_external_caller,
 			COALESCE(ss.key, ''), COALESCE(m.sender_seat_id::text, ''), COALESCE(rs.key, ''),
 			COALESCE(m.parent_id::text, ''), COALESCE(m.correlation_id::text, ''), m.body, m.created_at
 		FROM messages m JOIN conversations c ON c.id = m.conversation_id
 		LEFT JOIN seats ss ON ss.id = m.sender_seat_id LEFT JOIN seats rs ON rs.id = m.recipient_seat_id
 		WHERE m.id = $1`, msgID).Scan(&e.MessageID, &e.OrganizationID, &e.ConversationID, &e.Origin, &binding,
-		&e.ExternalUserID, &e.SenderSeat, &e.SenderSeatID, &e.RecipientSeat, &e.ParentID, &e.CorrelationID, &e.Body, &e.CreatedAt)
+		&e.ExternalUserID, &e.ExternalCallerID, &e.SenderSeat, &e.SenderSeatID, &e.RecipientSeat, &e.ParentID, &e.CorrelationID, &e.Body, &e.CreatedAt)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -160,6 +160,8 @@ func envelope(ctx context.Context, q pgx.Tx, msgID string) (*runtimeapi.Envelope
 	case OriginHuman:
 		e.Binding = binding
 		e.ReplyRoute = "binding:" + binding
+	case OriginExternalAgent:
+		e.ReplyRoute = "external:" + e.MessageID
 	case OriginSeat:
 		e.ReplyRoute = "seat:" + e.SenderSeat
 	}
