@@ -1,21 +1,21 @@
 # Instruction text is published as ConfigMaps in the organisation namespace and
 # referenced by content digest, so editing a file shows up as a plan change.
 module "culture" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.6.0"
   name        = "acme-culture"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/culture.md"
 }
 
 module "representative_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.6.0"
   name        = "acme-role-representative"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/representative.md"
 }
 
 module "engineer_role" {
-  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.5.0"
+  source      = "github.com/darcys22/steadmesh//modules/instruction-bundle?ref=v0.6.0"
   name        = "acme-role-engineer"
   namespace   = "acme-org"
   source_path = "${path.module}/instructions/engineer.md"
@@ -40,11 +40,11 @@ resource "steadmesh_organization" "acme" {
     harness_profiles = {
       claude = {
         adapter      = "claude-code"
-        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.5.0"
+        image_digest = "ghcr.io/darcys22/steadmesh/seat-claudecode:0.6.0"
         model        = { connection = "anthropic", id = "claude-sonnet-5-5" }
       }
       # Another seat could run Codex on OpenAI, or Pi on any compatible endpoint:
-      # codex = { adapter = "codex", image_digest = "…/seat-codex:0.1.1",
+      # codex = { adapter = "codex", image_digest = "…/seat-codex:0.6.0",
       #           model = { connection = "openai", id = "gpt-5.5" } }
     }
     execution_profiles = {

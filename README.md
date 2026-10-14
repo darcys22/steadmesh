@@ -8,7 +8,7 @@ representatives over Slack (or a terminal). Representatives keep context,
 delegate to other seats, and agents can track work in Linear.
 
 Steadmesh is early-stage. The current release is
-[v0.5.0](https://github.com/darcys22/steadmesh/releases/tag/v0.5.0).
+[v0.6.0](https://github.com/darcys22/steadmesh/releases/tag/v0.6.0).
 
 **Documentation:** [steadmesh.com](https://steadmesh.com/), built from the
 static pages in [`docs/`](docs/) with no build step: a quickstart, a tutorial,
@@ -76,7 +76,7 @@ ghcr.io, and the modules from GitHub.
 
 ```sh
 mkdir steadmesh && cd steadmesh
-terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.5.0"
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.6.0"
 ```
 
 This copies two small Terraform roots into the directory:

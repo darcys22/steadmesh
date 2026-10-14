@@ -43,7 +43,7 @@
 <!-- shell:sidebar -->
 <aside class="sidebar">
   <nav id="docs-nav" aria-label="Documentation">
-  <div class="brand-sub">Documentation for v0.5.0</div>
+  <div class="brand-sub">Documentation for v0.6.0</div>
     <div class="nav-group">Start</div>
     <ul>
       <li><a href="docs/">Overview</a></li>
@@ -173,7 +173,7 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-nam
 
 <h2 id="operator-cli">Administrative controls</h2>
 <p>The stable-key seat commands were introduced in v0.6.0. Install <code>orgctl</code> from the same release as your platform (Go 1.27.1 or newer), or build <code>make orgctl</code> from that release's source:</p>
-<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.5.0</code></pre>
+<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.6.0</code></pre>
 <p>Use the installed <code>orgctl</code> in place of <code>bin/orgctl</code> in the source-tree examples below. The <code>--name</code> value is the Kubernetes organisation object's name; <code>--seat</code> is its declaration key, not the generated seat name or durable UUID.</p>
 <p>Use <code>orgctl</code> to inspect, watch, pause or resume a seat by its stable declaration key, without looking up its generated Kubernetes name. All four commands require an explicit <code>--namespace</code>, <code>--name</code> (the <code>AgentOrganization</code> object name) and <code>--seat</code>. As with the other commands, supply <code>--context</code> or <code>STEADMESH_KUBE_CONTEXT</code>; the ambient Kubernetes context is never used. To change the direction of a seat's work, talk to your representative.</p>
 <pre><code><span class="c"># Inspect the representative_sean seat in this organisation</span>
