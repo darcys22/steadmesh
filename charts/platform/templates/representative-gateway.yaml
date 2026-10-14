@@ -1,0 +1,56 @@
+{{- if .Values.representativeGateway.enabled }}
+# Only the representative listener is reachable through this Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: steadmesh-representative-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: representative-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: steadmesh-platform
+  ports:
+    - name: representative
+      port: {{ .Values.representativeGateway.port }}
+      targetPort: representative
+{{- if .Values.representativeGateway.ingress.enabled }}
+---
+# No catch-all path and no route to steadmesh-platform:8080.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: steadmesh-representative-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "steadmesh.labels" . | nindent 4 }}
+    steadmesh.io/component: representative-gateway
+  {{- with .Values.representativeGateway.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.representativeGateway.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  tls:
+    - hosts:
+        - {{ .Values.representativeGateway.ingress.host | quote }}
+      secretName: {{ .Values.representativeGateway.ingress.tlsSecretName | quote }}
+  rules:
+    - host: {{ .Values.representativeGateway.ingress.host | quote }}
+      http:
+        paths:
+          {{- range list "/mcp" "/.well-known/oauth-protected-resource" "/.well-known/oauth-protected-resource/mcp" }}
+          - path: {{ . | quote }}
+            pathType: Exact
+            backend:
+              service:
+                name: steadmesh-representative-gateway
+                port:
+                  name: representative
+          {{- end }}
+{{- end }}
+{{- end }}

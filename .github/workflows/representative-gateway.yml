@@ -1,0 +1,33 @@
+name: Representative gateway
+on:
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'pkg/runtimeapi/**'
+      - 'runtime/**'
+      - 'harnesses/**'
+      - 'cmd/platform/**'
+      - 'charts/platform/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/representative-gateway.yml'
+permissions:
+  contents: read
+jobs:
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -short ./...
+      - run: go vet ./...
+      - run: go test -race -count=1 ./services/representative
+      - run: go test -count=1 -tags integration -timeout 20m ./services/store ./services/platform
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - run: helm lint charts/platform
+      - run: python3 -m unittest discover -s charts/platform/tests -v

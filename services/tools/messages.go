@@ -26,11 +26,11 @@ func (r *Registry) messageTools() []*tool {
 		{name: "messages.send", description: "Send a message to a seat over a declared route. By default it starts a turn for the recipient. With wake false it is queued instead and handed over with the recipient's next turn, for FYIs that need no action now. Continue a conversation with conversation_id, and correlate related work with correlation_id.",
 			schema:   `{"type":"object","properties":{"to":{"type":"string","description":"recipient seat key"},"body":{"type":"string","maxLength":12288},"conversation_id":{"type":"string"},"correlation_id":{"type":"string"},"wake":{"type":"boolean","default":true}},"required":["to","body"],"additionalProperties":false}`,
 			mutating: true, allowed: canSend, handle: r.send},
-		{name: "messages.reply", description: "Reply to a message you received (message_id), or, as a representative, send an update to your bound human (binding). wake false queues a reply to a seat without starting a turn for it.",
+		{name: "messages.reply", description: "Reply to a message you received (message_id), including external-agent messages, or, as a representative, send an update to your bound human (binding). wake false queues a reply to a seat without starting a turn for it.",
 			schema:   `{"type":"object","properties":{"message_id":{"type":"string"},"binding":{"type":"string"},"body":{"type":"string","maxLength":12288},"wake":{"type":"boolean","default":true}},"required":["body"],"additionalProperties":false}`,
 			mutating: true,
 			allowed: func(sm *compile.SeatManifest, _ *compile.Manifest) bool {
-				return len(sm.SendTo) > 0 || len(sm.ReceiveFrom) > 0 || len(sm.ChannelBindings) > 0
+				return sm.IsRepresentative || len(sm.SendTo) > 0 || len(sm.ReceiveFrom) > 0 || len(sm.ChannelBindings) > 0
 			},
 			handle: r.reply},
 		{name: "messages.inbox", description: "Read the messages queued for you without a turn of their own (sent with wake false). They are also handed over automatically with your next turn.",
@@ -150,6 +150,14 @@ func (r *Registry) reply(ctx context.Context, c *Call) (any, error) {
 		return nil, toolErr("not_found", "no message %s was delivered to this seat", a.MessageID)
 	}
 	switch m.Origin {
+	case store.OriginExternalAgent:
+		sent, err := r.d.Store.ReplyToExternal(ctx, c.fence(), store.ExternalReply{OrganizationID: c.Seat.OrganizationID,
+			SeatID: c.Seat.ID, ParentID: m.ID, Body: a.Body})
+		if err != nil {
+			return nil, err
+		}
+		return map[string]any{"message_id": sent.MessageID, "conversation_id": sent.ConversationID,
+			"correlation_id": sent.CorrelationID, "delivery": "stored"}, nil
 	case store.OriginHuman:
 		if !slices.Contains(m.Participants, c.Seat.ID) {
 			return nil, toolErr("forbidden", "not a participant of this conversation")

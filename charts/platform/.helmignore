@@ -1,0 +1,2 @@
+# Offline source-checkout tests are not part of the deployed chart.
+tests/
