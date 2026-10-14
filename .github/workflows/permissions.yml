@@ -1,0 +1,21 @@
+name: permission boundaries
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  permissions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Permission and connector regressions
+        run: go test -race ./connectors/... ./pkg/access ./pkg/compile ./services/policy ./services/gateway ./services/credentials ./services/tools ./services/api ./console
+      - name: Durable credential PostgreSQL integration
+        run: go test -race -count=1 -tags integration -run 'TestIssuedCredential|TestRegistryPostgres|TestCredential|TestSandboxAccessAndCredentials|TestOperationReplay|TestConcurrentOperationKeyReuse|TestGatewayReplay' -timeout 10m ./services/store ./services/credentials ./services/platform ./services/gateway

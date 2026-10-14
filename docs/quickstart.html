@@ -108,7 +108,7 @@ organisation/    stage 2: your keys, the seats, and who may talk to whom
 <tr><td>Docker and <a href="https://kind.sigs.k8s.io">kind</a>, or another cluster</td><td>Any cluster works if its CNI enforces NetworkPolicy (seats start only once their sandbox is verified; kind's default CNI, Calico and Cilium all qualify), it has a default StorageClass, and about 4 CPUs and 8 GB of memory are free.</td></tr>
 <tr><td>Terraform 1.5+, kubectl and Go 1.27+</td><td>Go installs <code>orgctl</code>, the command you chat with.</td></tr>
 <tr><td>A model endpoint</td><td>Any OpenAI-compatible API that serves <code>/v1/chat/completions</code>: its base URL, a model name and an API key. See <a href="faq.html#which-llm">Which LLM does it use?</a></td></tr>
-<tr><td>A GitHub repository and token</td><td>A <a href="https://github.com/settings/personal-access-tokens/new">fine-grained personal access token</a> for that repository only, with Contents, Pull requests and Issues set to read and write. Use a test repository: the token is delivered into the seats' sandboxes so they can run <code>git</code> and <code>gh</code> (see <a href="sandbox.html#github">Sandbox delivery</a>).</td></tr>
+<tr><td>A GitHub repository and token</td><td>A <a href="https://github.com/settings/personal-access-tokens/new">fine-grained personal access token</a> for that repository only, with Contents, Pull requests and Issues set to read and write. Use a test repository: the token is delivered into the seats' sandboxes so they can run <code>git</code> and <code>gh</code> (see <a href="sandbox.html#github">Sandbox delivery</a>). The hardened platform also requires a separately provisioned <a href="operations.html#credential-ledger">credential ledger key</a> before any sandbox credential can be delivered.</td></tr>
 </table>
 
 <h3 id="example-steps">Start your team</h3>
@@ -135,6 +135,7 @@ set -a; source .env; set +a</code></pre>
 terraform init
 terraform apply</code></pre>
 <p>This creates the <code>steadmesh-system</code> and <code>steadmesh</code> namespaces, Postgres, and the Steadmesh chart (the CRDs, the controller, the platform service, the egress gateway and the read-only console). It finishes with <code>Apply complete!</code> once the platform is running. There are two stages because the organisation is a custom resource that only exists once the platform is installed.</p>
+<p>Before using sandbox GitHub access on the hardened platform, provision the <a href="operations.html#credential-ledger">ledger-key Secret</a> outside Terraform. Pass its name through <code>credential_ledger_secret_name</code> on the platform module, then reapply the platform. An older example wrapper may need to expose this module input. Pass only the reference; never add the key itself to <code>.env</code>, Terraform variables or Helm values. Without it, credential delivery is refused even for the example's PAT.</p>
 </li>
 <li>
 <p><strong>Create the organisation.</strong></p>
@@ -230,6 +231,8 @@ kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy
 <span class="c"># then browse to http://127.0.0.1:8090</span></code></pre>
 <p>With <code>orgctl</code> installed, <code>orgctl console --context "$TF_VAR_kube_context"</code> does the same.</p>
 
+<p>If you add sandbox GitHub access or a signed-in browser later, first configure the <a href="operations.html#credential-ledger">ledger-key Secret</a>. The quickstart platform accepts <code>credential_ledger_secret_name</code> and <code>credential_ledger_secret_key</code>; only the references belong in <code>terraform.tfvars</code>.</p>
+
 <h3 id="slack-shape">Choose the people, roles and access</h3>
 <table>
 <tr><th>To change</th><th>Edit</th></tr>
@@ -241,6 +244,7 @@ kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy
 </table>
 
 <h2 id="upgrade">Upgrade</h2>
+<p>Existing deployments adopting permission hardening must follow the <a href="operations.html#permission-upgrade">coordinated restart, organisation resync and pre-upgrade token precautions</a>. A normal mixed-version rolling update does not establish the new security boundary.</p>
 <p>Change the release everywhere it is pinned, then apply <code>platform/</code>, then <code>organisation/</code>:</p>
 <ul>
 <li>In the example: update the module <code>?ref=</code> tags and <code>steadmesh_version</code> in <code>platform/main.tf</code>, plus the <code>darcys22/steadmesh</code> provider <code>version</code> and module tags in <code>organisation/main.tf</code>. Seat images are taken from the platform stage's versioned outputs. Review the <a href="operations.html#upgrade">upgrade notes</a> before applying.</li>

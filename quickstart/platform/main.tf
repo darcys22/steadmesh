@@ -38,6 +38,14 @@ module "steadmesh" {
   organisation_namespace = var.organisation_namespace
   enable_console         = var.enable_console
   enable_egress          = var.enable_egress
+  # Pass only the name of an existing Secret, never its value. The extra_values
+  # interface also works with the release-pinned module during staged upgrades.
+  extra_values = {
+    credentials = {
+      ledgerSecretName = var.credential_ledger_secret_name
+      ledgerSecretKey  = var.credential_ledger_secret_key
+    }
+  }
 }
 
 # Credentials, as Kubernetes Secrets in the control-plane namespace. Only the

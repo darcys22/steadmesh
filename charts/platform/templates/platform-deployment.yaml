@@ -47,6 +47,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if .Values.credentials.ledgerSecretName }}
+            - name: CREDENTIAL_LEDGER_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.credentials.ledgerSecretName | quote }}
+                  key: {{ .Values.credentials.ledgerSecretKey | quote }}
+            {{- end }}
             - name: CREDENTIAL_REFRESH_INTERVAL
               value: {{ .Values.credentials.refreshInterval | quote }}
             - name: CREDENTIAL_GRACE

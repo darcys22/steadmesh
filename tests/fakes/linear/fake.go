@@ -283,13 +283,24 @@ func (s *Server) execute(field string, vars map[string]json.RawMessage) (any, *g
 		return nil, fail("ENTITY_NOT_FOUND", "Entity not found: Project")
 	case "projects":
 		var filter struct {
-			Name map[string]string `json:"name"`
+			Name            map[string]string `json:"name"`
+			AccessibleTeams struct {
+				ID struct {
+					In []string `json:"in"`
+				} `json:"id"`
+			} `json:"accessibleTeams"`
 		}
 		_ = json.Unmarshal(vars["filter"], &filter)
 		nodes := []any{}
 		for i := len(s.projects) - 1; i >= 0 && len(nodes) < first(vars); i-- {
 			p := s.projects[i]
-			if matchString(p.Name, filter.Name) {
+			matchesTeam := filter.AccessibleTeams.ID.In == nil
+			for _, want := range filter.AccessibleTeams.ID.In {
+				for _, id := range p.TeamIDs {
+					matchesTeam = matchesTeam || id == want
+				}
+			}
+			if matchString(p.Name, filter.Name) && matchesTeam {
 				nodes = append(nodes, s.projectJSON(p))
 			}
 		}
@@ -334,14 +345,19 @@ func (s *Server) execute(field string, vars map[string]json.RawMessage) (any, *g
 		var filter struct {
 			Description map[string]string `json:"description"`
 			Project     struct {
-				ID map[string]string `json:"id"`
+				ID   map[string]string `json:"id"`
+				Null *bool             `json:"null"`
 			} `json:"project"`
+			Team struct {
+				ID map[string]string `json:"id"`
+			} `json:"team"`
 		}
 		_ = json.Unmarshal(vars["filter"], &filter)
 		nodes := []any{}
 		for i := len(s.issues) - 1; i >= 0 && len(nodes) < first(vars); i-- {
 			is := s.issues[i]
-			if matchString(is.Description, filter.Description) && matchString(is.ProjectID, filter.Project.ID) {
+			if matchString(is.Description, filter.Description) && matchString(is.ProjectID, filter.Project.ID) &&
+				matchString(is.TeamID, filter.Team.ID) && (filter.Project.Null == nil || *filter.Project.Null == (is.ProjectID == "")) {
 				nodes = append(nodes, s.issueJSON(is))
 			}
 		}
@@ -512,7 +528,7 @@ func (s *Server) projectJSON(p *Project) map[string]any {
 	}
 	return map[string]any{
 		"id": p.ID, "name": p.Name, "description": p.Description, "content": p.Content,
-		"url": p.URL, "state": p.State, "teams": map[string]any{"nodes": teams},
+		"url": p.URL, "state": p.State, "teams": map[string]any{"nodes": teams, "pageInfo": map[string]any{"hasNextPage": false}},
 	}
 }
 

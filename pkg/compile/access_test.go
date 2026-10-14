@@ -1,6 +1,7 @@
 package compile_test
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/spec"
+	"github.com/darcys22/steadmesh/services/policy"
 )
 
 func withAccess(t *testing.T) spec.OrganizationSpec {
@@ -105,5 +107,101 @@ func TestAccessRejected(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error lacks %q:\n%v", want, err)
 		}
+	}
+}
+
+func TestGrantClausesKeepOperationsPairedWithTargets(t *testing.T) {
+	s := withAccess(t)
+	// Team and seat grants, plus implicit access-profile capabilities, must
+	// all preserve their own operation/target pairing.
+	s.AccessProfiles["github"] = spec.AccessProfile{GitHub: &spec.GitHubAccess{Connection: "github", Repos: []string{"acme/a"}, Permissions: map[string]string{"issues": "read"}}}
+	s.Grants["seat_write_b"] = spec.Grant{Subject: "seat:reviewer", Resource: "connection:github", Operations: []string{"issue.comment"}, Targets: []string{"acme/b"}}
+	s.Grants["team_read_c"] = spec.Grant{Subject: "team:engineering", Resource: "connection:github", Operations: []string{"issue.read"}, Targets: []string{"acme/c"}}
+	s.Grants["unrestricted_repo_read"] = spec.Grant{Subject: "seat:reviewer", Resource: "connection:github", Operations: []string{"repo.read"}}
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm := m.Seats["reviewer"]
+	for _, tt := range []struct {
+		op, target string
+		want       bool
+	}{
+		{"issue.read", "acme/a", true}, {"issue.read", "acme/c", true},
+		{"issue.comment", "acme/b", true}, {"issue.comment", "acme/a", false},
+		{"issue.comment", "acme/c", false}, {"issue.read", "acme/b", false},
+		{"repo.read", "acme/unlisted", true}, {"repo.read", "", true},
+		{"issue.read", "", false}, {"issue.comment", "", false},
+	} {
+		if got := policy.ConnectionAllowed(&sm, "github", tt.op, tt.target); got != tt.want {
+			t.Errorf("%s %q: got %v want %v; clauses %+v", tt.op, tt.target, got, tt.want, sm.Capabilities)
+		}
+	}
+	if got := len(policy.Connections(&sm)["github"]); got != 4 {
+		t.Fatalf("got %d clauses, want 4", got)
+	}
+	// Repeated compilation and serialization must keep all independent
+	// clauses and deterministic revisions, including zero-target clauses.
+	before, _ := json.Marshal(sm)
+	for range 8 {
+		again, err := compile.Compile(s, compile.DefaultCatalog())
+		if err != nil {
+			t.Fatal(err)
+		}
+		after, _ := json.Marshal(again.Seats["reviewer"])
+		if string(before) != string(after) {
+			t.Fatal("clause ordering is nondeterministic")
+		}
+	}
+	var roundtrip compile.SeatManifest
+	if err := json.Unmarshal(before, &roundtrip); err != nil {
+		t.Fatal(err)
+	}
+	if policy.ConnectionAllowed(&roundtrip, "github", "issue.comment", "acme/a") {
+		t.Fatal("serialization widened authority")
+	}
+}
+
+func TestEqualTargetSetsCoalesceSafely(t *testing.T) {
+	s := withAccess(t)
+	s.Grants["same_targets_read"] = spec.Grant{Subject: "seat:reviewer", Resource: "connection:github", Operations: []string{"issue.read"}, Targets: []string{"acme/b", "acme/a", "acme/a"}}
+	s.Grants["same_targets_write"] = spec.Grant{Subject: "seat:reviewer", Resource: "connection:github", Operations: []string{"issue.comment"}, Targets: []string{"acme/a", "acme/b"}}
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm := m.Seats["reviewer"]
+	clauses := policy.Connections(&sm)["github"]
+	if len(clauses) != 2 {
+		t.Fatalf("want implicit sandbox clause and merged explicit clause; got %+v", clauses)
+	}
+	for _, clause := range clauses {
+		if slices.Equal(clause.Targets, []string{"acme/a", "acme/b"}) &&
+			slices.Equal(clause.Operations, []string{"issue.comment", "issue.read"}) &&
+			slices.Equal(clause.Sources, []string{"grant:same_targets_read", "grant:same_targets_write"}) {
+			return
+		}
+	}
+	t.Fatalf("equal target clauses were not safely coalesced: %+v", clauses)
+}
+
+func TestAccessProfilesKeepPermissionDeliveryPairs(t *testing.T) {
+	s := withAccess(t)
+	s.AccessProfiles["platform"] = spec.AccessProfile{GitHub: &spec.GitHubAccess{Connection: "github", Repos: []string{"acme/a"}, Permissions: map[string]string{"issues": "read"}, Delivery: "platform"}}
+	s.AccessProfiles["github"] = spec.AccessProfile{GitHub: &spec.GitHubAccess{Connection: "github", Repos: []string{"acme/b"}, Permissions: map[string]string{"issues": "write"}, Delivery: "sandbox"}}
+	tm := s.Teams["engineering"]
+	tm.AccessProfiles = append(tm.AccessProfiles, "platform")
+	s.Teams["engineering"] = tm
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sm := m.Seats["reviewer"]
+	if !policy.ConnectionAllowed(&sm, "github", "issue.read", "acme/a") || !policy.ConnectionAllowed(&sm, "github", "issue.comment", "acme/b") || policy.ConnectionAllowed(&sm, "github", "issue.comment", "acme/a") {
+		t.Fatalf("profiles widened capabilities: %+v", sm.Capabilities)
+	}
+	g, err := sm.Access.GitHubSandboxGrant("github")
+	if err != nil || g == nil || !slices.Equal(g.Repos, []string{"acme/b"}) || g.Permissions["issues"] != "write" {
+		t.Fatalf("sandbox scope includes platform grant: %+v %v", g, err)
 	}
 }

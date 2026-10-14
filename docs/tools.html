@@ -183,14 +183,16 @@
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
 <tr><td><code>connections.list</code></td><td>none</td><td>Connections this seat may use, with the granted operations and targets.</td></tr>
-<tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation on a tracker or code host, such as <code>project.create</code> on Linear or <code>pull_request.create</code> on GitHub (<a href="sandbox.html#github">platform delivery</a>). Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation instead of repeating it.</td></tr>
+<tr><td><code>connections.invoke</code></td><td><code>connection</code>, <code>operation</code>, <code>params</code>, <code>idempotency_key?</code></td><td>Runs a granted operation on a tracker or code host, such as <code>project.create</code> on Linear or <code>pull_request.create</code> on GitHub (<a href="sandbox.html#github">platform delivery</a>). Each call is recorded in the operation ledger. Reusing an idempotency key returns the recorded operation only for the same stable seat, operation, targets and canonical request. Other reuse is a conflict and never reveals the earlier result.</td></tr>
 <tr><td><code>operations.get</code></td><td><code>id</code></td><td>One recorded operation: status, receipt and result.</td></tr>
 </table>
+<p>The adapter validates the operation's parameters and derives the same targets it will execute against, including defaults. Unknown or ambiguous target fields are rejected; an extra <code>target</code> cannot override an operation's real <code>id</code>, <code>repo</code> or other target. Every resolved target must be granted for that operation. Fields from separate grants are never combined to manufacture broader access.</p>
+<p>Account-wide searches or lists with no concrete target require an unrestricted grant for the requested operation. A target-limited grant, including <code>targets = ["*"]</code>, fails closed for those calls. Stricter validation can reject formerly accepted ambiguous calls: send only the documented fields for the selected operation.</p>
 <p>Use these parameters to create and read projects, update tasks and follow comments in Linear:</p>
 <ul>
-<li><code>project.create</code>: <code>{name, description, content, team_ids}</code>. Team IDs default to the connection's <code>team_id</code>, and <code>description</code> is limited to 255 characters.</li>
+<li><code>project.create</code>: <code>{name, description, content, team_ids}</code>. Team IDs default to the connection's <code>team_id</code>; every selected team must be allowed. <code>description</code> is limited to 255 characters.</li>
 <li><code>project.read</code>: <code>{id}</code> or <code>{query, first}</code>.</li>
-<li><code>task.write</code>: <code>{title, description, team_id, project_id, state_id, assignee_id, priority}</code>. Passing an <code>id</code> turns a create into an update.</li>
+<li><code>task.write</code>: <code>{title, description, team_id, project_id, state_id, assignee_id, priority}</code>. Passing an <code>id</code> turns a create into an update. Creating requires access to the selected or default team; updating requires access to the task ID. A supplied destination project must also be allowed.</li>
 <li><code>task.read</code>: exactly one of <code>{id}</code>, <code>{query}</code> or <code>{project_id}</code>.</li>
 <li><code>comment.write</code>: <code>{issue_id, body}</code>.</li>
 <li><code>comment.read</code>: <code>{issue_id, first}</code>. The issue's comments with author and time, so agents can act on what people write in Linear.</li>
@@ -203,7 +205,7 @@
 <tr><td><code>failed</code></td><td>Rejected and not applied.</td></tr>
 <tr><td><code>unknown</code></td><td>The request may have been applied, but the response was lost. The platform tried to read the effect back and could not confirm it. It is never repeated automatically: the agent should check the tracker. Unknown operations are listed in the seat's recovery context after a restart.</td></tr>
 </table>
-<p>Because Linear has no idempotency keys, created records carry a marker <code>steadmesh-op:&lt;operation id&gt;</code>. After a lost response, the gateway searches for that marker to find out whether the first attempt landed.</p>
+<p>Because Linear has no idempotency keys, created records carry a marker <code>steadmesh-op:&lt;operation id&gt;</code>. After a lost response, the gateway searches for that marker within the original destination and verifies the returned resource before confirming the first attempt landed. A moved record or an unverifiable destination remains unknown; the operation is not replayed.</p>
 
 <h2 id="fake-harness">Try the delivery flow with scripted tasks</h2>
 <p>The <code>fake</code> harness never calls a model. It reads each message body as a small script, for deterministic infrastructure tests and the run-from-source walkthrough. Lines that start with <code>/</code> are commands; a body without any commands gets the reply <code>ack: &lt;text&gt;</code>. Every tool call goes through the <code>steadmesh-tools</code> binary, the same path and authority a real harness has.</p>

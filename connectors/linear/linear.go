@@ -234,7 +234,7 @@ func (a *Adapter) FindByOperation(ctx context.Context, operation string, params 
 	case OpTaskWrite:
 		return a.findTask(ctx, params, operationID)
 	case OpCommentWrite:
-		return a.findComment(ctx, operationID)
+		return a.findComment(ctx, params, operationID)
 	}
 	return nil, fmt.Errorf("%w: unsupported operation %q", connectors.ErrPermanent, operation)
 }

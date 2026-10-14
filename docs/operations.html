@@ -162,7 +162,7 @@ bin/orgctl verify --context kind-steadmesh --namespace steadmesh-example --timeo
 <li>Messages it never handled are returned to their senders.</li>
 <li>The organisation's representatives get a summary: whether it finished, its handoff, the released work items and the returned messages.</li>
 </ul>
-Its lease is fenced, credentials delivered to its sandbox are revoked, and its personal memory store is retired. The controller then stops the Pod and removes the runtime, keeping the workspace volume.</li>
+Its lease is fenced, new sandbox credential delivery stops, outstanding GitHub App tokens are marked for durable revocation, and its personal memory store is retired. Remote revocation can be delayed by provider outages; PATs and browser sessions need upstream revocation (<a href="sandbox.html#github">credential limits</a>). The controller then stops the Pod and removes the runtime, keeping the workspace volume.</li>
 </ol>
 <p>Adding the seat back before it retires cancels the retirement. Messages already returned stay returned. The grace period is the platform's <code>RETIREMENT_GRACE</code>: the chart value <code>retirement.grace</code>, or <code>seat_retirement_grace</code> on the <code>modules/platform</code> Terraform module. <code>0s</code> retires removed seats at once, and what they held is still handed back. Deleting the whole organisation retires every seat immediately.</p>
 <pre><code><span class="c"># Watch a seat wind down</span>
@@ -201,12 +201,34 @@ kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-object-name&
 <p>v0.6.0 includes database migrations <code>00002_model_budgets.sql</code>, <code>00003_task_runs.sql</code> and <code>00004_run_branches.sql</code>. The platform applies pending migrations automatically when it opens the database. Deploy the complete release in order; do not deploy a standalone feature branch or add a missing lower-numbered migration after later ones have run. If migration fails, inspect the platform logs and migration history before proceeding. There is no built-in backup/restore or documented automatic rollback.</p>
 <p>Worker support also depends on the matching controller, chart RBAC and seat image. A provider-only upgrade is not enough. The new <a href="model-budgets.html">model budgets</a> are opt-in; disposable-worker and branch tools are available to active seats without extra Terraform grants, but workers receive no platform tools by default. Read their <a href="task-workers.html#bounds-and-authority">authority and cleanup limits</a> before use.</p>
 
+<h3 id="permission-upgrade">Roll out permission hardening</h3>
+<p>The permission-hardening upgrade adds the automatic database migration <code>00005_issued_credentials.sql</code>, independent grant clauses and strict adapter target validation. Back up the database and preserve the ledger key separately before rollout.</p>
+<ol>
+<li>Prepare the <a href="#credential-ledger">existing Secret reference</a> for every platform replica before enabling sandbox credential delivery. Do not generate a new key on each start.</li>
+<li>Use a coordinated restart of the matching controller and platform version; avoid a mixed old/new security rollout. Old replicas can still issue untracked tokens or enforce previously flattened, overbroad grants.</li>
+<li>Reconcile/resync <strong>every organisation</strong> with the upgraded controller so its stored manifests are recompiled into independent grant clauses. Upgrading the binary alone does not repair old flattened manifests. Review the resulting grants and run <code>orgctl verify</code>.</li>
+<li>Tokens delivered before this upgrade existed only in memory and cannot be retroactively recorded. Revoke those GitHub App tokens upstream or allow their expiry before assuming full durable revocation coverage; handle PATs and browser sessions separately.</li>
+<li>Check calls and access profiles that validation now rejects. Remove spoofing or ambiguous parameter fields, use concrete target reads for scoped grants, and split heterogeneous sandbox repository permissions across connections or use platform delivery.</li>
+</ol>
+
+<h2 id="credential-ledger">Configure durable sandbox credentials</h2>
+<p>Set <code>CREDENTIAL_LEDGER_KEY</code> on the platform service to a base64-encoded, randomly generated 32-byte key. The platform uses AES-256-GCM to encrypt issued GitHub App token payloads before storing them in Postgres, alongside their scopes and revocation retry state. There is no command-line flag and no in-memory fallback.</p>
+<p>For Helm, provision a Kubernetes Secret in the control-plane namespace outside Helm and Terraform, then reference it:</p>
+<pre><code>credentials:
+  ledgerSecretName: steadmesh-credential-ledger
+  ledgerSecretKey: key</code></pre>
+<p><code>ledgerSecretKey</code> defaults to <code>key</code>. That Secret entry must contain the base64-encoded 32-byte value consumed by <code>CREDENTIAL_LEDGER_KEY</code> (Kubernetes <code>data</code> encoding is an additional layer; <code>stringData</code> accepts the environment value directly). Put only the Secret name and entry name in chart values or Terraform; never put the key material there or in command-line arguments, source control or logs.</p>
+<p>With <code>modules/platform</code> or <code>quickstart/platform</code>, pass <code>credential_ledger_secret_name</code> and, if needed, <code>credential_ledger_secret_key</code> (default <code>key</code>). These inputs carry only references. For a fresh installation where Terraform creates the namespace, apply the platform first with the name empty, provision the Secret outside Terraform, then set the name and reapply before starting work that needs sandbox credentials.</p>
+<p>All platform replicas must share the same stable key. Keep it outside the database, back it up separately, and preserve the matching key when restoring the database. Losing it prevents decryption and remote revocation of outstanding tokens. Do not change it while outstanding tokens remain: stop new issuance, drain revocations or wait for expiry, then coordinate the key change and restart all replicas. Connection-secret hot reload does not rotate this key.</p>
+<p>A missing key permits broker-only startup, but all sandbox credential delivery is refused, including PATs and stored browser sessions. A configured key that is malformed or does not decode to 32 bytes prevents startup. PATs and browser sessions are not retained in the revocable-token ledger because the platform cannot revoke them; the shared key requirement keeps delivery setup consistently fail-closed.</p>
+<div class="callout warn"><p><strong>Durability has an upstream boundary.</strong> A token is delivered only after its encrypted record is committed. If storage fails, delivery is withheld and the platform attempts cleanup. GitHub token minting and a database commit cannot be atomic: a process crash after minting can leave an undisclosed token valid upstream until expiry. Provider outages can delay revocation of recorded tokens; their pending state survives restart and retries until success or expiry. Existing untracked tokens need the <a href="#permission-upgrade">upgrade precautions</a> above.</p></div>
+
 <h2>Retention and deletion</h2>
 <ul>
 <li><strong>Retiring a seat</strong> stops new deliveries, revokes its capabilities and removes its Pod. Its workspace volume and database records are kept, because the volume has no garbage-collecting owner.</li>
-<li><strong>Destroying the organisation with <code>data_retention = "retain"</code></strong> removes the runtime and revokes everything, but keeps volumes and records. With <code>"delete"</code>, the volumes go too.</li>
+<li><strong>Destroying the organisation with <code>data_retention = "retain"</code></strong> removes the runtime and revokes platform capabilities, but keeps volumes and records. With <code>"delete"</code>, the volumes go too. Pending App-token revocations survive organisation deletion in the platform database; keep the platform, database and ledger key available until they succeed or the tokens expire. PATs and browser sessions need separate upstream revocation.</li>
 <li><strong>External resources are never deleted.</strong> That covers Slack workspaces, Linear projects and accounts, because connections are <code>ownership = "external"</code>.</li>
-<li><strong>Deleting a namespace or database</strong> from outside the platform bypasses retention. Protect them in the infrastructure repository, and use a <code>Retain</code> reclaim policy for production storage classes.</li>
+<li><strong>Deleting a namespace or database</strong> from outside the platform bypasses retention and can prevent pending credential revocations from completing. Revoke outstanding tokens upstream or wait for expiry before teardown. Protect storage in the infrastructure repository, and use a <code>Retain</code> reclaim policy for production storage classes.</li>
 </ul>
 <div class="callout warn"><p><strong>Retention is not a backup.</strong> This release has no built-in backup or restore (acceptance scenario A26 is deferred). Destroying the platform stage deletes its namespaces and the database in them, and deleting a cluster deletes its volumes. Back up Postgres and the seat workspace volumes yourself, and test a restore, before destroying anything you want to keep; a database dump alone does not include workspaces. See <a href="faq.html#data">Where is the data stored?</a> and <a href="faq.html#teardown">How do I take it down?</a></p></div>
 
@@ -241,6 +263,7 @@ orgctl console --context kind-steadmesh     # forwards http://127.0.0.1:8090</co
 <p>The console's ServiceAccount can only read AgentOrganizations, AgentSeats, Pods and PersistentVolumeClaims. The platform accepts that one identity on <code>/console/v1</code>, and every route there is a GET. Tool inputs and connector results shown in run details have credential-like fields (token, secret, password, API key, authorization) replaced with <code>[redacted]</code>.</p>
 
 <h2 id="credential-rotation">Rotating credentials</h2>
+<p>This section covers connection credentials. The <a href="#credential-ledger">credential ledger encryption key</a> has a separate drain-and-restart procedure; it is not hot-reloaded.</p>
 <p>Connections refer to credentials by <code>secret_ref</code>: a Kubernetes Secret in the control-plane namespace (<code>k8s:&lt;name&gt;</code>) or a Vault KV v2 entry (<code>vault:&lt;path&gt;</code>). To rotate one, replace the value in place and keep the reference. You don't need to run Terraform or restart anything.</p>
 <pre><code>kubectl -n steadmesh-system patch secret slack-credentials \
   -p '{"stringData":{"bot_token":"xoxb-new","app_token":"xapp-new"}}'

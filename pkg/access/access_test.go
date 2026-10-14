@@ -2,6 +2,8 @@ package access
 
 import (
 	"fmt"
+	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -81,7 +83,7 @@ func TestCheck(t *testing.T) {
 	}
 }
 
-func TestResolveUnionAndPodPart(t *testing.T) {
+func TestResolveClausesAndPodPart(t *testing.T) {
 	profiles := map[string]spec.AccessProfile{
 		"read": {
 			Tools:  &spec.ToolsAccess{Binaries: []string{"git"}},
@@ -98,12 +100,20 @@ func TestResolveUnionAndPodPart(t *testing.T) {
 	if !slices.Equal(a.Profiles, []string{"read", "write"}) || !slices.Equal(a.Binaries, []string{"gh", "git"}) {
 		t.Fatalf("profiles/binaries %+v", a)
 	}
-	if len(a.GitHub) != 1 {
+	if len(a.GitHub) != 2 {
 		t.Fatalf("github grants %+v", a.GitHub)
 	}
-	g := a.GitHub[0]
-	if !slices.Equal(g.Repos, []string{"acme/a", "acme/b"}) || g.Permissions["contents"] != "write" || g.Delivery != DeliverySandbox {
-		t.Fatalf("merged grant %+v", g)
+	read, write := a.GitHub[0], a.GitHub[1]
+	if !slices.Equal(read.Repos, []string{"acme/a"}) || read.Permissions["contents"] != "read" || read.Delivery != DeliveryPlatform ||
+		!slices.Equal(write.Repos, []string{"acme/b"}) || write.Permissions["contents"] != "write" || write.Delivery != DeliverySandbox {
+		t.Fatalf("grant clauses lost: %+v", a.GitHub)
+	}
+	if a.GitHubFor("ghe") != nil {
+		t.Fatal("ambiguous legacy lookup returned a partial grant")
+	}
+	g, err := a.GitHubSandboxGrant("ghe")
+	if err != nil || g == nil || !slices.Equal(g.Repos, []string{"acme/b"}) || !maps.Equal(g.Permissions, write.Permissions) {
+		t.Fatalf("platform access leaked into sandbox: %+v, %v", g, err)
 	}
 	if a.Network[0].CIDR != "10.0.5.0/24" || a.Network[0].Protocol != "tcp" {
 		t.Fatalf("network %+v", a.Network)
@@ -147,5 +157,93 @@ func TestGitHubDefaultHostsAndOperations(t *testing.T) {
 	}
 	if got := GitHubOperations(map[string]string{"contents": "read", "pull_requests": "write"}); !slices.Equal(got, []string{"repo.read", "pull_request.read", "pull_request.create"}) {
 		t.Fatalf("ops %v", got)
+	}
+}
+
+func TestGitHubSandboxGrantExactScope(t *testing.T) {
+	grant := func(repos []string, perms map[string]string, delivery string) GitHubGrant {
+		return GitHubGrant{Connection: "github", Repos: repos, Permissions: perms, Delivery: delivery, Host: "github.com"}
+	}
+	read := map[string]string{"contents": "read"}
+	write := map[string]string{"contents": "write"}
+	issues := map[string]string{"issues": "write"}
+	for _, tt := range []struct {
+		name    string
+		grants  []GitHubGrant
+		repos   []string
+		perms   map[string]string
+		wantErr bool
+	}{
+		{name: "no grant"},
+		{name: "platform only", grants: []GitHubGrant{grant([]string{"acme/a"}, write, DeliveryPlatform)}},
+		{name: "same permissions disjoint repos", grants: []GitHubGrant{grant([]string{"acme/b"}, read, DeliverySandbox), grant([]string{"acme/a"}, read, DeliverySandbox)}, repos: []string{"acme/a", "acme/b"}, perms: read},
+		{name: "different permissions disjoint repos", grants: []GitHubGrant{grant([]string{"acme/a"}, read, DeliverySandbox), grant([]string{"acme/b"}, write, DeliverySandbox)}, wantErr: true},
+		{name: "different permission names", grants: []GitHubGrant{grant([]string{"acme/a"}, read, DeliverySandbox), grant([]string{"acme/b"}, issues, DeliverySandbox)}, wantErr: true},
+		{name: "partially overlapping repos", grants: []GitHubGrant{grant([]string{"acme/a", "acme/b"}, read, DeliverySandbox), grant([]string{"acme/b"}, write, DeliverySandbox)}, wantErr: true},
+		{name: "same repos union permissions", grants: []GitHubGrant{grant([]string{"acme/a", "acme/b"}, read, DeliverySandbox), grant([]string{"acme/b", "acme/a"}, issues, DeliverySandbox)}, repos: []string{"acme/a", "acme/b"}, perms: map[string]string{"contents": "read", "issues": "write"}},
+		{name: "overlap collectively uniform", grants: []GitHubGrant{grant([]string{"acme/a", "acme/b"}, read, DeliverySandbox), grant([]string{"acme/a"}, write, DeliverySandbox), grant([]string{"acme/b"}, write, DeliverySandbox)}, repos: []string{"acme/a", "acme/b"}, perms: write},
+		{name: "platform write never delivered", grants: []GitHubGrant{grant([]string{"acme/a", "acme/b"}, write, DeliveryPlatform), grant([]string{"acme/a"}, read, DeliverySandbox)}, repos: []string{"acme/a"}, perms: read},
+		{name: "other connection ignored", grants: []GitHubGrant{{Connection: "other", Repos: []string{"acme/a"}, Permissions: write, Delivery: DeliverySandbox}}},
+		{name: "empty repos refused", grants: []GitHubGrant{grant(nil, read, DeliverySandbox)}, wantErr: true},
+		{name: "empty permissions refused", grants: []GitHubGrant{grant([]string{"acme/a"}, nil, DeliverySandbox)}, wantErr: true},
+		{name: "malformed repo refused", grants: []GitHubGrant{grant([]string{"acme/*"}, read, DeliverySandbox)}, wantErr: true},
+		{name: "malformed permission refused", grants: []GitHubGrant{grant([]string{"acme/a"}, map[string]string{"contents": "admin"}, DeliverySandbox)}, wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, reverse := range []bool{false, true} {
+				grants := slices.Clone(tt.grants)
+				if reverse {
+					slices.Reverse(grants)
+				}
+				a := &SeatAccess{GitHub: grants}
+				got, err := a.GitHubSandboxGrant("github")
+				if (err != nil) != tt.wantErr {
+					t.Fatalf("got %+v, %v; wantErr %v", got, err, tt.wantErr)
+				}
+				if tt.wantErr {
+					if got != nil {
+						t.Fatal("unsafe partial scope returned with error")
+					}
+					continue
+				}
+				if len(tt.repos) == 0 {
+					if got != nil {
+						t.Fatalf("unexpected grant %+v", got)
+					}
+					continue
+				}
+				if got == nil || !slices.Equal(got.Repos, tt.repos) || !maps.Equal(got.Permissions, tt.perms) || got.Delivery != DeliverySandbox {
+					t.Fatalf("got %+v; want repos %v perms %v", got, tt.repos, tt.perms)
+				}
+			}
+		})
+	}
+	if g, err := (*SeatAccess)(nil).GitHubSandboxGrant("github"); g != nil || err != nil {
+		t.Fatalf("nil access: %+v %v", g, err)
+	}
+}
+
+func TestGitHubSandboxScopeDoesNotAliasGrants(t *testing.T) {
+	a := &SeatAccess{GitHub: []GitHubGrant{{Connection: "github", Repos: []string{"acme/a"}, Permissions: map[string]string{"contents": "read"}, Delivery: DeliverySandbox}}}
+	g, err := a.GitHubSandboxGrant("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Repos[0], g.Permissions["contents"] = "acme/b", "write"
+	if a.GitHub[0].Repos[0] != "acme/a" || a.GitHub[0].Permissions["contents"] != "read" {
+		t.Fatal("scope aliases source grants")
+	}
+}
+
+func TestPodPartIgnoresDuplicateAndReorderedClauses(t *testing.T) {
+	a := &SeatAccess{GitHub: []GitHubGrant{
+		{Connection: "z", Host: "github.com", Delivery: DeliverySandbox},
+		{Connection: "a", Host: "git.example.com", Delivery: DeliverySandbox},
+	}}
+	before := a.PodPart()
+	a.GitHub = append(a.GitHub, GitHubGrant{Connection: "z", Host: "github.com", Delivery: DeliverySandbox, Repos: []string{"acme/another"}, Permissions: map[string]string{"issues": "read"}})
+	slices.Reverse(a.GitHub)
+	if after := a.PodPart(); !reflect.DeepEqual(before, after) {
+		t.Fatalf("wiring changed with live clauses: before %+v after %+v", before, after)
 	}
 }

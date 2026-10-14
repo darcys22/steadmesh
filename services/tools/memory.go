@@ -179,14 +179,24 @@ func (r *Registry) locate(ctx context.Context, c *Call, op, storeKey, path, reco
 	return nil, nil, toolErr("invalid", "give store and path, or record_id")
 }
 
-func (r *Registry) memoryStores(_ context.Context, c *Call) (any, error) {
-	var stores []runtimeapi.MemoryStoreInfo
-	for _, cap := range c.Seat.Manifest.Capabilities {
-		if key, ok := strings.CutPrefix(cap.Resource, "memory:"); ok {
-			stores = append(stores, runtimeapi.MemoryStoreInfo{Key: key, Personal: key == c.Seat.Manifest.PersonalMemory, Operations: cap.Operations})
+func memoryStoreInfos(sm *compile.SeatManifest) []runtimeapi.MemoryStoreInfo {
+	ops := map[string][]string{}
+	for _, c := range sm.Capabilities {
+		if key, ok := strings.CutPrefix(c.Resource, "memory:"); ok {
+			ops[key] = append(ops[key], c.Operations...)
 		}
 	}
-	return map[string]any{"stores": stores}, nil
+	stores := []runtimeapi.MemoryStoreInfo{}
+	for key, operations := range ops {
+		slices.Sort(operations)
+		stores = append(stores, runtimeapi.MemoryStoreInfo{Key: key, Personal: key == sm.PersonalMemory, Operations: slices.Compact(operations)})
+	}
+	slices.SortFunc(stores, func(a, b runtimeapi.MemoryStoreInfo) int { return strings.Compare(a.Key, b.Key) })
+	return stores
+}
+
+func (r *Registry) memoryStores(_ context.Context, c *Call) (any, error) {
+	return map[string]any{"stores": memoryStoreInfos(&c.Seat.Manifest)}, nil
 }
 
 func (r *Registry) memoryList(ctx context.Context, c *Call) (any, error) {

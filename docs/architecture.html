@@ -114,7 +114,8 @@
 <tr><td>Workspace files</td><td>Per-seat persistent volume</td><td>The seat's process</td></tr>
 <tr><td>Projects and tasks</td><td>The work tracker</td><td>Agents, through connectors</td></tr>
 <tr><td>External operation attempts</td><td>Operation ledger</td><td>Gateway</td></tr>
-<tr><td>Credentials</td><td>Kubernetes Secrets or Vault</td><td>Credential owners</td></tr>
+<tr><td>Connection credentials and credential ledger key</td><td>Kubernetes Secrets or Vault; ledger key kept outside Postgres</td><td>Credential owners</td></tr>
+<tr><td>Issued GitHub App tokens and revocation state</td><td>Encrypted token payloads, scopes and retry state in Postgres</td><td>Platform credential service</td></tr>
 </table>
 <p>The <code>steadmesh_organization</code> resource's Terraform state holds identifiers, declared values, secret <em>references</em> and computed outputs. It never holds conversations or memory, and runtime activity never causes drift. A stage that creates credential Secrets from Terraform variables, such as the quickstart's <code>platform/</code>, the example repository's <code>organisation/</code> or the source tree's <code>examples/foundation/</code>, does store those values in its own state; keep such state private, or create the Secrets outside Terraform and reference them.</p>
 
@@ -179,19 +180,19 @@
 <h2 id="gateway">Gateway and operation ledger</h2>
 <p><code>connections.invoke</code> works as follows:</p>
 <ol>
-<li>Check the grant: the seat's capability for <code>connection:&lt;k&gt;</code> must include the operation and match the target restrictions.</li>
+<li>Validate the adapter's typed parameters and resolve the exact execution targets, including defaults. Reject unknown or ambiguous fields. Each target must match a grant clause for <code>connection:&lt;k&gt;</code> that includes this operation; operations and targets from different clauses are never flattened together. A call with no concrete target, such as an account-wide search, requires an unrestricted clause for that operation.</li>
 <li>Insert a <code>pending</code> ledger row. The idempotency key defaults to a hash of the seat, operation and canonical parameters; read-only operations get a fresh key each time.</li>
-<li>If the key already exists, return the recorded operation instead of running it again.</li>
+<li>If the key already exists for the same stable seat, operation, resolved targets and canonical request hash, return the recorded operation instead of running it again. Any mismatch is a conflict, without disclosing the stored result.</li>
 <li>Call the adapter and record the outcome:
   <ul>
   <li>success becomes <code>succeeded</code>, with the receipt;</li>
   <li>a permanent error becomes <code>failed</code>;</li>
   <li>a retryable error is retried with bounded backoff;</li>
-  <li>an ambiguous or unclassified error triggers a read-back. The effect is either found (<code>succeeded</code>) or not confirmed (<code>unknown</code>), and an unknown operation is never re-run automatically.</li>
+  <li>an ambiguous or unclassified error triggers a read-back bound to the original destination. The effect is either found (<code>succeeded</code>) or not confirmed (<code>unknown</code>), and an unknown operation is never re-run automatically.</li>
   </ul>
 </li>
 </ol>
-<p>The effective authority is the intersection of three things: the platform grant, what the adapter implements, and what the external account allows.</p>
+<p>For brokered calls, the effective authority is the intersection of three things: the platform grant, what the adapter implements, and what the external account allows. <a href="sandbox.html#github">Sandbox credentials</a> have a different boundary: delivered PATs and browser sessions retain upstream authority, while issued GitHub App tokens are narrowed and tracked in an <a href="operations.html#credential-ledger">encrypted durable revocation ledger</a>.</p>
 
 <h2 id="readiness">Readiness flow</h2>
 <p>On each reconcile of the current generation, the controller works through these steps in order:</p>

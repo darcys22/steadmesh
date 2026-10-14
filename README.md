@@ -43,6 +43,11 @@ Pi, with any OpenAI-compatible model endpoint and one GitHub repository. Clone i
 fill in `.env`, apply `platform/` then `organisation/`, and chat from the terminal
 with `orgctl`. No Slack needed. Its README and the
 [quickstart](https://steadmesh.com/quickstart.html) walk through every step.
+Sandbox GitHub access on the hardened platform requires an
+[existing credential-ledger Secret](docs/operations.html#credential-ledger),
+including when delivering a PAT. Keep its key outside Terraform and Helm state;
+pass only its name with `credential_ledger_secret_name`. Older deployments
+need the [permission-hardening rollout](docs/operations.html#permission-upgrade).
 
 ## Quickstart: run agents in your cluster with Slack
 

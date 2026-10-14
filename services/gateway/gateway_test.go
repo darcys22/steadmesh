@@ -75,7 +75,7 @@ func TestSuccessAndIdempotentReplay(t *testing.T) {
 	tr := &fakeconn.Tracker{}
 	g, seat := setup(t, tr, "lead")
 	op, err := invoke(g, seat, "project.create", `{"name":"Apollo","team_id":"T1"}`)
-	if err != nil || op.Status != store.OpSucceeded || op.ExternalReceipt == "" || op.Target != "T1" {
+	if err != nil || op.Status != store.OpSucceeded || op.ExternalReceipt == "" || op.Target != "" {
 		t.Fatalf("op = %+v, %v", op, err)
 	}
 	// The same request with keys in a different order is the same operation.

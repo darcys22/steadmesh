@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/darcys22/steadmesh/pkg/access"
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/names"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
@@ -133,12 +134,13 @@ func activeSeats(ctx context.Context, tx pgx.Tx, orgID string) (map[string]*acti
 func authority(sm compile.SeatManifest) string {
 	b, _ := json.Marshal(struct {
 		Capabilities    []compile.Capability
+		Access          *access.SeatAccess
 		SendTo          []compile.RouteEdge
 		ReceiveFrom     []compile.RouteEdge
 		ChannelBindings []string
 		PersonalMemory  string
 		Teams           []string
-	}{sm.Capabilities, sm.SendTo, sm.ReceiveFrom, sm.ChannelBindings, sm.PersonalMemory, sm.Teams})
+	}{sm.Capabilities, sm.Access, sm.SendTo, sm.ReceiveFrom, sm.ChannelBindings, sm.PersonalMemory, sm.Teams})
 	return string(b)
 }
 
@@ -150,6 +152,17 @@ func upsertSeat(ctx context.Context, tx pgx.Tx, orgID, orgKey string, sm compile
 	if cur != nil {
 		if cur.retireBy != nil {
 			if err := cancelRetirement(ctx, tx, orgID, cur.id); err != nil {
+				return "", 0, err
+			}
+		}
+		// Mark revocation in the same transaction as the policy update. Even a
+		// rapid tighten/broaden sequence (or a crash before the API sweep) must
+		// not restore a credential whose old authority has changed. Revoking
+		// on broadening too is conservative; the seat can request a fresh one.
+		previousAccess, _ := json.Marshal(cur.manifest.Access)
+		nextAccess, _ := json.Marshal(sm.Access)
+		if string(previousAccess) != string(nextAccess) {
+			if err := pendingSeatCredentials(ctx, tx, cur.id); err != nil {
 				return "", 0, err
 			}
 		}
@@ -230,6 +243,9 @@ func transferSeatData(ctx context.Context, tx pgx.Tx, orgID, oldID, newID string
 // what the seat held first.
 func retireSeat(ctx context.Context, tx pgx.Tx, seatID, reason string) error {
 	if _, err := tx.Exec(ctx, `UPDATE seats SET retired_at = now(), updated_at = now() WHERE id = $1`, seatID); err != nil {
+		return err
+	}
+	if err := pendingSeatCredentials(ctx, tx, seatID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE automations SET status = 'deleted', updated_at = now() WHERE seat_id = $1 AND status IN ('active', 'paused')`, seatID); err != nil {
@@ -383,7 +399,8 @@ func retireStore(ctx context.Context, tx pgx.Tx, storeID string) error {
 // DeleteOrganization removes an organisation's runtime. With purge=false
 // (retain) the organisation is marked deleted and every seat retired so all
 // capabilities are revoked while durable data stays recoverable (A19). With
-// purge=true every row of the organisation is deleted.
+// purge=true organisation data is deleted, except encrypted outstanding
+// credentials retained until remote revocation or expiry.
 func (s *Store) DeleteOrganization(ctx context.Context, orgID string, purge bool) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		tag, err := tx.Exec(ctx, `UPDATE organizations SET deleted_at = COALESCE(deleted_at, now()), updated_at = now() WHERE id = $1`, orgID)
@@ -393,16 +410,25 @@ func (s *Store) DeleteOrganization(ctx context.Context, orgID string, purge bool
 		if tag.RowsAffected() == 0 {
 			return ErrNotFound
 		}
-		if purge {
-			return purgeOrganization(ctx, tx, orgID)
-		}
-		rows, err := tx.Query(ctx, `SELECT id FROM seats WHERE organization_id = $1 AND retired_at IS NULL`, orgID)
+		// Lock seats before credentials, matching issuance, sync and final
+		// retirement. Otherwise deleting while a retirement holds its seat
+		// and waits for a ledger row can create a lock-order deadlock.
+		rows, err := tx.Query(ctx, `SELECT id FROM seats WHERE organization_id = $1 AND retired_at IS NULL FOR UPDATE`, orgID)
 		if err != nil {
 			return err
 		}
 		ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
 		if err != nil {
 			return err
+		}
+		// Keep revocation handles even when all organisation data is purged.
+		if _, err := tx.Exec(ctx, `UPDATE issued_credentials SET
+			next_attempt_at = CASE WHEN pending THEN next_attempt_at ELSE now() END,
+			pending = true WHERE organization_id = $1`, orgID); err != nil {
+			return err
+		}
+		if purge {
+			return purgeOrganization(ctx, tx, orgID)
 		}
 		for _, id := range ids {
 			if err := retireSeat(ctx, tx, id, "organisation deleted"); err != nil {

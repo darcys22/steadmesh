@@ -6,7 +6,6 @@ import (
 	"errors"
 	"slices"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/darcys22/steadmesh/pkg/compile"
@@ -58,11 +57,7 @@ func Self(seat *store.Seat, org *store.Organization) runtimeapi.Self {
 	for _, i := range sm.Instructions {
 		out.Instructions = append(out.Instructions, runtimeapi.InstructionInfo{Ref: i.Ref, Scope: i.Scope, Order: i.Order})
 	}
-	for _, c := range sm.Capabilities {
-		if key, ok := strings.CutPrefix(c.Resource, "memory:"); ok {
-			out.MemoryStores = append(out.MemoryStores, runtimeapi.MemoryStoreInfo{Key: key, Personal: key == sm.PersonalMemory, Operations: c.Operations})
-		}
-	}
+	out.MemoryStores = memoryStoreInfos(sm)
 	for _, e := range sm.SendTo {
 		out.Recipients = append(out.Recipients, runtimeapi.RecipientInfo{Seat: e.Seat, DisplayName: displayName(&org.Manifest, e.Seat), CanReply: e.Reply})
 	}
@@ -73,7 +68,12 @@ func Self(seat *store.Seat, org *store.Organization) runtimeapi.Self {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		out.Connections = append(out.Connections, runtimeapi.ConnectionInfo{Key: k, Adapter: org.Manifest.Spec.Connections[k].Adapter, Operations: conns[k].Operations})
+		var ops []string
+		for _, clause := range conns[k] {
+			ops = append(ops, clause.Operations...)
+		}
+		slices.Sort(ops)
+		out.Connections = append(out.Connections, runtimeapi.ConnectionInfo{Key: k, Adapter: org.Manifest.Spec.Connections[k].Adapter, Operations: slices.Compact(ops)})
 	}
 	return out
 }
@@ -169,7 +169,7 @@ func (r *Registry) connectionTools() []*tool {
 			schema:  `{"type":"object","properties":{},"additionalProperties":false}`,
 			allowed: func(sm *compile.SeatManifest, _ *compile.Manifest) bool { return len(policy.Connections(sm)) > 0 },
 			handle:  r.connectionsList},
-		{name: "connections.invoke", description: "Invoke a granted operation on a work-tracker or code-host (GitHub) connection. Each call is recorded in the operation ledger; reusing an idempotency_key returns the recorded operation instead of repeating it. An unknown status means the outcome could not be confirmed: check the tracker before retrying.",
+		{name: "connections.invoke", description: "Invoke a granted operation on a work-tracker or code-host (GitHub) connection. Use the adapter's exact parameter names; authorization targets are derived from the resources the operation actually uses, not a separate target field. Every resource in a multi-target call must be granted; account-wide searches and lists need an unscoped operation grant. Each call is recorded in the operation ledger; reusing an idempotency_key returns the recorded operation instead of repeating it. An unknown status means the outcome could not be confirmed: check the tracker before retrying.",
 			schema:   `{"type":"object","properties":{"connection":{"type":"string"},"operation":{"type":"string"},"params":{"type":"object"},"idempotency_key":{"type":"string","maxLength":200}},"required":["connection","operation"],"additionalProperties":false}`,
 			mutating: true, allowed: hasInvocable, handle: r.invoke},
 		{name: "operations.get", description: "Get a recorded connector operation of this seat by id.",
@@ -189,12 +189,23 @@ func (r *Registry) connectionsList(_ context.Context, c *Call) (any, error) {
 	}
 	conns := policy.Connections(&c.Seat.Manifest)
 	out := []info{}
-	for k, cp := range conns {
+	for k, clauses := range conns {
 		adapter := c.Org.Manifest.Spec.Connections[k].Adapter
 		kind := adapterKind(adapter)
-		out = append(out, info{Key: k, Adapter: adapter, Kind: kind, Operations: cp.Operations, Targets: cp.Targets, Invocable: invocable(kind)})
+		for _, cp := range clauses {
+			out = append(out, info{Key: k, Adapter: adapter, Kind: kind, Operations: cp.Operations, Targets: cp.Targets, Invocable: invocable(kind)})
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	sort.Slice(out, func(i, j int) bool {
+		x, y := out[i], out[j]
+		if x.Key != y.Key {
+			return x.Key < y.Key
+		}
+		if n := slices.Compare(x.Targets, y.Targets); n != 0 {
+			return n < 0
+		}
+		return slices.Compare(x.Operations, y.Operations) < 0
+	})
 	return map[string]any{"connections": out}, nil
 }
 

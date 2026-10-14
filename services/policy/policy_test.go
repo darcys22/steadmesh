@@ -79,3 +79,53 @@ func TestRoutesAndReplies(t *testing.T) {
 		t.Fatalf("reachable = %v", got)
 	}
 }
+
+func TestConnectionClausesAreDisjunctions(t *testing.T) {
+	sm := &compile.SeatManifest{Capabilities: []compile.Capability{
+		{Resource: "connection:github", Operations: []string{"read"}, Targets: []string{"acme/a", "acme/shared-*"}},
+		{Resource: "connection:github", Operations: []string{"write"}, Targets: []string{"acme/b"}},
+		{Resource: "connection:github", Operations: []string{"read"}, Targets: []string{"acme/c"}},
+		{Resource: "connection:github", Operations: []string{"metadata"}},
+	}}
+	for _, tt := range []struct {
+		op      string
+		targets []string
+		want    bool
+	}{
+		{"read", []string{"acme/a", "acme/c"}, true},
+		{"read", []string{"acme/a", "acme/shared-one"}, true},
+		{"read", []string{"acme/a", "acme/b"}, false},
+		{"write", []string{"acme/b"}, true},
+		{"write", []string{"acme/a"}, false},
+		{"write", nil, false}, {"read", nil, false},
+		{"metadata", nil, true}, {"metadata", []string{"acme/anything"}, true},
+		{"metadata", []string{""}, false}, {"unknown", nil, false},
+	} {
+		if got := policy.ConnectionTargetsAllowed(sm, "github", tt.op, tt.targets); got != tt.want {
+			t.Errorf("%s %v: got %v want %v", tt.op, tt.targets, got, tt.want)
+		}
+	}
+	if _, ok := policy.Capability(sm, "connection:github"); ok {
+		t.Fatal("ambiguous capability returned one clause")
+	}
+	if !policy.Allows(sm, "connection:github", "write") {
+		t.Fatal("later clause ignored")
+	}
+	if len(policy.Connections(sm)["github"]) != 4 {
+		t.Fatal("connection listing dropped clauses")
+	}
+}
+
+func TestMemoryStoresDeduplicatesClauses(t *testing.T) {
+	sm := &compile.SeatManifest{Capabilities: []compile.Capability{
+		{Resource: "memory:b", Operations: []string{"read"}},
+		{Resource: "memory:a", Operations: []string{"read"}},
+		{Resource: "memory:a", Operations: []string{"read", "write"}},
+	}}
+	if got := policy.MemoryStores(sm, "read"); !slices.Equal(got, []string{"a", "b"}) {
+		t.Fatalf("got %v", got)
+	}
+	if !policy.Allows(sm, "memory:a", "write") {
+		t.Fatal("later memory clause ignored")
+	}
+}

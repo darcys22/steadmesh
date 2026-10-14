@@ -47,6 +47,9 @@ type Options struct {
 	CredentialRefresh  time.Duration
 	CredentialGrace    time.Duration
 	CredentialMaxStale time.Duration
+	// CredentialLedgerKey encrypts issued sandbox tokens in the durable ledger.
+	// Empty disables sandbox credential delivery, not broker operations.
+	CredentialLedgerKey []byte
 	// RetirementGrace bounds the wind-down of a seat removed from the
 	// declaration; zero takes store.DefaultRetirementGrace. Negative retires
 	// removed seats at once (still handing back what they held).
@@ -87,7 +90,7 @@ func New(ctx context.Context, o Options) *Platform {
 		RefreshInterval: o.CredentialRefresh, Grace: o.CredentialGrace, MaxStale: o.CredentialMaxStale})
 	gw := &gateway.Gateway{Ledger: o.Store, Trackers: conns, Metrics: m, Log: o.Log, Attempts: 3, Backoff: o.RetryBackoff}
 	reg := tools.New(tools.Deps{Store: o.Store, Gateway: gw, Metrics: m, Log: o.Log})
-	creds := &credentials.Registry{Connections: conns, Log: o.Log}
+	creds := &credentials.Registry{Connections: conns, Ledger: o.Store, EncryptionKey: o.CredentialLedgerKey, Log: o.Log}
 	return &Platform{
 		Handler: api.New(api.Config{Store: o.Store, Auth: o.Auth, Tools: reg, Connections: conns, Metrics: m,
 			Credentials: creds, Gatherer: o.Registry, Log: o.Log, Console: o.Console, RetirementGrace: o.RetirementGrace}),
@@ -112,6 +115,22 @@ func (p *Platform) Start(ctx context.Context) error {
 		}
 		p.Connections.SyncManifest(ctx, id, &org.Manifest)
 	}
+	// Reconcile immediately in the background, then after every interval.
+	// Pending state is already durable. Provider outages must not delay API
+	// startup while a backlog of tokens waits for remote revocation.
+	p.wg.Go(func() {
+		p.reconcileCredentials(ctx)
+		ticker := time.NewTicker(p.opts.Interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				p.reconcileCredentials(ctx)
+			}
+		}
+	})
 	loop := &scheduler.Loop{Store: p.opts.Store, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
 	disp := &outbox.Dispatcher{Store: p.opts.Store, Comms: p.Connections, Metrics: p.metrics, Log: p.opts.Log, Interval: p.opts.Interval}
 	p.wg.Go(func() { loop.Run(ctx) })
@@ -127,4 +146,12 @@ func (p *Platform) Start(ctx context.Context) error {
 func (p *Platform) Wait() {
 	p.wg.Wait()
 	p.Connections.Close()
+}
+
+func (p *Platform) reconcileCredentials(ctx context.Context) {
+	for _, result := range p.Credentials.Sweep(ctx) {
+		if result.Err != nil {
+			p.opts.Log.Warn("credential revocation reconciliation incomplete; pending work will retry", "seat", result.Seat, "connection", result.Connection)
+		}
+	}
 }

@@ -232,8 +232,9 @@
 <tr><td><code>subject</code></td><td><code>seat:&lt;key&gt;</code> or <code>team:&lt;key&gt;</code>. Team grants apply to the team's members at each policy revision.</td></tr>
 <tr><td><code>resource</code></td><td><code>connection:</code>, <code>memory:</code> or <code>workspace:</code> plus a key.</td></tr>
 <tr><td><code>operations</code></td><td>Memory: read, search, write, revise, archive, publish, history. Workspace: read, write. Connection: the adapter's operations.</td></tr>
-<tr><td><code>targets</code></td><td>Optional restriction on targets: exact values, <code>*</code>, or a <code>prefix*</code>. The target is read from the operation's <code>target</code>, <code>project_id</code>, <code>team_id</code> or <code>issue_id</code> parameter.</td></tr>
+<tr><td><code>targets</code></td><td>Optional restriction on targets: exact values, <code>*</code>, or a <code>prefix*</code>. The adapter derives the actual execution targets from its validated, typed parameters and defaults. Every target must be allowed for the requested operation. Account-wide searches with no concrete target require a grant for that operation with no target restriction; even <code>targets = ["*"]</code> does not authorise them.</td></tr>
 </table>
+<p>Each grant is an independent alternative: its operations and targets stay paired. For example, read access to <code>acme/public</code> plus write access to <code>acme/private</code> does not grant write access to <code>acme/public</code>. GitHub access profiles also preserve repository, permission and delivery-mode pairings; platform-only access never broadens a sandbox token. See <a href="sandbox.html#github">GitHub delivery limits</a>.</p>
 <p>Only three permissions are implicit: a seat's own <code>personal_memory</code> (all memory operations), <code>model.infer</code> on its harness's model connection, and <code>channel.reply</code> to the human it is bound to. Each appears in the seat's capability manifest with an <code>implicit:</code> source.</p>
 
 <h3><code>message_routes</code></h3>

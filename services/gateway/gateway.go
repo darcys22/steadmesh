@@ -7,6 +7,7 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,19 +71,6 @@ type Request struct {
 	IdempotencyKey string
 }
 
-// targetKeys are the parameters that name an operation's target, in order of
-// precedence. Grants with targets restrict calls to matching values.
-var targetKeys = []string{"target", "repo", "project_id", "team_id", "issue_id"}
-
-func target(params map[string]any) string {
-	for _, k := range targetKeys {
-		if v, ok := params[k].(string); ok && v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
 func digest(parts ...string) string {
 	h := sha256.New()
 	for _, p := range parts {
@@ -96,19 +85,34 @@ func (g *Gateway) Invoke(ctx context.Context, req Request) (*runtimeapi.Operatio
 	if len(req.Params) == 0 {
 		req.Params = json.RawMessage(`{}`)
 	}
+	_, err := connectors.ParamsObject(req.Params)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+	}
+	// Preserve exact numeric values while sorting keys recursively for stable
+	// idempotency. Decoding into interface{} with the default float64 mode can
+	// otherwise change the resource identifier before it reaches the adapter.
+	dec := json.NewDecoder(bytes.NewReader(req.Params))
+	dec.UseNumber()
 	var params map[string]any
-	if err := json.Unmarshal(req.Params, &params); err != nil {
-		return nil, fmt.Errorf("%w: params must be a JSON object", ErrInvalid)
+	if err := dec.Decode(&params); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
 	canonical, _ := json.Marshal(params)
-	tgt := target(params)
-	if !policy.ConnectionAllowed(&req.Seat.Manifest, req.Connection, req.Operation, tgt) {
+	if !policy.Allows(&req.Seat.Manifest, "connection:"+req.Connection, req.Operation) {
 		return nil, fmt.Errorf("%w: %s on connection %s", ErrForbidden, req.Operation, req.Connection)
 	}
 	tracker, err := g.Trackers.Tracker(req.Seat.OrganizationID, req.Connection)
 	if err != nil {
 		return nil, err
 	}
+	targets, err := authorizedTargets(tracker, req)
+	if err != nil {
+		return nil, err
+	}
+	// Keep the existing scalar ledger field for one target. Multiple targets
+	// are recorded losslessly as a JSON array, never as a guessed primary target.
+	tgt := targetRecord(targets)
 	key := req.IdempotencyKey
 	switch {
 	case key != "":
@@ -132,7 +136,7 @@ func (g *Gateway) Invoke(ctx context.Context, req Request) (*runtimeapi.Operatio
 		log.Info("idempotency key reused; returning recorded operation", "status", op.Status)
 		return op, nil
 	}
-	status, res, errText, attempts := g.execute(ctx, tracker, req, canonical, op.ID, log)
+	status, res, errText, attempts := g.execute(ctx, tracker, req, canonical, targets, op.ID, log)
 	op.Status, op.Error = status, errText
 	if res != nil {
 		op.ExternalReceipt, op.Result = res.Receipt, res.Data
@@ -150,7 +154,34 @@ func (g *Gateway) Invoke(ctx context.Context, req Request) (*runtimeapi.Operatio
 	return op, nil
 }
 
-func (g *Gateway) execute(ctx context.Context, tracker connectors.Tracker, req Request, params []byte, opID string, log *slog.Logger) (string, *connectors.Result, string, int) {
+func authorizedTargets(tracker connectors.Tracker, req Request) ([]string, error) {
+	var targets []string
+	if resolver, ok := tracker.(connectors.TargetResolver); ok {
+		var err error
+		targets, err = resolver.OperationTargets(req.Operation, req.Params)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
+		}
+	}
+	if !policy.ConnectionTargetsAllowed(&req.Seat.Manifest, req.Connection, req.Operation, targets) {
+		return nil, fmt.Errorf("%w: %s on connection %s has ungranted or unverifiable targets", ErrForbidden, req.Operation, req.Connection)
+	}
+	return targets, nil
+}
+
+func targetRecord(targets []string) string {
+	switch len(targets) {
+	case 0:
+		return ""
+	case 1:
+		return targets[0]
+	default:
+		b, _ := json.Marshal(targets)
+		return string(b)
+	}
+}
+
+func (g *Gateway) execute(ctx context.Context, tracker connectors.Tracker, req Request, params []byte, targets []string, opID string, log *slog.Logger) (string, *connectors.Result, string, int) {
 	backoff := g.Backoff
 	readOnly := tracker.ReadOnly(req.Operation)
 	refreshed := false
@@ -165,6 +196,15 @@ func (g *Gateway) execute(ctx context.Context, tracker connectors.Tracker, req R
 			// was rotated, retry once with the new credential.
 			refreshed = true
 			if next := g.refreshed(ctx, req); next != nil {
+				// A refreshed adapter may also have different configuration (for
+				// example a default team). Never retry against a different target.
+				nextTargets, err := authorizedTargets(next, req)
+				if err != nil {
+					return store.OpFailed, nil, err.Error(), attempt
+				}
+				if !slices.Equal(targets, nextTargets) {
+					return store.OpFailed, nil, "operation targets changed after credential refresh", attempt
+				}
 				log.Info("retrying with a refreshed credential", "attempt", attempt)
 				tracker = next
 				continue

@@ -94,6 +94,9 @@ type Server struct {
 // New returns a fake with the repositories owner/name and accepted PATs.
 func New(repos []string, pats ...string) *Server {
 	s := &Server{repos: repos, pats: map[string]bool{}, now: time.Now}
+	if len(repos) > 0 {
+		s.owner, _, _ = strings.Cut(repos[0], "/")
+	}
 	for _, p := range pats {
 		s.pats[p] = true
 	}
@@ -105,6 +108,14 @@ func (s *Server) SetApp(appID, installationID string, pub *rsa.PublicKey) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.appID, s.instID, s.pub = appID, installationID, pub
+}
+
+// SetInstallationOwner overrides the installation account's login. By default
+// it is the owner of the first configured repository.
+func (s *Server) SetInstallationOwner(owner string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.owner = owner
 }
 
 // State returns a snapshot.
@@ -254,6 +265,15 @@ func (s *Server) serve(w http.ResponseWriter, r *http.Request, c *caller) {
 			return
 		}
 		s.json(w, 200, map[string]any{"id": s.appID, "slug": "steadmesh-test"})
+	case len(parts) == 3 && parts[0] == "app" && parts[1] == "installations" && r.Method == http.MethodGet:
+		if c == nil || c.kind != "app" || parts[2] != s.instID {
+			unauth()
+			return
+		}
+		s.mu.Lock()
+		owner := s.owner
+		s.mu.Unlock()
+		s.json(w, 200, map[string]any{"id": s.instID, "account": map[string]string{"login": owner}})
 	case len(parts) == 4 && parts[0] == "app" && parts[1] == "installations" && parts[3] == "access_tokens" && r.Method == http.MethodPost:
 		if c == nil || c.kind != "app" || parts[2] != s.instID {
 			unauth()

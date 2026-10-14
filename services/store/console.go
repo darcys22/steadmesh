@@ -121,7 +121,7 @@ func seatConfig(orgID, id string, sm compile.SeatManifest, policy int64, created
 		c.SendTo = append(c.SendTo, e.Seat)
 	}
 	for _, cap := range sm.Capabilities {
-		c.Capabilities = append(c.Capabilities, runtimeapi.ConsoleCapability{Resource: cap.Resource, Operations: cap.Operations, Sources: cap.Sources})
+		c.Capabilities = append(c.Capabilities, runtimeapi.ConsoleCapability{Resource: cap.Resource, Operations: cap.Operations, Targets: cap.Targets, Sources: cap.Sources})
 	}
 	return c
 }

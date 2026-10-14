@@ -49,7 +49,11 @@ func (f *fakePlatform) Organization(_ context.Context, id string) (*runtimeapi.C
 		Teams: []string{"engineering"},
 		Seats: []runtimeapi.ConsoleSeatConfig{
 			{SeatID: leadID, OrganizationID: orgID, Key: "lead", DisplayName: "Engineering Lead", RoleRef: "lead", Teams: []string{"engineering"},
-				ConfigRevision: "rev-2", PersistentWorkspace: true, Capabilities: []runtimeapi.ConsoleCapability{{Resource: "connection:tracker", Operations: []string{"task.write"}}}},
+				ConfigRevision: "rev-2", PersistentWorkspace: true, Capabilities: []runtimeapi.ConsoleCapability{
+					{Resource: "connection:tracker", Operations: []string{"task.write"}},
+					{Resource: "connection:github", Operations: []string{"issue.read"}, Targets: []string{"acme/a"}, Sources: []string{"grant:read_a"}},
+					{Resource: "connection:github", Operations: []string{"issue.comment"}, Targets: []string{"acme/b"}, Sources: []string{"grant:comment_b"}},
+				}},
 			{SeatID: repID, OrganizationID: orgID, Key: "rep_a", DisplayName: "Alice's rep", RoleRef: "representative", IsRepresentative: true,
 				ConfigRevision: "rev-2", SendTo: []string{"lead"}},
 		},
@@ -417,5 +421,24 @@ func TestShortRef(t *testing.T) {
 	}
 	if got := shortRef("role:engineer"); got != "role:engineer" {
 		t.Fatalf("shortRef = %q", got)
+	}
+}
+
+func TestSeatGrantsShowOperationTargetPairs(t *testing.T) {
+	srv := newTestServer(t, &fakePlatform{})
+	status, body := get(t, srv, "/seats/"+leadID)
+	if status != http.StatusOK {
+		t.Fatalf("status %d: %s", status, body)
+	}
+	for _, want := range []string{
+		"Each row is an independent grant.",
+		"<th>Targets</th>",
+		`<td><code>connection:tracker</code></td><td>task.write</td><td>All targets</td>`,
+		`<td><code>connection:github</code></td><td>issue.read</td><td>acme/a</td><td class="muted">grant:read_a</td>`,
+		`<td><code>connection:github</code></td><td>issue.comment</td><td>acme/b</td><td class="muted">grant:comment_b</td>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("seat grants missing %q", want)
+		}
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/darcys22/steadmesh/connectors/github"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
@@ -37,6 +38,7 @@ func TestSandboxAccessAndCredentials(t *testing.T) {
 		"private_key": string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))})
 	e := newEnvWith(t, true, func(o *platform.Options) {
 		o.Secrets = secrets
+		o.CredentialLedgerKey = []byte("0123456789abcdef0123456789abcdef")
 		o.Factories.Tracker["github"] = github.New
 	})
 	sp := orgfixture.Spec()
@@ -84,8 +86,14 @@ func TestSandboxAccessAndCredentials(t *testing.T) {
 	sp.Seats["engineer"] = eng
 	e.sync(sp)
 	revoked := false
-	for _, tk := range gh.State().Tokens {
-		revoked = revoked || (tk.Token == cred.Token && tk.Revoked)
+	deadline := time.Now().Add(2 * time.Second)
+	for !revoked && time.Now().Before(deadline) {
+		for _, tk := range gh.State().Tokens {
+			revoked = revoked || (tk.Token == cred.Token && tk.Revoked)
+		}
+		if !revoked {
+			time.Sleep(10 * time.Millisecond)
+		}
 	}
 	if !revoked {
 		t.Fatal("the delivered token was not revoked at GitHub")

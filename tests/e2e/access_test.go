@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -288,4 +289,28 @@ func seatEvents(t *testing.T, seatKey, kind string) []json.RawMessage {
 		}
 	}
 	return out
+}
+
+// configureCredentialLedger provisions only the disposable test cluster's key,
+// outside Terraform state and process arguments. The test cluster is rebuilt
+// for each run; production operators must retain their key across restarts.
+func configureCredentialLedger(t *testing.T) {
+	t.Helper()
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"apiVersion": "v1", "kind": "Secret",
+		"metadata":   map[string]string{"name": "steadmesh-test-ledger", "namespace": systemNS},
+		"stringData": map[string]string{"key": base64.StdEncoding.EncodeToString(key)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("kubectl", "--context", kctx, "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(string(payload))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("configure test ledger Secret: %v: %s", err, out)
+	}
 }

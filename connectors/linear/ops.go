@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	projectFields = `id name description content url state teams { nodes { id key } }`
+	projectFields = `id name description content url state teams(includeArchived: true) { nodes { id key } pageInfo { hasNextPage } }`
 	issueFields   = `id identifier title description url priority state { id name } project { id } assignee { id } team { id key }`
 	commentFields = `id body url issue { id identifier }`
 
@@ -69,15 +69,7 @@ func decode(params json.RawMessage, dst any) error {
 	if len(bytes.TrimSpace(params)) == 0 {
 		params = json.RawMessage("{}")
 	}
-	dec := json.NewDecoder(bytes.NewReader(params))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return invalid("params: %v", err)
-	}
-	if dec.More() {
-		return invalid("params: trailing data")
-	}
-	return nil
+	return connectors.DecodeParams(params, dst)
 }
 
 func invalid(format string, args ...any) error {
@@ -153,7 +145,45 @@ func (a *Adapter) parseProjectCreate(params json.RawMessage) (projectCreateParam
 		}
 		p.TeamIDs = []string{a.teamID}
 	}
+	for _, team := range p.TeamIDs {
+		if strings.TrimSpace(team) == "" {
+			return p, invalid("team_ids must contain nonempty team IDs")
+		}
+	}
 	return p, nil
+}
+
+func (p projectReadParams) validate() error {
+	if p.ID != "" && (p.Query != "" || p.First != 0) {
+		return invalid("id cannot be combined with query or first")
+	}
+	_, err := pageSize(p.First)
+	return err
+}
+
+func (p taskReadParams) validate() error {
+	set := 0
+	for _, v := range []string{p.ID, p.Query, p.ProjectID} {
+		if v != "" {
+			set++
+		}
+	}
+	if set != 1 {
+		return invalid("exactly one of id, query or project_id is required")
+	}
+	if p.ID != "" && p.First != 0 {
+		return invalid("id cannot be combined with first")
+	}
+	_, err := pageSize(p.First)
+	return err
+}
+
+func (p commentReadParams) validate() error {
+	if p.IssueID == "" {
+		return invalid("issue_id is required")
+	}
+	_, err := pageSize(p.First)
+	return err
 }
 
 func (p *taskWriteParams) validate(defaultTeam string) error {
@@ -230,6 +260,9 @@ type project struct {
 			ID  string `json:"id"`
 			Key string `json:"key"`
 		} `json:"nodes"`
+		PageInfo *struct {
+			HasNextPage *bool `json:"hasNextPage"`
+		} `json:"pageInfo"`
 	} `json:"teams"`
 }
 
@@ -286,10 +319,10 @@ func (a *Adapter) projectRead(ctx context.Context, params json.RawMessage) (conn
 	if err := decode(params, &p); err != nil {
 		return connectors.Result{}, err
 	}
+	if err := p.validate(); err != nil {
+		return connectors.Result{}, err
+	}
 	if p.ID != "" {
-		if p.Query != "" || p.First != 0 {
-			return connectors.Result{}, invalid("id cannot be combined with query or first")
-		}
 		var out struct {
 			Project project `json:"project"`
 		}
@@ -352,19 +385,10 @@ func (a *Adapter) taskRead(ctx context.Context, params json.RawMessage) (connect
 	if err := decode(params, &p); err != nil {
 		return connectors.Result{}, err
 	}
-	set := 0
-	for _, v := range []string{p.ID, p.Query, p.ProjectID} {
-		if v != "" {
-			set++
-		}
-	}
-	if set != 1 {
-		return connectors.Result{}, invalid("exactly one of id, query or project_id is required")
+	if err := p.validate(); err != nil {
+		return connectors.Result{}, err
 	}
 	if p.ID != "" {
-		if p.First != 0 {
-			return connectors.Result{}, invalid("id cannot be combined with first")
-		}
 		var out struct {
 			Issue issue `json:"issue"`
 		}
@@ -484,12 +508,19 @@ func (a *Adapter) findProject(ctx context.Context, params json.RawMessage, opera
 			Nodes []project `json:"nodes"`
 		} `json:"projects"`
 	}
-	vars := map[string]any{"first": findScan, "filter": map[string]any{"name": map[string]any{"eq": p.Name}}}
+	// The ProjectFilter field is accessibleTeams (not the response's teams).
+	// See Linear's published SDK schema: packages/sdk/src/schema.graphql.
+	vars := map[string]any{"first": findScan, "filter": map[string]any{
+		"name":            map[string]any{"eq": p.Name},
+		"accessibleTeams": map[string]any{"id": map[string]any{"in": p.TeamIDs}},
+	}}
 	if err := a.do(ctx, true, qProjects, vars, &out); err != nil {
 		return nil, err
 	}
 	for _, pr := range out.Projects.Nodes {
-		if hasMarker(pr.Content, operationID) || hasMarker(pr.Description, operationID) {
+		// Markers can be copied or records moved. A match is evidence only
+		// when the complete destination still equals the original request.
+		if projectDestinationMatches(p, pr) && (hasMarker(pr.Content, operationID) || hasMarker(pr.Description, operationID)) {
 			r, err := result(pr.ID, pr)
 			return &r, err
 		}
@@ -512,7 +543,7 @@ func (a *Adapter) findTask(ctx context.Context, params json.RawMessage, operatio
 		if err := a.do(ctx, true, qIssue, map[string]any{"id": p.ID}, &out); err != nil {
 			return nil, err
 		}
-		if !updateApplied(p, out.Issue) {
+		if !issueIdentityMatches(p.ID, out.Issue) || !updateApplied(p, out.Issue) {
 			return nil, nil
 		}
 		r, err := result(out.Issue.Identifier, out.Issue)
@@ -523,19 +554,61 @@ func (a *Adapter) findTask(ctx context.Context, params json.RawMessage, operatio
 			Nodes []issue `json:"nodes"`
 		} `json:"issues"`
 	}
+	projectFilter := map[string]any{"null": true}
+	if p.ProjectID != nil && *p.ProjectID != "" {
+		projectFilter = map[string]any{"id": map[string]any{"eq": *p.ProjectID}}
+	}
 	vars := map[string]any{"first": findScan, "filter": map[string]any{
 		"description": map[string]any{"contains": Marker(operationID)},
+		"team":        map[string]any{"id": map[string]any{"eq": p.TeamID}},
+		"project":     projectFilter,
 	}}
 	if err := a.do(ctx, true, qIssues, vars, &out); err != nil {
 		return nil, err
 	}
 	for _, is := range out.Issues.Nodes {
-		if hasMarker(is.Description, operationID) {
+		if taskDestinationMatches(p, is) && hasMarker(is.Description, operationID) {
 			r, err := result(is.Identifier, is)
 			return &r, err
 		}
 	}
 	return nil, nil
+}
+
+// projectDestinationMatches rejects incomplete team lists and any additional
+// or missing team. Merely overlapping the requested teams is insufficient.
+func projectDestinationMatches(p projectCreateParams, pr project) bool {
+	if pr.ID == "" || pr.Name != p.Name || pr.Teams.PageInfo == nil || pr.Teams.PageInfo.HasNextPage == nil || *pr.Teams.PageInfo.HasNextPage {
+		return false
+	}
+	want := make(map[string]bool, len(p.TeamIDs))
+	for _, id := range p.TeamIDs {
+		want[id] = true
+	}
+	seen := make(map[string]bool, len(pr.Teams.Nodes))
+	for _, team := range pr.Teams.Nodes {
+		if !want[team.ID] {
+			return false
+		}
+		seen[team.ID] = true
+	}
+	return len(seen) == len(want)
+}
+
+func taskDestinationMatches(p taskWriteParams, is issue) bool {
+	if is.ID == "" || is.Identifier == "" || is.Team.ID != p.TeamID {
+		return false
+	}
+	if p.ProjectID == nil || *p.ProjectID == "" {
+		return is.Project == nil
+	}
+	return is.Project != nil && is.Project.ID == *p.ProjectID
+}
+
+// Linear accepts both canonical IDs and human-readable issue identifiers.
+// Validate the response as well as scoping the query to the requested identity.
+func issueIdentityMatches(id string, is issue) bool {
+	return is.ID != "" && is.Identifier != "" && (is.ID == id || is.Identifier == id)
 }
 
 // updateApplied reports whether every field requested by an update already
@@ -557,20 +630,36 @@ func updateApplied(p taskWriteParams, is issue) bool {
 		eq(p.StateID, state) && (p.Priority == nil || *p.Priority == is.Priority)
 }
 
-func (a *Adapter) findComment(ctx context.Context, operationID string) (*connectors.Result, error) {
+func (a *Adapter) findComment(ctx context.Context, params json.RawMessage, operationID string) (*connectors.Result, error) {
+	p, err := parseCommentWrite(params)
+	if err != nil {
+		return nil, err
+	}
+	// Comment filters use the canonical issue ID. Resolve accepted aliases
+	// first, and fail closed if the lookup does not prove the original target.
+	var target struct {
+		Issue issue `json:"issue"`
+	}
+	if err := a.do(ctx, true, qIssue, map[string]any{"id": p.IssueID}, &target); err != nil {
+		return nil, err
+	}
+	if !issueIdentityMatches(p.IssueID, target.Issue) {
+		return nil, nil
+	}
 	var out struct {
 		Comments struct {
 			Nodes []comment `json:"nodes"`
 		} `json:"comments"`
 	}
 	vars := map[string]any{"first": findScan, "filter": map[string]any{
-		"body": map[string]any{"contains": Marker(operationID)},
+		"body":  map[string]any{"contains": Marker(operationID)},
+		"issue": map[string]any{"id": map[string]any{"eq": target.Issue.ID}},
 	}}
 	if err := a.do(ctx, true, qComments, vars, &out); err != nil {
 		return nil, err
 	}
 	for _, c := range out.Comments.Nodes {
-		if hasMarker(c.Body, operationID) {
+		if c.ID != "" && c.Issue.ID == target.Issue.ID && hasMarker(c.Body, operationID) {
 			r, err := result(c.ID, c)
 			return &r, err
 		}
@@ -591,8 +680,8 @@ func (a *Adapter) commentRead(ctx context.Context, params json.RawMessage) (conn
 	if err := decode(params, &p); err != nil {
 		return connectors.Result{}, err
 	}
-	if p.IssueID == "" {
-		return connectors.Result{}, invalid("issue_id is required")
+	if err := p.validate(); err != nil {
+		return connectors.Result{}, err
 	}
 	first, err := pageSize(p.First)
 	if err != nil {

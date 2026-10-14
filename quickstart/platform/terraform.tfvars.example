@@ -25,3 +25,9 @@ model_api_keys = {
 # }
 
 # enable_console = true
+
+# Required before delivering GitHub/browser credentials into sandboxes.
+# Create the stable ledger key outside Terraform, then reference its Secret:
+# credential_ledger_secret_name = "steadmesh-credential-ledger"
+# credential_ledger_secret_key  = "key"
+# See docs/operations.html#credential-ledger for setup and upgrade precautions.
