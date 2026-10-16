@@ -20,6 +20,6 @@ jobs:
       - name: Unit tests
         run: go test -short ./...
       - name: Task worker and branching PostgreSQL integration
-        run: go test -count=1 -tags integration -run 'TestTask|TestRunBranch|TestBranchTools' -timeout 10m ./services/store ./services/platform
+        run: go test -count=1 -tags integration -run 'TestElastic|TestTask|TestRunBranch|TestBranchTools' -timeout 10m ./services/store ./services/platform
       - name: Website references
         run: python3 hack/site.py check

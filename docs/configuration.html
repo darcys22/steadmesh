@@ -264,6 +264,34 @@
 </table>
 <p>Each work item becomes one issue, titled <code>&lt;store&gt;/W-&lt;n&gt;: &lt;objective&gt;</code>, with its status, owner, plan, acceptance criteria and evidence in the description. Later changes update the same issue. Publication runs in the background and is retried while the tracker is unavailable. Its state is shown per item in the console's Work view, separately from the work itself. A crash between creating an issue and recording it is resolved by reading the issue back, never by creating a duplicate. This is outward only: edits made in the tracker do not change work items, although agents can read them with <code>task.read</code> and <code>comment.read</code>.</p>
 
+<h2 id="elastic-teams">Elastic teams</h2>
+<p><code>spec.elastic_teams</code> opts named durable seats into temporary, execution-scoped workers. It requires positive <code>model_budgets.organization_daily_output_tokens</code> and <code>execution_output_tokens</code>. Omit the policy to disable elastic launches; set <code>draining = true</code> to stop all new disposable launches, including legacy tasks and branches, while existing workers finish.</p>
+<pre><code>elastic_teams = {
+  enabled_seats              = ["engineer"]
+  max_active_workers         = 20
+  max_active_per_execution   = 10
+  max_launches_per_execution = 20
+  max_timeout_seconds        = 600
+  templates = {
+    researcher = {
+      instructions      = "Research the assigned question and cite evidence."
+      tool_names        = ["memory.read", "memory.search"]
+    }
+  }
+}</code></pre>
+<ul>
+<li>Limits are required: organization active workers 1–1024, active workers per execution 1–32, lifetime launches per execution 1–128 (including retries), and timeout 1–1200 seconds. Ten parallel researchers are supported when all configured limits and budgets permit.</li>
+<li>Enabled seats must exist. Templates need stable nonempty keys and nonempty UTF-8 instructions of at most 8192 bytes. Workers inherit each requester's pinned harness, runtime resources and model authorization automatically. Optional <code>harness_profile</code> and <code>execution_profile</code> assertions, if set, must match every enabled seat; they cannot select an independent model or runtime.</li>
+<li>Templates can request only <code>memory.stores</code>, <code>memory.list</code>, <code>memory.read</code>, <code>memory.search</code>, <code>memory.history</code>, <code>work.get</code> and <code>work.list</code>. Runtime access is intersected with requester grants. Omitted tools grant none. No writes, external connectors or nested worker launches are delegated.</li>
+<li>Workers remain temporary execution children, not Terraform-managed seats. They share the parent's execution output budget and organization daily budget; this is an output-token ceiling, not a dollar-cost ceiling. Admission checks available headroom but does not reserve a worker's future tokens. The parent or sibling workers can consume that headroom; an admitted worker may subsequently receive a <code>budget_exhausted</code> proxy error. Its terminal worker state is <code>failed</code>, not a dedicated budget-exhaustion state; error text depends on the harness. Inspect parent budget status and proxy errors to distinguish this from other failures. Reservations occur for individual model calls.</li>
+</ul>
+
+<h3 id="elastic-launch-recovery">Conservative launch recovery</h3>
+<p>Before enabling this policy during an upgrade, quiesce all old controller instances. Older versions do not participate in the durable launch fence and must not continue scheduling workers alongside this version.</p>
+<p>Launches reserve capacity durably before creating a worker Pod. If the controller crashes or a Kubernetes create result is ambiguous after <code>launch_started_at</code> is recorded but before <code>launch_resolved_at</code>, that capacity remains held. There is no time-based release or automatic retry of this ambiguous launch in the MVP: an old request might still create a Pod.</p>
+<p>Operator recovery requires conclusively quiescing <strong>all controller instances and in-flight API requests</strong>, then verifying and, if necessary, deleting the worker Pod before resetting the launch fence or cleaning up its reservation. Do not reset records with SQL while an old controller or request may still complete. Capacity is retained until a late create is impossible. This conservative behavior can require manual remediation and temporarily reduce available worker capacity.</p>
+<p>Concurrency and timeout limits bound worker execution; they are not cloud infrastructure spending limits. Token budgets cover generated output only and do not guarantee funds or reserved output allowance to each admitted worker.</p>
+
 <h2 id="model-budgets">Cumulative model output budgets</h2>
 <p>For a step-by-step example, response semantics and troubleshooting, see <a href="model-budgets.html">Model output budgets</a>. Introduced in v0.6.0.</p>
 <p><code>spec.model_budgets</code> is optional. These are enforced output-token limits at the platform model proxy, shared by all platform replicas. They do not cap input tokens or dollar cost. Use a provider-side spending limit for a monetary ceiling.</p>

@@ -102,7 +102,7 @@ steadmesh-tools call tasks.cancel '{"id":"TASK_RUN_ID"}'</code></pre>
 <p>The runtime API also offers <code>POST /v1/task-runs</code>, <code>GET /v1/task-runs</code>, <code>GET /v1/task-runs/{id}</code>, and <code>POST /v1/task-runs/{id}/cancel</code>. Creation requires the current generation and a real running parent execution in the existing runtime headers. Reads are scoped to the parent seat. The full GET returns the explicit input and result files; tool results retain the existing 16 KiB limit. <code>tasks.get</code> with <code>artifact_path</code> returns a single small artifact; use the runtime API for larger files.</p>
 <h2 id="bounds-and-authority">Bounds and authority</h2>
 <ul>
-<li>At most four workers with runtime cleanup outstanding per seat, and   sixteen creations per parent execution, enforced in a serialized transaction</li>
+<li>By default, at most four workers with runtime cleanup outstanding per seat and sixteen creations per parent execution, enforced in a serialized transaction. <a href="configuration.html#elastic-teams">Enabled elastic-team policy</a> replaces these with shared organization and execution limits</li>
 <li>Default deadline 600 seconds, maximum 1,200, including provisioning time;   the Pod also has an active deadline and never restarts</li>
 <li>Prompt at most 32 KiB; at most 64 UTF-8 files totaling 256 KiB in each   direction, including path bytes; output at most 16 KiB; paths must be safe,   relative, unique and no more than 240 bytes</li>
 <li>Only requested regular-file artifacts are returned; missing, binary,   oversized or escaping paths fail the run. <code>.git</code> input paths are rejected</li>

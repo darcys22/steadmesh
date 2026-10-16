@@ -62,6 +62,9 @@ type OrganizationSpec struct {
 	MessageRoutes map[string]MessageRoute `json:"message_routes,omitempty"`
 	// +optional
 	ChannelBindings map[string]ChannelBinding `json:"channel_bindings,omitempty"`
+	// ElasticTeams permits bounded temporary workers for selected seats.
+	// +optional
+	ElasticTeams *ElasticTeams `json:"elastic_teams,omitempty"`
 	// ModelBudgets optionally limits cumulative generated output tokens at the model proxy.
 	// +optional
 	ModelBudgets *ModelBudgets `json:"model_budgets,omitempty"`

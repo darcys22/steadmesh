@@ -13,13 +13,13 @@ import (
 )
 
 const taskColumns = `id, parent_seat_id, parent_execution_id, parent_generation, config_revision,
- service_account, pod_uid, state, request, result, created_at, deadline, finished_at, cleaned_at`
+ service_account, pod_uid, state, request, result, created_at, deadline, finished_at, cleaned_at, launch_started_at, launch_resolved_at`
 
 func scanTask(row pgx.Row) (*runtimeapi.TaskRun, error) {
 	var t runtimeapi.TaskRun
 	var req, res []byte
 	err := row.Scan(&t.ID, &t.ParentSeatID, &t.ParentExecutionID, &t.ParentGeneration, &t.ConfigRevision, &t.ServiceAccount,
-		&t.PodUID, &t.State, &req, &res, &t.CreatedAt, &t.Deadline, &t.FinishedAt, &t.CleanedAt)
+		&t.PodUID, &t.State, &req, &res, &t.CreatedAt, &t.Deadline, &t.FinishedAt, &t.CleanedAt, &t.LaunchStartedAt, &t.LaunchResolvedAt)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -33,12 +33,15 @@ func scanTask(row pgx.Row) (*runtimeapi.TaskRun, error) {
 }
 
 func (s *Store) CreateTaskRun(ctx context.Context, f Fence, parentExecutionID string, req runtimeapi.TaskRunRequest) (out *runtimeapi.TaskRun, err error) {
+	if req.Template != "" {
+		return nil, fmt.Errorf("%w: templates require elastic team admission", ErrInvalid)
+	}
 	err = s.inTx(ctx, func(tx pgx.Tx) error { out, err = createTaskRunTx(ctx, tx, f, parentExecutionID, req); return err })
 	return
 }
 
 // createTaskRunTx is shared with atomic branch-group creation. The seat row
-// serializes admission, so concurrent calls cannot exceed either bound.
+// serializes legacy admission; the organization lock serializes aggregate policy.
 func createTaskRunTx(ctx context.Context, tx pgx.Tx, f Fence, parentExecutionID string, req runtimeapi.TaskRunRequest) (*runtimeapi.TaskRun, error) {
 	requestID, err := uuid.Parse(req.RequestID)
 	if err != nil {
@@ -57,6 +60,10 @@ func createTaskRunTx(ctx context.Context, tx pgx.Tx, f Fence, parentExecutionID 
 	normalized, _ := json.Marshal(req)
 	req = runtimeapi.TaskRunRequest{}
 	_ = json.Unmarshal(normalized, &req)
+	org, policy, err := lockWorkerOrganization(ctx, tx, f.SeatID)
+	if err != nil {
+		return nil, err
+	}
 	if err := checkFence(ctx, tx, f); err != nil {
 		return nil, err
 	}
@@ -85,13 +92,16 @@ func createTaskRunTx(ctx context.Context, tx pgx.Tx, f Fence, parentExecutionID 
 	if !active {
 		return nil, fmt.Errorf("%w: parent execution is not active", ErrFenced)
 	}
+	if err := workerAdmission(ctx, tx, org, f.SeatID, parentExecutionID, policy, req); err != nil {
+		return nil, err
+	}
 	var activeCount, totalCount int
 	err = tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE cleaned_at IS NULL),count(*) FILTER(WHERE parent_execution_id=$2)
  FROM task_runs WHERE parent_seat_id=$1`, f.SeatID, parentExecutionID).Scan(&activeCount, &totalCount)
 	if err != nil {
 		return nil, err
 	}
-	if activeCount >= runtimeapi.MaxActiveTaskRuns || totalCount >= runtimeapi.MaxTaskRunsPerExecution {
+	if policy.ElasticTeams == nil && (activeCount >= runtimeapi.MaxActiveTaskRuns || totalCount >= runtimeapi.MaxTaskRunsPerExecution) {
 		return nil, fmt.Errorf("%w: task worker limit reached", ErrConflict)
 	}
 	id := uuid.NewString()
@@ -116,7 +126,13 @@ func (s *Store) ListTaskRuns(ctx context.Context, parentSeatID string, cleanupOn
  finished_at=now(),result=jsonb_build_object('error','deadline or parent authority expired')
  FROM seats s JOIN execution_leases l ON l.seat_id=s.id JOIN organizations o ON o.id=s.organization_id
  WHERE t.parent_seat_id=$1 AND s.id=t.parent_seat_id AND t.state IN ('pending','running')
- AND (t.deadline<=now() OR l.generation<>t.parent_generation OR s.config_revision<>t.config_revision OR s.retired_at IS NOT NULL OR s.retiring_at IS NOT NULL OR o.deleted_at IS NOT NULL)`, parentSeatID)
+ AND (t.deadline<=now() OR l.generation<>t.parent_generation OR s.config_revision<>t.config_revision OR s.retired_at IS NOT NULL OR s.retiring_at IS NOT NULL OR o.deleted_at IS NOT NULL
+ OR (COALESCE(t.request->>'template','')<>'' AND NOT COALESCE(
+  (o.manifest->'spec'->'elastic_teams'->'enabled_seats' ? s.key)
+  AND (o.manifest->'spec'->'elastic_teams'->'templates' ? (t.request->>'template'))
+  AND (COALESCE(o.manifest->'spec'->'elastic_teams'->'templates'->(t.request->>'template')->>'harness_profile','')='' OR o.manifest->'spec'->'elastic_teams'->'templates'->(t.request->>'template')->>'harness_profile'=s.manifest->>'harness_profile')
+  AND (COALESCE(o.manifest->'spec'->'elastic_teams'->'templates'->(t.request->>'template')->>'execution_profile','')='' OR o.manifest->'spec'->'elastic_teams'->'templates'->(t.request->>'template')->>'execution_profile'=s.manifest->>'execution_profile')
+  AND (COALESCE(t.request->'tool_names','[]'::jsonb) <@ COALESCE(o.manifest->'spec'->'elastic_teams'->'templates'->(t.request->>'template')->'tool_names','[]'::jsonb)),false)))`, parentSeatID)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +140,10 @@ func (s *Store) ListTaskRuns(ctx context.Context, parentSeatID string, cleanupOn
 	if cleanupOnly {
 		query += ` AND cleaned_at IS NULL`
 	}
-	query += ` ORDER BY created_at DESC LIMIT 100`
+	query += ` ORDER BY created_at DESC`
+	if !cleanupOnly {
+		query += ` LIMIT 100`
+	}
 	rows, err := s.pool.Query(ctx, query, parentSeatID)
 	if err != nil {
 		return nil, err
@@ -241,11 +260,30 @@ func terminateTaskRun(ctx context.Context, tx pgx.Tx, seatID, id, state string) 
 // ReconcileTaskRun records runtime failures or confirmed cleanup. It cannot
 // mark work successful; only the authenticated bound worker returns a result.
 func (s *Store) ReconcileTaskRun(ctx context.Context, seatID, id, action string) error {
+	// Only the caller that successfully acquired launch may send launched, and
+	// only after its single Pod Create has conclusively returned. Replays of
+	// launch conflict, including after restart or a lost API response.
+	if action == "launch" || action == "launched" {
+		query := `UPDATE task_runs SET launch_started_at=now() WHERE parent_seat_id=$1 AND id=$2
+ AND state='pending' AND deadline>now() AND cleaned_at IS NULL AND launch_started_at IS NULL AND pod_uid=''`
+		if action == "launched" {
+			query = `UPDATE task_runs SET launch_resolved_at=COALESCE(launch_resolved_at,now()) WHERE parent_seat_id=$1 AND id=$2 AND launch_started_at IS NOT NULL AND cleaned_at IS NULL`
+		}
+		tag, err := s.pool.Exec(ctx, query, seatID, id)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrConflict
+		}
+		return nil
+	}
 	if action == "cleaned" {
 		return s.inTx(ctx, func(tx pgx.Tx) error {
 			var state, parent, org string
 			err := tx.QueryRow(ctx, `SELECT t.state,t.parent_execution_id,s.organization_id FROM task_runs t JOIN seats s ON s.id=t.parent_seat_id
-    WHERE t.parent_seat_id=$1 AND t.id=$2 AND t.state NOT IN ('pending','running') FOR UPDATE OF t`, seatID, id).Scan(&state, &parent, &org)
+    WHERE t.parent_seat_id=$1 AND t.id=$2 AND t.state NOT IN ('pending','running')
+ AND (t.launch_started_at IS NULL OR t.launch_resolved_at IS NOT NULL) FOR UPDATE OF t`, seatID, id).Scan(&state, &parent, &org)
 			if err != nil {
 				return notFound(err)
 			}

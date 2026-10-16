@@ -12,6 +12,9 @@ import (
 )
 
 func (s *server) registerTaskRuns(seat func(string, seatHandler)) {
+	seat("POST "+runtimeapi.PathElasticTeams, s.createElasticTeam)
+	seat("GET "+runtimeapi.PathElasticTeams+"/{team}", s.getElasticTeam)
+	seat("POST "+runtimeapi.PathElasticTeams+"/{team}/cancel", s.cancelElasticTeam)
 	seat("POST "+runtimeapi.PathTaskRuns, s.createTaskRun)
 	seat("GET "+runtimeapi.PathTaskRuns, s.listTaskRuns)
 	seat("GET "+runtimeapi.PathTaskRuns+"/{task}", s.getTaskRun)
@@ -64,6 +67,23 @@ func (s *server) authorizeTaskWorker(w http.ResponseWriter, r *http.Request, q *
 		(!claim && (t.State != runtimeapi.TaskRunning || t.PodUID != q.principal.PodUID)) {
 		writeError(w, http.StatusForbidden, "forbidden", "task worker authority is not valid for this request")
 		return false
+	}
+	// Re-read the committed template ceiling for every worker request. Policy
+	// changes do not necessarily alter the persistent seat's config revision.
+	if t.Request.Template != "" {
+		p := q.org.Manifest.Spec.ElasticTeams
+		if p == nil || !slices.Contains(p.EnabledSeats, q.seat.Manifest.Key) {
+			writeError(w, http.StatusForbidden, "forbidden", "elastic worker authority revoked")
+			return false
+		}
+		tmpl, ok := p.Templates[t.Request.Template]
+		if !ok || (tmpl.HarnessProfile != "" && tmpl.HarnessProfile != q.seat.Manifest.HarnessProfile) || (tmpl.ExecutionProfile != "" && tmpl.ExecutionProfile != q.seat.Manifest.ExecutionProfile) {
+			writeError(w, http.StatusForbidden, "forbidden", "elastic worker template revoked")
+			return false
+		}
+		// Neither a broadened template nor a later task can expand the immutable
+		// admission-time delegation. Revocation intersects it immediately.
+		t.Request.ToolNames = slices.DeleteFunc(slices.Clone(t.Request.ToolNames), func(name string) bool { return !slices.Contains(tmpl.ToolNames, name) })
 	}
 	q.task = t
 	q.gen = t.ParentGeneration
@@ -138,7 +158,21 @@ func (s *server) claimTaskRun(w http.ResponseWriter, r *http.Request, q *seatReq
 		return
 	}
 	boot := runtimeapi.Bootstrap{Self: tools.Self(q.seat, q.org), Guidance: "You are a disposable task worker for this parent seat. Work only on the explicit task and input files. Your workspace and session are temporary. Return a result; do not claim to have changed the parent's workspace. Only explicitly delegated read-only tools are available."}
-	writeJSON(w, http.StatusOK, taskworker.Bootstrap{Run: *t, Manifest: q.seat.Manifest, Identity: boot})
+	instructions := ""
+	if t.Request.Template != "" {
+		policy := q.org.Manifest.Spec.ElasticTeams
+		if policy == nil {
+			writeError(w, http.StatusForbidden, "forbidden", "worker template revoked")
+			return
+		}
+		template, ok := policy.Templates[t.Request.Template]
+		if !ok {
+			writeError(w, http.StatusForbidden, "forbidden", "worker template revoked")
+			return
+		}
+		instructions = template.Instructions
+	}
+	writeJSON(w, http.StatusOK, taskworker.Bootstrap{Run: *t, Manifest: q.seat.Manifest, Identity: boot, Instructions: instructions})
 }
 func (s *server) finishTaskRun(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	if q.task == nil {

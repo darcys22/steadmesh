@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.22.0
+    controller-gen.kubebuilder.io/version: v0.20.1
   name: agentorganizations.steadmesh.io
 spec:
   group: steadmesh.io
@@ -272,6 +272,70 @@ spec:
               display_name:
                 description: DisplayName is the human-readable organisation name.
                 type: string
+              elastic_teams:
+                description: ElasticTeams permits bounded temporary workers for selected
+                  seats.
+                properties:
+                  draining:
+                    description: Draining prevents new launches while existing workers
+                      finish.
+                    type: boolean
+                  enabled_seats:
+                    items:
+                      type: string
+                    minItems: 1
+                    type: array
+                  max_active_per_execution:
+                    maximum: 32
+                    minimum: 1
+                    type: integer
+                  max_active_workers:
+                    maximum: 1024
+                    minimum: 1
+                    type: integer
+                  max_launches_per_execution:
+                    maximum: 128
+                    minimum: 1
+                    type: integer
+                  max_timeout_seconds:
+                    maximum: 1200
+                    minimum: 1
+                    type: integer
+                  templates:
+                    additionalProperties:
+                      description: |-
+                        WorkerTemplate fixes a role and a read-only subset of the requester's tools.
+                        Optional profile selectors assert the enabled requester's profiles; workers inherit
+                        its pinned runtime resources, model and authorization rather than escalating.
+                      properties:
+                        execution_profile:
+                          type: string
+                        harness_profile:
+                          type: string
+                        instructions:
+                          description: Instructions is nonempty and limited to 8192
+                            UTF-8 bytes by the compiler.
+                          maxLength: 8192
+                          minLength: 1
+                          type: string
+                        tool_names:
+                          items:
+                            type: string
+                          maxItems: 7
+                          type: array
+                      required:
+                      - instructions
+                      type: object
+                    minProperties: 1
+                    type: object
+                required:
+                - enabled_seats
+                - max_active_per_execution
+                - max_active_workers
+                - max_launches_per_execution
+                - max_timeout_seconds
+                - templates
+                type: object
               execution_profiles:
                 additionalProperties:
                   properties:

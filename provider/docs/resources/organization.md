@@ -46,6 +46,26 @@ resource "steadmesh_organization" "acme" {
   spec = {
     culture_refs = [module.culture.ref]
 
+    # Optional bounded, read-only worker fan-out; all workers share their
+    # requester's model and execution budget and cannot spawn more workers.
+    model_budgets = {
+      organization_daily_output_tokens = 1000000
+      execution_output_tokens          = 100000
+    }
+    elastic_teams = {
+      enabled_seats              = ["engineer"]
+      max_active_workers         = 20
+      max_active_per_execution   = 10
+      max_launches_per_execution = 20
+      max_timeout_seconds        = 600
+      templates = {
+        researcher = {
+          instructions = "Research the assigned question and cite your evidence."
+          tool_names   = ["memory.read", "memory.search"]
+        }
+      }
+    }
+
     team_templates = {
       engineering = { roles = { engineer = module.engineer_role.ref } }
     }
@@ -192,6 +212,7 @@ Optional:
 - `channel_bindings` (Attributes Map) Bindings of verified human identities to representative seats. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--channel_bindings))
 - `connections` (Attributes Map) Connections to external services. Secrets are references only. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--connections))
 - `culture_refs` (List of String) Ordered organisation culture instruction references (configmap:<name>/<key>#sha256:<digest>).
+- `elastic_teams` (Attributes) Bounded temporary workers for selected seats. Requires positive organization and execution output-token budgets. Workers inherit requester model/runtime authorization and cannot launch nested workers. (see [below for nested schema](#nestedatt--spec--elastic_teams))
 - `execution_profiles` (Attributes Map) Execution profiles. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--execution_profiles))
 - `grants` (Attributes Map) Access grants. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--grants))
 - `harness_profiles` (Attributes Map) Harness profiles. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--harness_profiles))
@@ -338,6 +359,37 @@ Optional:
 
 - `apis` (List of String) APIs this model is served on; empty means all of the connection's APIs.
 
+
+
+
+<a id="nestedatt--spec--elastic_teams"></a>
+### Nested Schema for `spec.elastic_teams`
+
+Required:
+
+- `enabled_seats` (List of String) Existing seats permitted to launch elastic workers.
+- `max_active_per_execution` (Number) Active worker limit per execution, 1–32.
+- `max_active_workers` (Number) Organization-wide active worker limit, 1–1024.
+- `max_launches_per_execution` (Number) Lifetime launches per execution, including retries, 1–128.
+- `max_timeout_seconds` (Number) Maximum worker timeout, 1–1200 seconds.
+- `templates` (Attributes Map) Nonempty map of stable worker template keys. (see [below for nested schema](#nestedatt--spec--elastic_teams--templates))
+
+Optional:
+
+- `draining` (Boolean) Prevent all new disposable worker launches, including legacy tasks and branches, while existing workers finish. Defaults to false.
+
+<a id="nestedatt--spec--elastic_teams--templates"></a>
+### Nested Schema for `spec.elastic_teams.templates`
+
+Required:
+
+- `instructions` (String) Role instructions, nonempty UTF-8, at most 8192 bytes.
+
+Optional:
+
+- `execution_profile` (String) Optional assertion: must equal every enabled seat's execution profile. Omit to inherit each requester's pinned runtime resources.
+- `harness_profile` (String) Optional assertion: must equal every enabled seat's harness profile. Omit to inherit each requester's pinned model and harness.
+- `tool_names` (List of String) Read-only tools: memory.stores, memory.list, memory.read, memory.search, memory.history, work.get, work.list. Further restricted by requester grants. Omitted or empty means no delegated tools.
 
 
 

@@ -174,3 +174,55 @@ func TestTaskRunDeadlineAndParentRevocation(t *testing.T) {
 		t.Fatalf("fence: %+v %v", runs, err)
 	}
 }
+
+func TestTaskRunLaunchCleanupFence(t *testing.T) {
+	ctx := context.Background()
+	s, f, parent := taskParent(t)
+	run, err := s.CreateTaskRun(ctx, f, parent, taskRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "launch"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "launch"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("launch replay: %v", err)
+	}
+	if err := s.CancelTaskRun(ctx, f, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "cleaned"); err == nil {
+		t.Fatal("unresolved launch released capacity")
+	}
+	got, err := s.TaskRun(ctx, f.SeatID, run.ID)
+	if err != nil || got.CleanedAt != nil || got.LaunchStartedAt == nil || got.LaunchResolvedAt != nil {
+		t.Fatalf("fence not durable: %+v %v", got, err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "launched"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "cleaned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "launch"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("cleaned run launched: %v", err)
+	}
+}
+
+func TestTaskRunCancellationBeforeLaunchFencesStaleController(t *testing.T) {
+	ctx := context.Background()
+	s, f, parent := taskParent(t)
+	run, err := s.CreateTaskRun(ctx, f, parent, taskRequest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CancelTaskRun(ctx, f, run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "cleaned"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.ReconcileTaskRun(ctx, f.SeatID, run.ID, "launch"); !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale controller launched: %v", err)
+	}
+}
