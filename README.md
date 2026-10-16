@@ -92,7 +92,7 @@ ghcr.io, and the modules from GitHub.
 
 ```sh
 mkdir steadmesh && cd steadmesh
-terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.6.0"
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.7.0"
 ```
 
 This copies two small Terraform roots into the directory:

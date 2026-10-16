@@ -32,9 +32,9 @@ provider "helm" {
 }
 
 module "steadmesh" {
-  source = "github.com/darcys22/steadmesh//modules/platform?ref=v0.6.0"
+  source = "github.com/darcys22/steadmesh//modules/platform?ref=v0.7.0"
 
-  steadmesh_version      = "0.6.0"
+  steadmesh_version      = "0.7.0"
   organisation_namespace = var.organisation_namespace
   enable_console         = var.enable_console
   enable_egress          = var.enable_egress
