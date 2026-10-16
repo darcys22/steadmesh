@@ -103,10 +103,31 @@
 <p>Keep a persistent seat's identity and workspace while a separate, bounded Pod handles an explicit task. Workers receive fresh workspaces and sessions, the parent's model and sandbox limits, and no tools by default. Results do not apply themselves. See the <a href="task-workers.html">task-worker API and security contract</a>.</p>
 <table>
 <tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
-<tr><td><code>tasks.start</code></td><td><code>request_id</code> (UUID), <code>prompt</code>, <code>timeout_seconds?</code>, <code>tool_names[]?</code>, <code>input_files[]?</code>, <code>artifact_paths[]?</code></td><td>Starts an idempotent child run during an active parent execution. At most four workers with cleanup outstanding and sixteen per parent execution; default timeout ten minutes, maximum twenty.</td></tr>
+<tr><td><code>tasks.start</code></td><td><code>request_id</code> (UUID), <code>prompt</code>, <code>timeout_seconds?</code>, <code>tool_names[]?</code>, <code>input_files[]?</code>, <code>artifact_paths[]?</code></td><td>Starts an idempotent child run during an active parent execution. By default, at most four workers with cleanup outstanding and sixteen per parent execution; enabled elastic-team policy supplies shared limits. Default timeout ten minutes, maximum twenty.</td></tr>
 <tr><td><code>tasks.get</code></td><td><code>id</code>, <code>artifact_path?</code></td><td>Reads parent-scoped state, bounded output and returned artifact names. A single small file can be requested by path; use the runtime API for full files.</td></tr>
 <tr><td><code>tasks.cancel</code></td><td><code>id</code></td><td>Revokes the child and requests removal of its temporary workspace. Durable results are retained. Cleanup produces a deduplicated parent notification.</td></tr>
 </table>
+
+<h2 id="elastic-teams">Expand a temporary team</h2>
+<p>Seats enabled by <a href="configuration.html#elastic-teams">elastic-team policy</a> can request an entire temporary team from administrator-approved templates. Admission is all-or-nothing, with no waiting queue or partial teams. Workers share the parent execution's output budget, inherit its pinned model/runtime authorization and cannot spawn workers. See <a href="configuration.html#elastic-launch-recovery">launch recovery and operational limits</a>.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>teams.templates</code></td><td>optional <code>template</code> or <code>after</code></td><td>Lists up to 64 approved template names and limits; pass the returned next_after as after for another page. Select a template to inspect its tool ceiling and bounded instruction preview. Use before expansion.</td></tr>
+<tr><td><code>teams.expand</code></td><td><code>request_id</code> (UUID), <code>workers[]</code> (unique letters/digits/hyphens/underscores name, template, task)</td><td>Admits 1–32 required workers atomically within organization and execution limits. Each task has a prompt and optional timeout_seconds, tool_names, input_files and artifact_paths. Omitted timeout uses the smaller of 600 seconds and the policy ceiling. Tools narrow the template ceiling; omitted means none. The server assigns child request IDs. Identical retries reuse the team; changed payloads conflict.</td></tr>
+<tr><td><code>teams.get</code></td><td><code>id</code></td><td>Reads this seat's durable team, member names, worker IDs and states. Use tasks.get for individual results and artifacts.</td></tr>
+<tr><td><code>teams.cancel</code></td><td><code>id</code></td><td>Cancels unfinished members and revokes access. Capacity remains held until runtime cleanup is confirmed; results remain available.</td></tr>
+</table>
+<pre><code>{
+  "request_id": "424a30ad-fd44-46f4-a3da-e7224d4ed290",
+  "workers": [
+    {"name": "research-evidence", "template": "researcher", "task": {
+      "prompt": "Find evidence relevant to the current design decision.",
+      "tool_names": ["memory.read", "memory.search"],
+      "timeout_seconds": 600
+    }}
+  ]
+}</code></pre>
+<p>The runtime API exposes <code>POST /v1/elastic-teams</code>, <code>GET /v1/elastic-teams/{id}</code> and <code>POST /v1/elastic-teams/{id}/cancel</code>. Creation requires a real running parent execution and current lease generation. Reads are scoped to the parent seat. Admission checks output-budget headroom but does not guarantee per-worker token funding; concurrent callers may consume it before a worker's next model call.</p>
 
 <h2 id="run-branches">Compare independent alternatives</h2>
 <p>Start several approaches from the same explicit handoff and text files, compare their separate results, then deliberately choose one. This is a portable context snapshot, not a clone of process memory or a working tree. No parent secrets or tool grants are copied. See the <a href="run-branches.html">branching workflow and safety contract</a>.</p>

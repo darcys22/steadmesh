@@ -112,7 +112,7 @@ func (r *Runner) runTaskWorker(ctx context.Context, id string) (retErr error) {
 		<-drained
 	}
 	defer stop()
-	env := r.environment(boot.Identity, &boot.Manifest, "")
+	env := r.environment(boot.Identity, &boot.Manifest, boot.Instructions)
 	if err = a.Prepare(taskCtx, env); err != nil {
 		return fail(err)
 	}

@@ -30,6 +30,26 @@ resource "steadmesh_organization" "acme" {
   spec = {
     culture_refs = [module.culture.ref]
 
+    # Optional bounded, read-only worker fan-out; all workers share their
+    # requester's model and execution budget and cannot spawn more workers.
+    model_budgets = {
+      organization_daily_output_tokens = 1000000
+      execution_output_tokens          = 100000
+    }
+    elastic_teams = {
+      enabled_seats              = ["engineer"]
+      max_active_workers         = 20
+      max_active_per_execution   = 10
+      max_launches_per_execution = 20
+      max_timeout_seconds        = 600
+      templates = {
+        researcher = {
+          instructions = "Research the assigned question and cite your evidence."
+          tool_names   = ["memory.read", "memory.search"]
+        }
+      }
+    }
+
     team_templates = {
       engineering = { roles = { engineer = module.engineer_role.ref } }
     }

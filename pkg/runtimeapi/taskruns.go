@@ -35,6 +35,8 @@ type TaskFile struct {
 // TaskRunRequest cannot select a new model, identity, runtime or credential.
 // ToolNames narrows existing read-only memory grants; omitted means none.
 type TaskRunRequest struct {
+	// Template is server-assigned for an admitted elastic team member.
+	Template       string     `json:"template,omitempty"`
 	RequestID      string     `json:"request_id"`
 	Prompt         string     `json:"prompt"`
 	TimeoutSeconds int        `json:"timeout_seconds,omitempty"`
@@ -66,6 +68,10 @@ type TaskRun struct {
 	Deadline          time.Time      `json:"deadline"`
 	FinishedAt        *time.Time     `json:"finished_at,omitempty"`
 	CleanedAt         *time.Time     `json:"cleaned_at,omitempty"`
+	// LaunchStartedAt is a durable, one-shot create fence. An unresolved launch
+	// retains capacity indefinitely; it must never be reclaimed by a lease TTL.
+	LaunchStartedAt  *time.Time `json:"launch_started_at,omitempty"`
+	LaunchResolvedAt *time.Time `json:"launch_resolved_at,omitempty"`
 }
 
 func (r TaskRun) Terminal() bool {

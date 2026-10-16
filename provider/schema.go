@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -57,6 +58,24 @@ func keyed(desc string, attrs map[string]schema.Attribute) schema.MapNestedAttri
 func specAttributes() map[string]schema.Attribute {
 	return map[string]schema.Attribute{
 		"timezone": optStr("IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC."),
+		"elastic_teams": schema.SingleNestedAttribute{
+			Optional:    true,
+			Description: "Bounded temporary workers for selected seats. Requires positive organization and execution output-token budgets. Workers inherit requester model/runtime authorization and cannot launch nested workers.",
+			Attributes: map[string]schema.Attribute{
+				"enabled_seats":              schema.ListAttribute{Required: true, ElementType: types.StringType, Description: "Existing seats permitted to launch elastic workers.", Validators: []validator.List{elasticNonemptyValidator{}}},
+				"max_active_workers":         schema.Int64Attribute{Required: true, Validators: []validator.Int64{elasticLimitValidator{max: 1024}}, Description: "Organization-wide active worker limit, 1–1024."},
+				"max_active_per_execution":   schema.Int64Attribute{Required: true, Validators: []validator.Int64{elasticLimitValidator{max: 32}}, Description: "Active worker limit per execution, 1–32."},
+				"max_launches_per_execution": schema.Int64Attribute{Required: true, Validators: []validator.Int64{elasticLimitValidator{max: 128}}, Description: "Lifetime launches per execution, including retries, 1–128."},
+				"max_timeout_seconds":        schema.Int64Attribute{Required: true, Validators: []validator.Int64{elasticLimitValidator{max: 1200}}, Description: "Maximum worker timeout, 1–1200 seconds."},
+				"draining":                   optBool("Prevent all new disposable worker launches, including legacy tasks and branches, while existing workers finish. Defaults to false."),
+				"templates": schema.MapNestedAttribute{Required: true, Validators: []validator.Map{elasticNonemptyValidator{}}, Description: "Nonempty map of stable worker template keys.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
+					"instructions":      reqStr("Role instructions, nonempty UTF-8, at most 8192 bytes."),
+					"tool_names":        strList("Read-only tools: memory.stores, memory.list, memory.read, memory.search, memory.history, work.get, work.list. Further restricted by requester grants. Omitted or empty means no delegated tools."),
+					"harness_profile":   optStr("Optional assertion: must equal every enabled seat's harness profile. Omit to inherit each requester's pinned model and harness."),
+					"execution_profile": optStr("Optional assertion: must equal every enabled seat's execution profile. Omit to inherit each requester's pinned runtime resources."),
+				}}},
+			},
+		},
 		"model_budgets": schema.SingleNestedAttribute{
 			Optional:    true,
 			Description: "Enforced cumulative output-token budgets. Input tokens and dollar costs are not capped. Daily windows reset at 00:00 UTC. Zero scope limits are unlimited; at least one must be positive.",

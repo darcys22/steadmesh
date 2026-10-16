@@ -46,7 +46,9 @@ func (r *SeatReconciler) reconcileTaskWorkers(ctx context.Context, s *seatruntim
 			if err := api.TaskRunAction(ctx, s.SeatID, t.ID, "cancel"); err != nil {
 				return err
 			}
-			t.State = "cancelled"
+			// Refetch on the next pass. A launch may have acquired its fence
+			// after our list snapshot but before this cancellation committed.
+			continue
 		}
 		if t.Terminal() {
 			if exists {
@@ -57,7 +59,13 @@ func (r *SeatReconciler) reconcileTaskWorkers(ctx context.Context, s *seatruntim
 				}
 				continue
 			}
-			// Confirmed no Pod: remove policy and identity, then record cleanup.
+			// A missing Pod does not prove that a delayed Create cannot arrive.
+			// Only the launch owner can resolve its durable one-shot fence. Crash
+			// or ambiguous API errors intentionally retain the capacity reservation.
+			if t.LaunchStartedAt != nil && t.LaunchResolvedAt == nil {
+				continue
+			}
+			// Confirmed no Pod and no outstanding launch: remove policy and identity.
 			for _, obj := range []client.Object{&corev1.ServiceAccount{}, &networkingv1.NetworkPolicy{}} {
 				obj.SetNamespace(key.Namespace)
 				obj.SetName(key.Name)
@@ -79,10 +87,14 @@ func (r *SeatReconciler) reconcileTaskWorkers(ctx context.Context, s *seatruntim
 			continue
 		}
 		// Never restart a claimed worker: a replacement must be a new explicit run.
-		if t.PodUID != "" {
+		if t.PodUID != "" || t.LaunchResolvedAt != nil {
 			if err := api.TaskRunAction(ctx, s.SeatID, t.ID, "failed"); err != nil {
 				return err
 			}
+			continue
+		}
+		if t.LaunchStartedAt != nil {
+			// Never retry an unresolved create, even after a controller restart.
 			continue
 		}
 		if !time.Now().Before(t.Deadline) {
@@ -97,11 +109,21 @@ func (r *SeatReconciler) reconcileTaskWorkers(ctx context.Context, s *seatruntim
 		if err != nil {
 			return err
 		}
+		// Fence before *any* runtime write so cancellation cannot clean up policy
+		// or identity while an old reconciliation is still creating resources.
+		if err := api.TaskRunAction(ctx, s.SeatID, t.ID, "launch"); err != nil {
+			return fmt.Errorf("task worker %s launch fence: %w", t.ID, err)
+		}
 		// Establish default-deny policy and separate identity before the Pod.
 		for _, obj := range []client.Object{np, sa, desired} {
 			if err := r.Client.Create(ctx, obj); err != nil && !apierrors.IsAlreadyExists(err) {
 				return fmt.Errorf("task worker %s: %w", t.ID, err)
 			}
+		}
+		// Do not resolve any failed/ambiguous Create: it could commit later.
+		// No observer may resolve this fence merely because it sees a Pod.
+		if err := api.TaskRunAction(ctx, s.SeatID, t.ID, "launched"); err != nil {
+			return fmt.Errorf("task worker %s launch resolution: %w", t.ID, err)
 		}
 	}
 	return nil

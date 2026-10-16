@@ -25,9 +25,11 @@ func (s *Store) CreateRunBranch(ctx context.Context, f Fence, executionID string
 		return nil, fmt.Errorf("%w: request_id must be a UUID", ErrInvalid)
 	}
 	req.RequestID = requestID.String()
-	if _, err := uuid.Parse(executionID); err != nil {
+	parsedExecution, err := uuid.Parse(executionID)
+	if err != nil {
 		return nil, fmt.Errorf("%w: a current parent execution is required", ErrInvalid)
 	}
+	executionID = parsedExecution.String()
 	if err := runtimeapi.ValidateRunBranch(&req); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
@@ -39,6 +41,9 @@ func (s *Store) CreateRunBranch(ctx context.Context, f Fence, executionID string
 	digest := hex.EncodeToString(sum[:])
 	id := uuid.NewString()
 	err = s.inTx(ctx, func(tx pgx.Tx) error {
+		if _, _, err := lockWorkerOrganization(ctx, tx, f.SeatID); err != nil {
+			return err
+		}
 		if err := checkFence(ctx, tx, f); err != nil {
 			return err
 		}
@@ -48,12 +53,12 @@ func (s *Store) CreateRunBranch(ctx context.Context, f Fence, executionID string
 			ON CONFLICT (parent_seat_id, request_id) DO NOTHING RETURNING id`,
 			id, f.SeatID, executionID, req.RequestID, raw, digest, runtimeapi.BranchSnapshotSHA256(req)).Scan(&id)
 		if errors.Is(err, pgx.ErrNoRows) {
-			var previous string
-			if err := tx.QueryRow(ctx, `SELECT id, request_sha256 FROM run_branches
-				WHERE parent_seat_id = $1 AND request_id = $2`, f.SeatID, req.RequestID).Scan(&id, &previous); err != nil {
+			var previous, previousExecution string
+			if err := tx.QueryRow(ctx, `SELECT id, request_sha256, parent_execution_id FROM run_branches
+				WHERE parent_seat_id = $1 AND request_id = $2`, f.SeatID, req.RequestID).Scan(&id, &previous, &previousExecution); err != nil {
 				return err
 			}
-			if previous != digest {
+			if previous != digest || previousExecution != executionID {
 				return fmt.Errorf("%w: request_id already belongs to a different branch request", ErrConflict)
 			}
 			return nil

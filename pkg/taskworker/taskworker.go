@@ -9,9 +9,10 @@ import (
 )
 
 type Bootstrap struct {
-	Run      runtimeapi.TaskRun   `json:"run"`
-	Manifest compile.SeatManifest `json:"manifest"`
-	Identity runtimeapi.Bootstrap `json:"identity"`
+	Instructions string               `json:"instructions,omitempty"`
+	Run          runtimeapi.TaskRun   `json:"run"`
+	Manifest     compile.SeatManifest `json:"manifest"`
+	Identity     runtimeapi.Bootstrap `json:"identity"`
 }
 
 // Manifest intersects current parent grants with the worker's fixed read-only

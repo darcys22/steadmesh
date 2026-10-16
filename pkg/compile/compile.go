@@ -159,6 +159,7 @@ func (c *compiler) run() *Manifest {
 	c.checkConnections(&out)
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
+	c.checkElasticTeams(&c.in)
 	c.checkWorkPublication(&out)
 	c.checkAccess(&out)
 	if len(c.errs) > 0 {
