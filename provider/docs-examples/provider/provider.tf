@@ -2,7 +2,7 @@ terraform {
   required_providers {
     steadmesh = {
       source  = "darcys22/steadmesh"
-      version = "~> 0.6.0"
+      version = "~> 0.7.0"
     }
   }
 }

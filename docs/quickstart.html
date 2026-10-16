@@ -43,7 +43,7 @@
 <!-- shell:sidebar -->
 <aside class="sidebar">
   <nav id="docs-nav" aria-label="Documentation">
-  <div class="brand-sub">Documentation for v0.6.0</div>
+  <div class="brand-sub">Documentation for v0.7.0</div>
     <div class="nav-group">Start</div>
     <ul>
       <li><a href="docs/">Overview</a></li>
@@ -146,7 +146,7 @@ terraform apply</code></pre>
 </li>
 <li>
 <p><strong>Talk to your representative.</strong></p>
-<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.6.0
+<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.7.0
 orgctl chat --context "$TF_VAR_kube_context" --user me</code></pre>
 <pre data-no-copy><code>Chatting with me's representative over terminal. Ctrl-D or Ctrl-C to leave.
 you&gt; Add a CONTRIBUTING.md to the repo explaining how to run the tests.</code></pre>
@@ -200,7 +200,7 @@ kubectl --context "$TF_VAR_kube_context" -n steadmesh-system port-forward deploy
 <li>
 <p><strong>Get the quickstart.</strong> This copies two small Terraform roots into a new directory. <code>platform/</code> installs Steadmesh, and <code>organisation/</code> declares your agents.</p>
 <pre><code>mkdir steadmesh &amp;&amp; cd steadmesh
-terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.6.0"</code></pre>
+terraform init -from-module="github.com/darcys22/steadmesh//quickstart?ref=v0.7.0"</code></pre>
 </li>
 <li>
 <p><strong>Install the platform.</strong> Set <code>kube_context</code> and your tokens (or <code>existing_secret_refs</code>; see the comments in <code>terraform.tfvars.example</code>) in <code>terraform.tfvars</code>. Read the state warning above first.</p>

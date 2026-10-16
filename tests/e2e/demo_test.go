@@ -567,7 +567,7 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
 <!-- shell:sidebar -->
 <aside class="sidebar">
   <nav id="docs-nav" aria-label="Documentation">
-  <div class="brand-sub">Documentation for v0.6.0</div>
+  <div class="brand-sub">Documentation for v0.7.0</div>
     <div class="nav-group">Start</div>
     <ul>
       <li><a href="docs/">Overview</a></li>

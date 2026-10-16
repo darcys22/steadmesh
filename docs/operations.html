@@ -43,7 +43,7 @@
 <!-- shell:sidebar -->
 <aside class="sidebar">
   <nav id="docs-nav" aria-label="Documentation">
-  <div class="brand-sub">Documentation for v0.6.0</div>
+  <div class="brand-sub">Documentation for v0.7.0</div>
     <div class="nav-group">Start</div>
     <ul>
       <li><a href="docs/">Overview</a></li>
@@ -173,7 +173,7 @@ kubectl --context kind-steadmesh -n steadmesh-example get agentseat &lt;seat-nam
 
 <h2 id="operator-cli">Administrative controls</h2>
 <p>The stable-key seat commands were introduced in v0.6.0. Install <code>orgctl</code> from the same release as your platform (Go 1.27.1 or newer), or build <code>make orgctl</code> from that release's source:</p>
-<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.6.0</code></pre>
+<pre><code>go install github.com/darcys22/steadmesh/cmd/orgctl@v0.7.0</code></pre>
 <p>Use the installed <code>orgctl</code> in place of <code>bin/orgctl</code> in the source-tree examples below. The <code>--name</code> value is the Kubernetes organisation object's name; <code>--seat</code> is its declaration key, not the generated seat name or durable UUID.</p>
 <p>Use <code>orgctl</code> to inspect, watch, pause or resume a seat by its stable declaration key, without looking up its generated Kubernetes name. All four commands require an explicit <code>--namespace</code>, <code>--name</code> (the <code>AgentOrganization</code> object name) and <code>--seat</code>. As with the other commands, supply <code>--context</code> or <code>STEADMESH_KUBE_CONTEXT</code>; the ambient Kubernetes context is never used. To change the direction of a seat's work, talk to your representative.</p>
 <pre><code><span class="c"># Inspect the representative_sean seat in this organisation</span>
@@ -200,6 +200,15 @@ kubectl --context kind-steadmesh -n steadmesh-example logs &lt;seat-object-name&
 <p>Back up Postgres, seat workspace volumes and your Terraform state before upgrading. Keep the platform chart, controller, platform service, seat images, Terraform provider and <code>orgctl</code> on the same release. Update module <code>?ref=</code> pins, <code>steadmesh_version</code> and the provider version together; apply <code>platform/</code> before <code>organisation/</code>, then check readiness with <code>orgctl verify</code> using your explicit context and organisation selection.</p>
 <p>v0.6.0 includes database migrations <code>00002_model_budgets.sql</code>, <code>00003_task_runs.sql</code> and <code>00004_run_branches.sql</code>. The platform applies pending migrations automatically when it opens the database. Deploy the complete release in order; do not deploy a standalone feature branch or add a missing lower-numbered migration after later ones have run. If migration fails, inspect the platform logs and migration history before proceeding. There is no built-in backup/restore or documented automatic rollback.</p>
 <p>Worker support also depends on the matching controller, chart RBAC and seat image. A provider-only upgrade is not enough. The new <a href="model-budgets.html">model budgets</a> are opt-in; disposable-worker and branch tools are available to active seats without extra Terraform grants, but workers receive no platform tools by default. Read their <a href="task-workers.html#bounds-and-authority">authority and cleanup limits</a> before use.</p>
+
+<h3 id="v070-upgrade">Upgrade from v0.6.0 to v0.7.0</h3>
+<p>v0.7.0 adds migrations <code>00005_issued_credentials.sql</code>, <code>00006_external_conversations.sql</code>, <code>00007_elastic_teams.sql</code> and <code>00008_task_launch_fence.sql</code>. Back up the database and follow the permission-hardening rollout below, including a stable credential-ledger encryption key and resyncing every organisation.</p>
+<p>Before the migration and restart, stop new worker creation, drain or cancel existing workers and confirm their Pods are gone, then quiesce all old controller replicas. Do not run v0.6.0 controllers alongside v0.7.0: old controllers do not participate in the durable launch fence. Start the matching platform and controller release only after the old controllers and their outstanding Kubernetes API requests cannot issue further creates; recheck worker Pods after quiescence.</p>
+<p>Helm does not upgrade existing CRDs from a chart's <code>crds/</code> directory. Before applying organisations with <code>elastic_teams</code>, update the existing CRDs from the v0.7.0 source checkout using your explicit cluster context; do not delete and recreate them:</p>
+<pre><code>kubectl --context YOUR_CONTEXT apply -f charts/platform/crds/</code></pre>
+<p>Run that command from a verified v0.7.0 checkout and confirm the CRDs are established before the organisation apply. This requires cluster-scoped CRD update permission.</p>
+<p>The launch fence deliberately retains capacity when a controller crashes after acquiring its launch fence but before resolving it, or a Kubernetes create has an ambiguous outcome. A missing Pod alone is not proof that a delayed create cannot still arrive. Such reservations require manual operator recovery after establishing that the original launch can no longer create resources; there is no automatic timeout-based fence reset or supported recovery command. Do not clear the reservation or retry the same launch merely because its Pod is absent.</p>
+<p>Elastic teams are opt-in and need positive organisation-daily and execution output-token budgets. Workers inherit the requester's model and runtime restrictions and can receive only the supported read-only tools; these budgets do not cap input tokens or monetary cost. The representative MCP gateway remains disabled by default. See <a href="configuration.html#elastic-teams">elastic-team configuration</a> and <a href="tools.html">tools and gateway access</a>.</p>
 
 <h3 id="permission-upgrade">Roll out permission hardening</h3>
 <p>The permission-hardening upgrade adds the automatic database migration <code>00005_issued_credentials.sql</code>, independent grant clauses and strict adapter target validation. Back up the database and preserve the ledger key separately before rollout.</p>

@@ -178,7 +178,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.check.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --generate-notes --notes "$(cat <<EOF
+          gh release create "$GITHUB_REF_NAME" --generate-notes --notes "$(cat RELEASE_NOTES.md; printf '\n\n'; cat <<EOF
           Install into your cluster without cloning:
 
           \`\`\`sh
