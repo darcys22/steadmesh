@@ -7,8 +7,10 @@ Pi on a model endpoint you choose. People message their personal
 representatives over Slack (or a terminal). Representatives keep context,
 delegate to other seats, and agents can track work in Linear.
 
-Steadmesh is early-stage. The current release is
-[v0.6.0](https://github.com/darcys22/steadmesh/releases/tag/v0.6.0).
+Steadmesh is early-stage. Check [releases](https://github.com/darcys22/steadmesh/releases)
+for published artifacts. This source tree and its quickstart target v0.7.0;
+wait for that release's publishing workflow to finish before installing its
+chart, images and Terraform provider.
 
 **Documentation:** [steadmesh.com](https://steadmesh.com/), built from the
 static pages in [`docs/`](docs/) with no build step: a quickstart, a tutorial,
@@ -34,6 +36,16 @@ Introduced in v0.6.0:
 
 See the [upgrade notes](docs/operations.html#upgrade) before using these
 features on an older deployment.
+
+## Compose native teams
+
+v0.7.0 adds [native teams](docs/native-teams.html): combine declared leaders
+with bounded pools of independent teammates, coordinate through an explicitly
+shared work board, and choose fixed, self-editable or reviewed working
+instructions. Membership, mission editing, review, messaging and tool access
+remain separately controlled. Existing organizations keep their declared-team
+behavior unless these policies are enabled. Read the
+[v0.7.0 upgrade notes](docs/operations.html#v070-upgrade) before rollout.
 
 ## External representative MCP gateway
 
