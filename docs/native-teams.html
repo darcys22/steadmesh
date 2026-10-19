@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Composable native teams · Steadmesh</title>
+<meta name="description" content="Compose declared leadership, independent native pool members and self-organising teams with explicit authority and editable context.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/native-teams.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Composable native teams · Steadmesh">
+<meta property="og:description" content="Compose declared leadership, independent native pool members and self-organising teams with explicit authority and editable context.">
+<meta property="og:url" content="https://steadmesh.com/native-teams.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#possibilities">What you can do</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.7.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="native-teams.html" aria-current="page">Composable native teams</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Project</div>
+    <ul>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1 id="native-teams">Composable native teams</h1>
+<p class="lede">Keep a declared leadership group, add a bounded pool of independent teammates, and let those teammates organise work on an explicitly shared board. Coordination, membership, permissions and editable context are separate choices.</p>
+<p><strong>Development build:</strong> these policies require matching provider, controller, platform and seat images built from this source tree. This guide does not announce a published release. Use the <a href="from-source.html">source setup</a> and the local examples below.</p>
+<nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#choose">Choose a team shape</a></li><li><a href="#identity">Independent participants</a></li><li><a href="#authority">Authority and review</a></li><li><a href="#context">Context and memory</a></li><li><a href="#lifecycle">Pool lifecycle</a></li><li><a href="#run">Run the local examples</a></li><li><a href="#compatibility">Defaults and compatibility</a></li></ul></nav>
+<h2 id="choose">Choose a team shape</h2>
+<p>A native team composes three optional policies:</p>
+<ul><li><code>coordination</code> sets <code>mode</code> (<code>declared</code> or <code>self_organising</code>), a mission, work board, mission editors, review policy and per-execution message limit</li><li><code>pool</code> sets minimum and maximum available members, explicit participant templates and lifecycle bounds</li><li><code>context</code> independently permits each member to edit its own working instructions and summary</li></ul>
+<p>Static seats continue to use ordinary <code>teams</code> memberships. Runtime pool members use independent seat identities; Terraform owns their policy and bounds, not a changing list of runtime identities. A self-organising team can use only declared seats, only a pool, or both.</p>
+<pre><code>teams = {
+  delivery = {
+    coordination = {
+      mode                       = "self_organising"
+      mission                    = "Produce a reviewed project plan."
+      work_store                 = "board"
+      mission_editors            = ["team:delivery"]
+      review_policy              = "required"
+      max_messages_per_execution = 20
+    }
+    context = {
+      editable_instructions = false
+      editable_summary      = true
+    }
+    # Add pool = { ... } to admit dynamic members.
+  }
+}</code></pre>
+<p>This excerpt is policy only. The complete examples also declare the board, grants, message routes, harness/execution/sandbox profiles, role bundles, budgets and pool templates.</p>
+<h2 id="identity">Independent participants</h2>
+<p>Every admitted native member has its own identity, inbox, ordinary turn lifecycle and private memory. It uses the normal seat runner and tools under the operator-declared template. It does not borrow its requester's active execution, lease, read-only tool subset or private memory. A member can collaborate across ordinary turns rather than disappearing when its requester's turn ends.</p>
+<p>Declare a full <code>seat</code> inside each pool template, including its role reference and harness, execution and sandbox profiles. Team membership and explicit grants determine authority in the same way as for other seats. Do not supply a shared fixed <code>personal_memory</code> or <code>adopt_from</code> in a pool template; each member needs its own private identity and memory. The owning pool team is added to membership automatically.</p>
+<h2 id="authority">Authority and review</h2>
+<p>The operator's permission envelope stays authoritative. A mission, a title such as CEO, an editable prompt or a teammate's request cannot add connections, grants, sandbox access, routes or pool capacity. The original task remains available; self-edits are subordinate working context and never replace it.</p>
+<p><code>work_store</code> must name a declared shared memory store with explicit team <code>read</code>, <code>write</code> and <code>revise</code> authority. Naming the store is not a grant. Keep <code>search</code>, <code>history</code> or other operations explicit too. Personal memory remains private unless its owner deliberately publishes permitted information.</p>
+<p><code>mission_editors</code> authorizes mission edits only. Use <code>seat:member_key</code> for selected declared members or <code>team:delivery</code> for all members of that team. An empty list authorizes no agent edits. Neither selector grants additional tools or message access. To refine a mission, read <code>teams.mission</code> and supply both its numeric revision as <code>expected_revision</code> and <code>mission.policy_revision</code> as <code>expected_policy_revision</code> to <code>teams.refine_mission</code>, along with the mission and reason. Operator policy changes invalidate stale refinements.</p>
+<p><code>review_policy = "required"</code> makes review a distinct step before accepted completion. Assignment, execution success and business acceptance are different facts. <code>work.review</code> requires a distinct owner and reviewer, in-review status and evidence for approval. Changes to the objective, acceptance criteria, plan, owner or evidence invalidate the approval; incidental notes do not. <code>work.refine</code> lets explicit mission editors revise current objectives with a reason while retaining the original task in revision history. Set clear reviewer responsibilities in the mission and role instructions; there is no implicit privileged reviewer or executive. Use a separate participant for review and retain evidence on the board.</p>
+<p>Direct messages always require an operator-declared route. Shared membership alone does not permit messaging. This explicit peer route allows members of <code>delivery</code> to communicate:</p>
+<pre><code>message_routes = {
+  delivery_peers = {
+    from          = "team:delivery"
+    to            = "team:delivery"
+    bidirectional = true
+  }
+}</code></pre>
+<p>Apply positive organisation and execution output-token budgets before enabling a pool. Message limits require an active execution and include outgoing sends and replies. Pool bounds, message limits and model budgets limit different resources; none replaces the others. See <a href="model-budgets.html">model output budgets</a>.</p>
+<h2 id="context">Context and memory are independent</h2>
+<p><code>editable_instructions</code> controls self-authored working instructions. <code>editable_summary</code> controls a compact private summary. Both default to false. Normal memory access still follows the seat's personal-memory ownership and explicit shared-memory grants, independently of those flags.</p>
+<p>Choose one of three instruction behaviours: immutable (<code>editable_instructions = false</code>), direct self-edit (<code>editable_instructions = true</code>) or reviewed edits (also set <code>require_instruction_approval = true</code> and explicit <code>instruction_approvers</code>). The hybrid example uses reviewed edits with the three named leaders as approvers. An author cannot approve their own proposal; a leader needs another authorized leader. Across memberships, any approval requirement overrides direct self-edit, and explicit approver selectors are combined. Approval grants no access to the author’s private summary or memory.</p>
+<p>The fixed-prompts example disables instruction edits but permits summary edits and ordinary memory writes. To freeze both context fields while keeping memory writable, set both flags to false and leave the memory grants unchanged. To make shared memory read-only, change those grants; an instruction flag does not do it.</p>
+<p>Within an authenticated active seat turn, <code>context.read</code> returns current context or a selected revision. <code>context.update</code> changes one field using mandatory compare-and-swap <code>expected_revision</code>. When approval is required, instruction updates and instruction rollback must use the reviewed proposal workflow; direct writes are refused. Summary updates keep their independent permission. An untouched context starts at revision 0. Each field is limited to 4096 UTF-8 bytes, with combined JSON-escaped fields capped at 14336 bytes.</p>
+<pre><code>steadmesh-tools call context.read '{}'
+steadmesh-tools call context.update '{"field":"summary","text":"Plan drafted; awaiting independent review.","expected_revision":0}'
+steadmesh-tools call context.update '{"field":"summary","text":"Review complete; preparing delivery.","expected_revision":1}'
+steadmesh-tools call context.history '{}'
+steadmesh-tools call context.rollback '{"field":"summary","revision":1,"expected_revision":2}'</code></pre>
+<p>Use the revision actually returned by your read; the values above illustrate two initial updates and restoring the first saved snapshot. Revision 0 describes an empty initial context, not a saved rollback target. Rollback requires an existing revision of at least 1. Rollback restores only the selected, permitted field and creates a new revision. History returns the latest 20 revision metadata entries; pass <code>before_revision</code> to page backward. These tools target only the authenticated participant, never a supplied teammate identity. Changes become visible on the next ordinary turn, including resumed native harness sessions.</p>
+<h3 id="reviewed-instructions">Review an instruction change</h3>
+<p>With approval required, the author calls <code>context.propose_instruction</code> with <code>text</code>, <code>expected_context_revision</code> and a <code>reason</code>. This creates a proposal, not a context update. Read the current revision first; private summary changes also advance context revisions.</p>
+<p>Use <code>context.proposals</code> to inspect your own proposals or pending proposals you are explicitly authorized to review as a member of the same team. Results contain one proposal per page; pass <code>next_before_sequence</code> as <code>before_sequence</code> for the next page. Reviewers receive the proposed instructions, not access to the author’s private summary or memory.</p>
+<p>A different authorized participant calls <code>context.approve_instruction</code> with the proposal’s exact <code>proposal_id</code>, <code>expected_context_revision</code>, <code>policy_token</code> and <code>approve</code> boolean. Self-approval is always refused, including when the whole team is an approver. Approval appends a revision attributed to both author and approver, visible on the author’s next turn; rejection leaves context unchanged. If context or approval policy has changed, the proposal is stale and must be proposed again.</p>
+<h2 id="lifecycle">Availability, draining and retention</h2>
+<p><code>min_members = 3</code> means keep three members available for work. It does not mean three models constantly generating output. The ordinary inbox and execution idle policy decide when each member runs; the pool's idle timeout decides when surplus members can retire. <code>max_members = 30</code> bounds admitted pool members, not every static seat in the organisation.</p>
+<p>Set <code>draining = true</code> to stop admitting new members and drain the pool. Draining gives active participants a bounded opportunity to finish and leave a handoff. A drain timeout bounds that opportunity; it does not establish business completion. Handoffs, execution history and private memory survive draining. With <code>retention_seconds = 0</code> (the default), private records remain indefinitely. A positive value explicitly opts into automatic cleanup after retirement plus that interval: retired-private context, memory, session and handoff data are removed. Shared evidence and message audit are retained. This is a destructive data-retention choice; choose it deliberately before applying the policy. Retention is not permission to make private memory visible to teammates.</p>
+<p>Native pool defaults are <code>min_members = 0</code>, idle timeout 900 seconds, drain timeout 300 seconds and <code>retention_seconds = 0</code> (indefinite). Supply <code>max_members</code> and at least one explicit template. Baseline minimum membership uses the alphabetically first template; request other configured templates explicitly through <code>teams.grow</code>. Keep organisation/store data-retention choices aligned with operational and privacy needs; do not assume retirement deletes every retained record immediately.</p>
+<h2 id="run">Run three complete local examples</h2>
+<ul><li><a href="https://github.com/darcys22/steadmesh/tree/main/examples/native-hybrid">Hybrid CEO, lieutenants and pool</a>: declared leadership plus a self-organising delivery team with 3–30 pool members; only the three named leaders may edit its mission, and instruction edits require approval by a different named leader</li><li><a href="https://github.com/darcys22/steadmesh/tree/main/examples/native-self-organising">Self-organising peers</a>: all coordination is peer-based, including a declared peer that serves as the terminal contact; all team members may edit the mission</li><li><a href="https://github.com/darcys22/steadmesh/tree/main/examples/native-fixed-prompts">Self-organising peers with fixed prompts</a>: the same collaboration model, with instruction edits disabled while summary and memory updates remain available</li></ul>
+<p>Each root includes complete HCL, a local role bundle, a deterministic fake-harness smoke input and setup instructions. Reuse the foundation/platform stages, the locally built provider and a local terminal credential fixture. No model API key, Slack account or live external service is required. Initial dependency/image downloads still need network access; cached provider and container artifacts allow subsequent offline fixture runs.</p>
+<p>The fake harness executes explicit script commands; it does not invent a real project plan or demonstrate model-driven autonomy. Its smoke input checks the terminal-to-seat turn path. Inspect runtime membership and use the integration tests for lifecycle and authorization coverage.</p>
+<h2 id="compatibility">Backwards-compatible defaults and separate legacy mode</h2>
+<p>Omitting these native policies preserves existing declared-team behaviour. A supplied coordination block defaults to <code>mode = "declared"</code>, <code>review_policy = "none"</code> and a maximum of 20 messages per execution. No pool is created by omission; context edit permissions remain off.</p>
+<p><a href="task-workers.html">Disposable task workers</a> and legacy <code>elastic_teams</code> remain separate execution-scoped mechanisms. Their read-only worker authority, inheritance and cleanup rules still apply. A legacy worker is not a native member, and existing task records or worker policies are not automatically migrated. Choose a native pool explicitly when independent ongoing participants are the intended model.</p>
+<!-- shell:pager -->
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="model-budgets.html" rel="prev"><small>Previous</small>Model output budgets</a><a class="next" href="task-workers.html" rel="next"><small>Next</small>Disposable task workers</a></nav>
+<!-- /shell:pager -->
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/native-teams.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

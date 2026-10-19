@@ -92,6 +92,8 @@ type RouteEdge struct {
 
 // SeatManifest is the effective configuration of one seat.
 type SeatManifest struct {
+	// PoolTeam is runtime provenance, never a declarative seat membership field.
+	PoolTeam         string                `json:"pool_team,omitempty"`
 	Key              string                `json:"key"`
 	DisplayName      string                `json:"display_name"`
 	RoleRef          string                `json:"role_ref"`
@@ -113,7 +115,8 @@ type SeatManifest struct {
 	IsRepresentative bool                  `json:"is_representative"`
 	// Timezone is where the seat reads and schedules times of day: its
 	// human's for a representative, otherwise the organisation's.
-	Timezone string `json:"timezone"`
+	Timezone string            `json:"timezone"`
+	Context  *spec.TeamContext `json:"context,omitempty"`
 	// Access is what the seat may do from its sandbox (access profiles).
 	Access         *access.SeatAccess `json:"access,omitempty"`
 	ConfigRevision string             `json:"config_revision"`
@@ -160,6 +163,7 @@ func (c *compiler) run() *Manifest {
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
 	c.checkElasticTeams(&c.in)
+	c.checkTeamPolicies(&out)
 	c.checkWorkPublication(&out)
 	c.checkAccess(&out)
 	if len(c.errs) > 0 {
@@ -177,6 +181,17 @@ func (c *compiler) run() *Manifest {
 		return nil
 	}
 	for k, sm := range seats {
+		for _, tk := range sm.Teams {
+			if p := out.Teams[tk].Context; p != nil {
+				if sm.Context == nil {
+					sm.Context = &spec.TeamContext{}
+				}
+				sm.Context.EditableInstructions = sm.Context.EditableInstructions || p.EditableInstructions
+				sm.Context.EditableSummary = sm.Context.EditableSummary || p.EditableSummary
+				sm.Context.RequireInstructionApproval = sm.Context.RequireInstructionApproval || p.RequireInstructionApproval
+				sm.Context.InstructionApprovers = appendUnique(sm.Context.InstructionApprovers, p.InstructionApprovers...)
+			}
+		}
 		sm.ConfigRevision = Revision(sm)
 		seats[k] = sm
 	}
@@ -279,7 +294,7 @@ func (c *compiler) resolveTemplates(o *spec.OrganizationSpec) map[string][]strin
 	for _, tk := range sortedKeys(o.Teams) {
 		team := o.Teams[tk]
 		path := "teams." + tk
-		resolved := spec.Team{Parameters: map[string]string{}, SharedMemory: map[string][]string{}, AccessProfiles: team.AccessProfiles}
+		resolved := spec.Team{Parameters: map[string]string{}, SharedMemory: map[string][]string{}, AccessProfiles: team.AccessProfiles, Coordination: team.Coordination, Pool: team.Pool, Context: team.Context}
 		roles := map[string]string{}
 		var layers []spec.TeamTemplate
 		if team.Template != "" {
@@ -326,18 +341,17 @@ func (c *compiler) resolveTemplates(o *spec.OrganizationSpec) map[string][]strin
 		teamRoles[tk] = roles
 	}
 
-	for _, sk := range sortedKeys(o.Seats) {
-		seat := o.Seats[sk]
+	resolveRole := func(seat spec.Seat, path string) spec.Seat {
 		name, ok := strings.CutPrefix(seat.RoleRef, "role:")
 		if !ok {
-			continue
+			return seat
 		}
 		var found string
 		var foundIn string
 		for _, tk := range seat.Teams {
 			if ref, ok := teamRoles[tk][name]; ok {
 				if found != "" && ref != found {
-					c.errf("seats."+sk+".role_ref", "ambiguous role %q: teams %s and %s define different instructions", name, foundIn, tk)
+					c.errf(path+".role_ref", "ambiguous role %q: teams %s and %s define different instructions", name, foundIn, tk)
 				}
 				if found == "" {
 					found, foundIn = ref, tk
@@ -345,11 +359,29 @@ func (c *compiler) resolveTemplates(o *spec.OrganizationSpec) map[string][]strin
 			}
 		}
 		if found == "" {
-			c.errf("seats."+sk+".role_ref", "role %q is not defined by the templates of the seat's teams", name)
-			continue
+			c.errf(path+".role_ref", "role %q is not defined by the templates of the seat's teams", name)
+			return seat
 		}
 		seat.RoleRef = found
-		o.Seats[sk] = seat
+		return seat
+	}
+	for _, sk := range sortedKeys(o.Seats) {
+		o.Seats[sk] = resolveRole(o.Seats[sk], "seats."+sk)
+	}
+	for _, tk := range sortedKeys(o.Teams) {
+		if p := o.Teams[tk].Pool; p != nil {
+			for _, name := range sortedKeys(p.Templates) {
+				t := p.Templates[name]
+				if t.Seat == nil {
+					continue
+				}
+				seat := *t.Seat
+				seat.Teams = appendUnique(seat.Teams, tk)
+				seat = resolveRole(seat, "teams."+tk+".pool.templates."+name+".seat")
+				t.Seat = &seat
+				p.Templates[name] = t
+			}
+		}
 	}
 	o.TeamTemplates = nil
 	if len(lineage) == 0 {
@@ -428,6 +460,17 @@ func (c *compiler) applyDefaults(o *spec.OrganizationSpec) {
 	for _, s := range o.Seats {
 		if h, ok := o.HarnessProfiles[s.HarnessProfile]; ok && h.Model != nil {
 			usedModel[h.Model.Connection] = true
+		}
+	}
+	for _, team := range o.Teams {
+		if team.Pool != nil {
+			for _, template := range team.Pool.Templates {
+				if seat := template.Seat; seat != nil {
+					if h, ok := o.HarnessProfiles[seat.HarnessProfile]; ok && h.Model != nil {
+						usedModel[h.Model.Connection] = true
+					}
+				}
+			}
 		}
 	}
 	bound := map[string]bool{}

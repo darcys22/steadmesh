@@ -136,6 +136,25 @@ func (r *OrganizationReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return r.finish(ctx, orig, &org, nonce, false, 10*time.Second)
 	}
 	st.OrganizationID = resp.OrganizationID
+	// Pool participants come only from the authenticated runtime response.
+	// This materialization copy is never written back to the desired spec.
+	for key, raw := range resp.RuntimeSeats {
+		var sm compile.SeatManifest
+		if err := json.Unmarshal(raw, &sm); err != nil {
+			return ctrl.Result{}, err
+		}
+		if sm.Key != key {
+			return ctrl.Result{}, fmt.Errorf("runtime seat key mismatch: %s", key)
+		}
+		m.Seats[key] = sm
+	}
+	if len(resp.RuntimeSeats) > 0 {
+		var errs []error
+		texts, errs = r.Instructions.ResolveAll(ctx, org.Namespace, m)
+		if len(errs) > 0 {
+			return ctrl.Result{}, fmt.Errorf("pool instructions: %v", errs)
+		}
+	}
 	r.Pollers.Ensure(resp.OrganizationID, m.Spec.Key, org.Namespace)
 	var missing []string
 	for _, k := range sortedKeys(m.Seats) {
@@ -223,6 +242,12 @@ func (r *OrganizationReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		complete = verifyFresh(views, enforcement, nonce, r.verifyNonce(org.UID))
 	}
 	requeue := r.VerifyInterval
+	for _, team := range m.Spec.Teams {
+		if team.Pool != nil {
+			requeue = minDuration(requeue, 10*time.Second)
+			break
+		}
+	}
 	if !condIs(st.Conditions, v1alpha1.CondOperationalReady, metav1.ConditionTrue) {
 		requeue = 10 * time.Second
 	}
@@ -346,7 +371,11 @@ func (r *OrganizationReconciler) sync(ctx context.Context, org *v1alpha1.AgentOr
 	r.mu.Lock()
 	e, ok := r.syncs[org.UID]
 	r.mu.Unlock()
-	if ok && e.digest == m.Digest && r.Now().Sub(e.at) < r.SyncInterval {
+	hasPool := false
+	for _, team := range m.Spec.Teams {
+		hasPool = hasPool || team.Pool != nil
+	}
+	if !hasPool && ok && e.digest == m.Digest && r.Now().Sub(e.at) < r.SyncInterval {
 		return e.resp, nil
 	}
 	raw, err := json.Marshal(m)

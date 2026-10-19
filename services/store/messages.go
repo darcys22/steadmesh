@@ -82,6 +82,7 @@ type Sent struct {
 // SeatMessage is an internal message between seats. Route authorisation is
 // the caller's responsibility; the store enforces conversation membership.
 type SeatMessage struct {
+	ExecutionID    string
 	OrganizationID string
 	SenderID       string
 	RecipientID    string
@@ -100,6 +101,9 @@ type SeatMessage struct {
 // fenced transaction. A full recipient inbox is rejected (ADR-0006), and a
 // retiring or retired recipient with ErrRecipientRetiring.
 func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*Sent, error) {
+	if in.SenderID != f.SeatID {
+		return nil, ErrFenced
+	}
 	out := &Sent{MessageID: uuid.NewString(), CorrelationID: in.CorrelationID}
 	if out.CorrelationID == "" {
 		out.CorrelationID = out.MessageID
@@ -108,6 +112,9 @@ func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*
 	}
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		if err := checkFence(ctx, tx, f); err != nil {
+			return err
+		}
+		if err := checkTeamMessageBudget(ctx, tx, f, in); err != nil {
 			return err
 		}
 		if err := checkRecipient(ctx, tx, in.RecipientID); err != nil {
@@ -136,10 +143,10 @@ func (s *Store) SendSeatMessage(ctx context.Context, f Fence, in SeatMessage) (*
 			}
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO messages (id, organization_id, conversation_id, origin, sender_seat_id,
-				recipient_seat_id, parent_id, correlation_id, body, route, sender_generation)
-			VALUES ($1, $2, $3, 'seat', $4, $5, NULLIF($6, '')::uuid, $7, $8, $9, $10)`,
+				recipient_seat_id, parent_id, correlation_id, body, route, sender_generation, execution_id)
+			VALUES ($1, $2, $3, 'seat', $4, $5, NULLIF($6, '')::uuid, $7, $8, $9, $10, NULLIF($11, '')::uuid)`,
 			out.MessageID, in.OrganizationID, out.ConversationID, in.SenderID, in.RecipientID, in.ParentID,
-			out.CorrelationID, in.Body, in.Route, f.Generation); err != nil {
+			out.CorrelationID, in.Body, in.Route, f.Generation, in.ExecutionID); err != nil {
 			return err
 		}
 		_, err := insertDelivery(ctx, tx, out.MessageID, in.RecipientID, true, in.Passive)

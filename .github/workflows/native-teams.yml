@@ -1,0 +1,39 @@
+name: native teams
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  native-teams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - name: Build, vet and unit tests
+        run: |
+          go build ./...
+          go vet ./...
+          go test -short ./...
+      - name: Native policy and runtime race checks
+        run: go test -race ./pkg/compile ./provider ./services/policy ./services/tools ./services/api ./cmd/seat-runner ./harnesses/...
+      - name: PostgreSQL migrations, concurrency and regressions
+        run: go test -count=1 -tags integration -timeout 15m ./services/store ./services/platform
+      - name: Terraform example schemas
+        run: |
+          for dir in examples/native-hybrid examples/native-self-organising examples/native-fixed-prompts; do terraform fmt -check -recursive "$dir"; done
+          make -C examples validate-native
+      - name: Generated provider docs and website
+        run: |
+          make provider-docs
+          git diff --exit-code -- provider/docs
+          python3 hack/site.py check

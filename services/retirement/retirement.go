@@ -52,6 +52,15 @@ func (l *Loop) Run(ctx context.Context) {
 
 // Tick retires every due seat.
 func (l *Loop) Tick(ctx context.Context) {
+	// Retention is independent maintenance: a failed cleanup must never
+	// prevent revocation/finalization of other participants.
+	if cleaner, ok := l.Store.(interface {
+		PurgeExpiredPoolState(context.Context, int) error
+	}); ok {
+		if err := cleaner.PurgeExpiredPoolState(ctx, 50); err != nil && ctx.Err() == nil {
+			l.Log.Error("purge expired private participant state", "error", err)
+		}
+	}
 	due, err := l.Store.DueRetirements(ctx, 50)
 	if err != nil {
 		if ctx.Err() == nil {

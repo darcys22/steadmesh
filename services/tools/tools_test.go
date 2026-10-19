@@ -93,8 +93,8 @@ func TestDescriptorsAreFilteredAndValid(t *testing.T) {
 			t.Errorf("missing branch tool %s", name)
 		}
 	}
-	if len(r.tools) != 42 {
-		t.Errorf("registry has %d tools, want the 42 of docs/tools.html", len(r.tools))
+	if len(r.tools) != 57 {
+		t.Errorf("registry has %d tools, want the 57 of docs/tools.html", len(r.tools))
 	}
 	seen := map[string]bool{}
 	for _, tool := range r.tools {

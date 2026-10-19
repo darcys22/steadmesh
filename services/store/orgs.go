@@ -56,6 +56,11 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 		}
 		out.OrganizationID = orgID
 
+		effective, dynamic, err := reconcileNativePools(ctx, tx, orgID, in.Manifest)
+		if err != nil {
+			return err
+		}
+
 		active, err := activeSeats(ctx, tx, orgID)
 		if err != nil {
 			return err
@@ -63,7 +68,7 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 		retiring := map[string]string{} // personal store key -> retiring owner seat id
 		for _, key := range sortedKeys(active) {
 			seat := active[key]
-			if _, ok := in.Manifest.Seats[key]; ok {
+			if _, ok := effective.Seats[key]; ok {
 				continue
 			}
 			rs, err := beginRetirement(ctx, tx, orgID, key, seat, in.RetirementGrace)
@@ -80,8 +85,8 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 		}
 
 		adopted := map[string]string{} // personal store key -> adopting seat id
-		for _, key := range sortedKeys(in.Manifest.Seats) {
-			sm := in.Manifest.Seats[key]
+		for _, key := range sortedKeys(effective.Seats) {
+			sm := effective.Seats[key]
 			id, rev, err := upsertSeat(ctx, tx, orgID, in.Key, sm, active[key])
 			if err != nil {
 				return err
@@ -91,7 +96,26 @@ func (s *Store) SyncOrganization(ctx context.Context, in SyncInput) (*runtimeapi
 			}
 			out.Seats[key] = runtimeapi.SeatIdentity{SeatID: id, ServiceAccount: names.Seat(in.Key, key), PolicyRevision: rev}
 		}
-		return syncStores(ctx, tx, orgID, in.Manifest, out.Seats, adopted, retiring)
+		runtimeKeys := dynamic
+		if len(dynamic) > 0 {
+			runtimeKeys = map[string]bool{}
+			for key := range effective.Seats {
+				runtimeKeys[key] = true
+			}
+		}
+		for key := range runtimeKeys {
+			if sm, ok := effective.Seats[key]; ok {
+				if out.RuntimeSeats == nil {
+					out.RuntimeSeats = map[string]json.RawMessage{}
+				}
+				raw, err := json.Marshal(sm)
+				if err != nil {
+					return err
+				}
+				out.RuntimeSeats[key] = raw
+			}
+		}
+		return syncStores(ctx, tx, orgID, effective, out.Seats, adopted, retiring)
 	})
 	if err != nil {
 		return nil, err
@@ -244,6 +268,9 @@ func transferSeatData(ctx context.Context, tx pgx.Tx, orgID, oldID, newID string
 // what the seat held first.
 func retireSeat(ctx context.Context, tx pgx.Tx, seatID, reason string) error {
 	if _, err := tx.Exec(ctx, `UPDATE seats SET retired_at = now(), updated_at = now() WHERE id = $1`, seatID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE native_pool_members SET retained_until=CASE WHEN retention_seconds>0 THEN COALESCE(retained_until,now()+make_interval(secs=>retention_seconds)) ELSE NULL END WHERE seat_id=$1`, seatID); err != nil {
 		return err
 	}
 	if err := pendingSeatCredentials(ctx, tx, seatID); err != nil {
@@ -443,6 +470,11 @@ func (s *Store) DeleteOrganization(ctx context.Context, orgID string, purge bool
 func purgeOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 	seatScoped := `seat_id IN (SELECT id FROM seats WHERE organization_id = $1)`
 	for _, q := range []string{
+		`DELETE FROM context_instruction_proposals WHERE organization_id = $1`,
+		`DELETE FROM participant_context_history WHERE ` + seatScoped,
+		`DELETE FROM participant_context WHERE ` + seatScoped,
+		`DELETE FROM team_missions WHERE organization_id = $1`,
+		`DELETE FROM native_pool_members WHERE organization_id = $1`,
 		`DELETE FROM model_budget_reservations WHERE organization_id = $1`,
 		`DELETE FROM model_budget_counters WHERE organization_id = $1`,
 		`DELETE FROM execution_events WHERE execution_id IN (SELECT e.id FROM executions e JOIN seats s ON s.id = e.seat_id WHERE s.organization_id = $1)`,
@@ -455,6 +487,7 @@ func purgeOrganization(ctx context.Context, tx pgx.Tx, orgID string) error {
 		`DELETE FROM connector_operations WHERE organization_id = $1`,
 		`DELETE FROM automations WHERE organization_id = $1`,
 		`DELETE FROM artifacts WHERE organization_id = $1`,
+		`DELETE FROM work_publications WHERE organization_id = $1`,
 		`DELETE FROM memory_revisions WHERE store_id IN (SELECT id FROM memory_stores WHERE organization_id = $1)`,
 		`DELETE FROM memory_records WHERE organization_id = $1`,
 		`DELETE FROM memory_stores WHERE organization_id = $1`,

@@ -593,7 +593,16 @@ func (r *Runner) handleDelivery(stop context.Context, d runtimeapi.InboxDelivery
 	tctx, cancel := context.WithTimeout(r.workCtx, r.cfg.TurnTimeout)
 	defer cancel()
 	log.Info("turn started")
-	tr, err := r.adapter.Deliver(tctx, harnesses.Delivery{DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive,
+	// Fetch after claiming the delivery so edits made in the prior turn are
+	// adopted even when the adapter retains a native session. Fail closed:
+	// stale context must not silently be used after a refresh failure.
+	latest, err := r.c.Bootstrap(tctx)
+	if err != nil {
+		r.check(err)
+		log.Warn("working context refresh failed; delivery left for redelivery", "err", err)
+		return
+	}
+	tr, err := r.adapter.Deliver(tctx, harnesses.Delivery{Context: &latest.Context, DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive,
 		Timezone: r.boot.Self.Timezone})
 	fctx, fcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	r.fwd.Flush(fctx)

@@ -158,3 +158,25 @@ Objects annotated `steadmesh.io/managed-by=helm` are rejected. An object with
 no owner annotation needs explicit adoption: use the ID
 `steadmesh-example/example-company/adopt`. `wait_for_ready` and `timeouts` are
 not stored on the object, so an import assumes their defaults.
+
+## Native composable teams (development source)
+
+Three additional complete organisation roots use the fake harness and local
+terminal fixture, without live model credentials:
+
+- [Hybrid leadership and a 3–30 member pool](native-hybrid/README.md)
+- [Entirely self-organising peer coordination](native-self-organising/README.md)
+- [Self-organising peers with fixed prompts](native-fixed-prompts/README.md)
+
+They reuse foundation/platform and explicitly compose profiles, memory grants,
+message routes and native pool policy. Runtime members have independent ordinary
+seat identities. They do not migrate the older disposable-task or elastic-worker
+mode. See each README for setup and smoke input. `make validate-native` checks
+all three; `make validate` includes them. These instructions require matching
+source builds and do not announce a published release.
+
+For an offline HCL-to-spec/compiler check without provider RPC or a cluster, run
+`go test ./examples` from the repository root. It evaluates the checked-in HCL,
+uses the instruction bundle’s real content digest and validates each native
+policy. This complements, rather than replaces, Terraform validation and a
+cluster smoke run.

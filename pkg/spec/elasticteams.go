@@ -28,6 +28,10 @@ type ElasticTeams struct {
 // Optional profile selectors assert the enabled requester's profiles; workers inherit
 // its pinned runtime resources, model and authorization rather than escalating.
 type WorkerTemplate struct {
+	// Seat is the explicit independent participant configuration for native pools.
+	// It is forbidden in legacy elastic_teams, whose authority stays read-only.
+	// +optional
+	Seat *Seat `json:"seat,omitempty"`
 	// Instructions is nonempty and limited to 8192 UTF-8 bytes by the compiler.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=8192

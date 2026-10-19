@@ -167,3 +167,38 @@ func TestCatalogListsRegisteredHarnesses(t *testing.T) {
 		t.Errorf("pi APIs %v", cat.Harnesses["pi"].APIs)
 	}
 }
+
+func TestNativeTemplateOnlyModelUses(t *testing.T) {
+	s := nativePoolSpec(t)
+	s.Connections["pool_model"] = spec.Connection{Adapter: "model", EndpointRef: "https://pool.example.com/v1", SecretRef: "k8s:pool-model", Model: &spec.ModelEndpoint{APIs: []string{harnesses.APIOpenAIChat}, Models: []spec.ModelEntry{{ID: "pool-model"}}}}
+	s.HarnessProfiles["pool_harness"] = spec.HarnessProfile{Adapter: "pi", ImageDigest: "seat:dev", Model: &spec.ModelSelection{Connection: "pool_model", ID: "pool-model"}}
+	team := s.Teams["pool_team"]
+	team.Pool.Templates["builder"].Seat.HarnessProfile = "pool_harness"
+	copy := team.Pool.Templates["builder"]
+	team.Pool.Templates["second"] = copy
+	m, err := compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	uses := compile.ModelUses(m)["pool_model"]
+	if len(uses) != 1 || uses[0] != (compile.ModelUse{ID: "pool-model", API: harnesses.APIOpenAIChat}) {
+		t.Fatalf("template-only model not verified/deduplicated: %+v", uses)
+	}
+	if !compile.RequiredConnections(m, compile.DefaultCatalog())["pool_model"] || !*m.Spec.Connections["pool_model"].Required {
+		t.Fatal("template-only model not required by default")
+	}
+	if len(m.Seats) != len(s.Seats) {
+		t.Fatal("model readiness leaked template participants into desired membership")
+	}
+	no := false
+	connection := s.Connections["pool_model"]
+	connection.Required = &no
+	s.Connections["pool_model"] = connection
+	m, err = compile.Compile(s, compile.DefaultCatalog())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compile.RequiredConnections(m, compile.DefaultCatalog())["pool_model"] {
+		t.Fatal("explicit optional model overridden")
+	}
+}

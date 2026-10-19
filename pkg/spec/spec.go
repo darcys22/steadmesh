@@ -102,6 +102,12 @@ type TeamTemplate struct {
 
 // Team is a concrete grouping of seats. Membership is declared on seats only.
 type Team struct {
+	// +optional
+	Coordination *TeamCoordination `json:"coordination,omitempty"`
+	// +optional
+	Pool *TeamPool `json:"pool,omitempty"`
+	// +optional
+	Context *TeamContext `json:"context,omitempty"`
 	// AccessProfiles are granted to every member.
 	// +optional
 	AccessProfiles []string `json:"access_profiles,omitempty"`

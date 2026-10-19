@@ -10,7 +10,7 @@ import (
 
 func elasticAllowed(sm *compile.SeatManifest, org *compile.Manifest) bool {
 	p := org.Spec.ElasticTeams
-	return p != nil && slices.Contains(p.EnabledSeats, sm.Key)
+	return sm.PoolTeam == "" && p != nil && slices.Contains(p.EnabledSeats, sm.Key)
 }
 
 func (r *Registry) elasticTeamTools() []*tool {

@@ -160,7 +160,10 @@ type WorkSummary struct {
 }
 
 type Bootstrap struct {
-	Self Self `json:"self"`
+	// ParticipantInstructions are operator-owned inline native-pool instructions.
+	ParticipantInstructions string             `json:"participant_instructions,omitempty"`
+	Context                 ParticipantContext `json:"context"`
+	Self                    Self               `json:"self"`
 	// Instructions is the rendered, ordered instruction text.
 	Instructions string `json:"instructions"`
 	// Guidance is platform guidance on memory retrieval and progress keeping.
@@ -313,8 +316,10 @@ type SeatIdentity struct {
 }
 
 type SyncResponse struct {
-	OrganizationID string                  `json:"organization_id"`
-	Seats          map[string]SeatIdentity `json:"seats"`
+	// RuntimeSeats are effective runtime manifests including pool participants and updated peer routes, never persisted as desired spec.
+	RuntimeSeats   map[string]json.RawMessage `json:"runtime_seats,omitempty"`
+	OrganizationID string                     `json:"organization_id"`
+	Seats          map[string]SeatIdentity    `json:"seats"`
 	// Retiring lists seats removed from the declaration that are winding
 	// down: they take no new messages, get one retirement notice turn and
 	// are retired at RetireBy at the latest.

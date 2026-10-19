@@ -106,6 +106,7 @@ func retiringErr(seat string) *Error {
 // deliver persists a seat-to-seat message and reports the recipient's
 // state so a sender can explain delays (§9.3).
 func (r *Registry) deliver(ctx context.Context, c *Call, to *store.Seat, msg store.SeatMessage) (any, error) {
+	msg.ExecutionID = c.ExecutionID
 	msg.OrganizationID, msg.SenderID, msg.RecipientID = c.Seat.OrganizationID, c.Seat.ID, to.ID
 	sent, err := r.d.Store.SendSeatMessage(ctx, c.fence(), msg)
 	if err != nil {

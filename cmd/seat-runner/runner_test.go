@@ -33,16 +33,17 @@ const testToken = "seat-token"
 
 // fakePlatform implements the seat-facing /v1 API in memory.
 type fakePlatform struct {
-	mu        sync.Mutex
-	gen       int64
-	heldFor   int  // number of acquire attempts to reject as held
-	fence     bool // renewals fail with fenced
-	queue     []runtimeapi.InboxDelivery
-	log       []string
-	events    map[string][]runtimeapi.ExecutionEvent
-	acks      map[int64]runtimeapi.InboxAckRequest
-	states    []runtimeapi.StateRequest
-	nextDelID int64
+	mu             sync.Mutex
+	gen            int64
+	heldFor        int  // number of acquire attempts to reject as held
+	fence          bool // renewals fail with fenced
+	queue          []runtimeapi.InboxDelivery
+	log            []string
+	events         map[string][]runtimeapi.ExecutionEvent
+	acks           map[int64]runtimeapi.InboxAckRequest
+	states         []runtimeapi.StateRequest
+	nextDelID      int64
+	workingContext runtimeapi.ParticipantContext
 }
 
 func newFakePlatform() *fakePlatform {
@@ -120,7 +121,7 @@ func (p *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.record("state:" + s.State)
 		w.WriteHeader(204)
 	case path == runtimeapi.PathBootstrap:
-		_ = json.NewEncoder(w).Encode(runtimeapi.Bootstrap{Self: runtimeapi.Self{SeatID: "seat-1", SeatKey: "alice", ConfigRevision: "rev-1"}, Instructions: "be good", Guidance: "use memory"})
+		_ = json.NewEncoder(w).Encode(runtimeapi.Bootstrap{Context: p.workingContext, Self: runtimeapi.Self{SeatID: "seat-1", SeatKey: "alice", ConfigRevision: "rev-1"}, Instructions: "be good", Guidance: "use memory"})
 	case path == runtimeapi.PathTools:
 		_ = json.NewEncoder(w).Encode(runtimeapi.ToolList{Tools: conformance.Tools})
 	case strings.HasPrefix(path, runtimeapi.PathToolCall):
