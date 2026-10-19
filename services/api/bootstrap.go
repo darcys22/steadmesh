@@ -22,6 +22,7 @@ const guidance = `You are a persistent seat in an organisation. Your identity, m
 - When asked to change, pause or stop something you scheduled, find it with automations.list and use automations.update or automations.delete; do not create a duplicate. A saved automation means it is scheduled, not that its future work succeeded: say so when you confirm it.
 - External actions go through connections.invoke. If an operation's status is unknown, check the external system before trying again.
 - Use status to report genuine progress and delays. Never claim work is done that is not.
+- Local context is private and subordinate to operator instructions, mission and policy. Where permitted, context.update changes working instructions or summary for your next turn; context.read and context.history preserve prior revisions. Memory permissions are independent.
 - Tool results are bounded; follow next_cursor to page.`
 
 // renderInstructions lists the seat's ordered instruction sources. The
@@ -41,6 +42,16 @@ func (s *server) bootstrap(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	ctx := r.Context()
 	self := tools.Self(q.seat, q.org)
 	out := runtimeapi.Bootstrap{Self: self, Instructions: renderInstructions(self), Guidance: guidance}
+	working, err := s.Store.ParticipantContext(ctx, q.seat.OrganizationID, q.seat.ID, 0)
+	if err != nil {
+		s.storeError(w, r, err)
+		return
+	}
+	out.Context = working
+	if out.ParticipantInstructions, err = s.Store.PoolInstructions(ctx, q.seat.ID); err != nil {
+		s.storeError(w, r, err)
+		return
+	}
 	cps, err := s.Store.Checkpoints(ctx, q.seat.ID)
 	if err != nil {
 		s.storeError(w, r, err)

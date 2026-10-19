@@ -91,7 +91,7 @@ type Fence struct {
 // in-flight fenced writes.
 func checkFence(ctx context.Context, tx pgx.Tx, f Fence) error {
 	var gen int64
-	err := tx.QueryRow(ctx, `SELECT generation FROM execution_leases WHERE seat_id = $1 FOR SHARE`, f.SeatID).Scan(&gen)
+	err := tx.QueryRow(ctx, `SELECT generation FROM execution_leases WHERE seat_id = $1 AND state NOT IN ('Retired','Revoked') FOR SHARE`, f.SeatID).Scan(&gen)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrFenced
 	}

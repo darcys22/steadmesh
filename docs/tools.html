@@ -57,6 +57,7 @@
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
       <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="native-teams.html">Composable native teams</a></li>
       <li><a href="task-workers.html">Disposable task workers</a></li>
       <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
@@ -79,6 +80,7 @@
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Agent tools</h1>
+<p>For composable team coordination, native participant pools and versioned self-context, see <a href="native-teams.html">Composable native teams</a>.</p>
 <p class="lede">Give the team ways to remember decisions, delegate work, follow up later and use connected services. This reference explains the tools available to seats and the permissions each call uses.</p>
 <p>A seat can discover its tools and use them to work with the rest of the team. Calls go to the platform service, which authenticates the seat from its identity token and checks its current execution lease and capability manifest, built from your grants. The same checks apply whether the call comes through MCP, the CLI or HTTP; a seat cannot substitute another identity.</p>
 
@@ -89,7 +91,7 @@
 <tr><td>CLI</td><td><code>steadmesh-tools call &lt;name&gt; '&lt;json&gt;'</code>, <code>steadmesh-tools list</code></td><td>Dotted names. Exit code 1 means a tool error; 4 means the caller's lease was fenced.</td></tr>
 <tr><td>HTTP</td><td><code>GET /v1/tools</code>, <code>POST /v1/tools/{name}</code> on the platform service</td><td>Dotted names</td></tr>
 </table>
-<p>Each seat sees only the tools it can use. Results are JSON, capped at 16 KiB, and lists are paginated with <code>cursor</code>.</p>
+<p>The development registry contains 57 tools; each seat sees only those permitted by its policy. Results are JSON, capped at 16 KiB. List tools document their own pagination arguments.</p>
 
 <h2>Find context and check progress</h2>
 <table>
@@ -98,6 +100,27 @@
 <tr><td><code>status</code></td><td><code>seats?</code> (up to 20)</td><td>Technical state (running, stopped, queued work) of this seat and the seats it talks to. Representatives can use it to explain delays and report the current state.</td></tr>
 <tr><td><code>handoff.update</code></td><td><code>objective</code>, <code>unresolved[]</code>, <code>record_ids[]</code>, <code>pending_message_ids[]</code>, <code>operation_ids[]</code>, <code>notes</code></td><td>Replaces the seat's portable handoff, which is restored after restarts and harness changes.</td></tr>
 </table>
+
+<h2 id="native-teams">Coordinate independent native teammates</h2>
+<p>These development-source tools use <a href="native-teams.html">native team policy</a>. Native teammates have independent identities, ordinary turns and private memory. They are separate from the execution-scoped workers below.</p>
+<table>
+<tr><th>Tool</th><th>Arguments</th><th>Behaviour</th></tr>
+<tr><td><code>teams.discover</code></td><td><code>team?, after?, limit? (1–50)</code></td><td>Lists opted-in teams or a team’s participants. Discovery stays scoped to membership; can_message reflects explicit routes.</td></tr>
+<tr><td><code>teams.mission</code></td><td><code>team</code></td><td>Reads the mission, revision, work store, review policy and whether this participant may refine it.</td></tr>
+<tr><td><code>teams.refine_mission</code></td><td><code>team, expected_revision, expected_policy_revision, mission, reason</code></td><td>Only explicit mission editors may refine the mission. Supply the numeric expected_revision and the mission.policy_revision string from teams.mission as expected_policy_revision. Both must match, rejecting concurrent edits and stale refinements after operator policy changes. This cannot change the operator’s envelope.</td></tr>
+<tr><td><code>teams.pool</code></td><td><code>team, cursor?, limit? (1–50)</code></td><td>Lists independent runtime pool participants, separate from legacy teams.get worker runs. Default limit 20; pass returned next_cursor to paginate.</td></tr>
+<tr><td><code>teams.grow</code></td><td><code>team, template, request_id (UUID)</code></td><td>Admits one peer from an explicit full-seat template within pool and shared-budget bounds. Retries are idempotent; no requester authority is inherited.</td></tr>
+<tr><td><code>teams.drain</code></td><td><code>team, member_id</code></td><td>Drains an admitted member within policy bounds. Preserves handoff/private memory and releases unfinished claims; pool maximum includes draining members.</td></tr>
+<tr><td><code>context.read</code></td><td><code>revision?</code></td><td>Reads this participant’s current private context or a historical revision. Initial context is revision 0.</td></tr>
+<tr><td><code>context.update</code></td><td><code>field, text, expected_revision</code></td><td>Updates instructions or summary only if the corresponding edit flag permits it. Revision check is required. Reviewed instruction policy refuses direct instruction updates and rollback; use a proposal instead.</td></tr>
+<tr><td><code>context.rollback</code></td><td><code>field, revision, expected_revision</code></td><td>Restores one permitted field from an existing saved revision (at least 1) as a new revision, never overwriting another field.</td></tr>
+<tr><td><code>context.propose_instruction</code></td><td><code>text, expected_context_revision, reason</code></td><td>In approval mode, submits proposed instructions without applying them. Binds the proposed change to the author’s current context and approval policy.</td></tr>
+<tr><td><code>context.proposals</code></td><td><code>before_sequence?</code></td><td>Lists the caller’s own proposals or pending proposals they are explicitly authorized to review in a shared team. Returns one per page with next_before_sequence. It does not expose private summaries or memory.</td></tr>
+<tr><td><code>context.approve_instruction</code></td><td><code>proposal_id, expected_context_revision, policy_token, approve</code></td><td>A different, explicitly authorized reviewer approves or rejects using the exact version/token from the proposal. Current context and policy must match. Approval creates an author-and-approver-attributed revision for the next turn; rejection leaves context unchanged. Self-approval is always denied.</td></tr>
+<tr><td><code>context.history</code></td><td><code>before_revision?</code></td><td>Returns up to 20 revision metadata records, latest first. Paginate using the last returned revision.</td></tr>
+</table>
+<p>Direct context read/update/rollback/history tools are scoped to the caller’s own private context. Each field is limited to 4096 UTF-8 bytes and combined JSON-escaped fields to 14336 bytes. Changes apply next turn; operator role/template instructions, original task and policy remain authoritative. Memory grants are independent of context edit flags.</p>
+<p>An opted-in team’s message limit requires a current active execution and counts outgoing sends and replies in that execution. It does not grant routes. Pool minimum means availability, not continuous model calls.</p>
 
 <h2 id="task-workers">Delegate to a disposable worker</h2>
 <p>Keep a persistent seat's identity and workspace while a separate, bounded Pod handles an explicit task. Workers receive fresh workspaces and sessions, the parent's model and sandbox limits, and no tools by default. Results do not apply themselves. See the <a href="task-workers.html">task-worker API and security contract</a>.</p>
@@ -162,7 +185,9 @@
 <tr><td><code>work.get</code>, <code>work.list</code></td><td><code>work_id</code>; or <code>store?</code>, <code>owner?</code> (seat key or <code>me</code>), <code>status?</code></td><td>The item with its log and current revision, or summaries with the current step.</td></tr>
 <tr><td><code>work.claim</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>note?</code></td><td>Takes an unowned item. If someone else owns it, the result is a <code>conflict</code> naming the owner; nothing changes.</td></tr>
 <tr><td><code>work.update_plan</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>plan[]</code> of <code>{step, status}</code> (pending, in_progress, completed), <code>explanation?</code></td><td>Replaces the plan. At most one step is in progress. Only the owner, or the creator while the item is unowned, can change it.</td></tr>
-<tr><td><code>work.update</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>status?</code>, <code>note?</code>, <code>evidence[]?</code>, <code>blocker?</code></td><td>Anyone who can write the store may add notes and evidence. Only the owner, or the creator while unowned, changes status: <code>ready</code>, <code>in_progress</code>, <code>in_review</code>, <code>blocked</code> (needs a blocker), <code>done</code> (needs evidence) or <code>cancelled</code>. A finished item reopens as <code>ready</code>.</td></tr>
+<tr><td><code>work.update</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>status?</code>, <code>note?</code>, <code>evidence[]?</code>, <code>blocker?</code></td><td>Anyone who can write the store may add notes and evidence. Only the owner, or the creator while unowned, changes status: <code>ready</code>, <code>in_progress</code>, <code>in_review</code>, <code>blocked</code> (needs a blocker), <code>done</code> (needs evidence) or <code>cancelled</code>. A finished item reopens as <code>ready</code>. On a board with required review, done also requires a valid separate-member approval matching the current evidence and objective.</td></tr>
+<tr><td><code>work.review</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>approve</code>, <code>note</code></td><td>A different team member reviews owned, in_review work. Approval requires evidence and records a content digest. Rejection returns it to in_progress. The reviewer still needs ordinary store write authority.</td></tr>
+<tr><td><code>work.refine</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>objective</code>, <code>acceptance[]</code>, <code>reason</code></td><td>An explicitly authorized mission editor refines the current objective while retaining the original task in revision history. Invalidates review; finished or in_review work reopens as ready. Ordinary store authority is still required.</td></tr>
 <tr><td><code>work.release</code></td><td><code>work_id</code>, <code>expected_revision</code>, <code>note</code></td><td>The owner gives the item up for someone else to claim.</td></tr>
 </table>
 <p>A restarted seat finds its unfinished work items in the recovery section of its bootstrap context. The organisation can optionally publish work items to a tracker (<code>work_publication</code>, see <a href="configuration.html">Configuration</a>). The tracker is a view for people. Agents never depend on it.</p>

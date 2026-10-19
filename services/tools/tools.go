@@ -81,10 +81,17 @@ func New(d Deps) *Registry {
 	r.tools = append(r.tools, r.taskTools()...)
 	r.tools = append(r.tools, r.elasticTeamTools()...)
 	r.tools = append(r.tools, r.branchTools()...)
+	r.tools = append(r.tools, r.nativeTeamTools()...)
+	r.tools = append(r.tools, r.contextTools()...)
 	return r
 }
 
 func always(*compile.SeatManifest, *compile.Manifest) bool { return true }
+
+// Native pool admission adds peers; legacy child workers are not exposed.
+func legacyWorkerAllowed(sm *compile.SeatManifest, _ *compile.Manifest) bool {
+	return sm.PoolTeam == ""
+}
 
 // List returns the descriptors of the tools the seat may use.
 func (r *Registry) List(seat *store.Seat, org *store.Organization) []runtimeapi.ToolDescriptor {

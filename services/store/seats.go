@@ -32,7 +32,8 @@ type Seat struct {
 func (s *Store) SeatByServiceAccount(ctx context.Context, namespace, serviceAccount string) (string, error) {
 	var id string
 	err := s.pool.QueryRow(ctx, `SELECT s.id FROM seats s JOIN organizations o ON o.id = s.organization_id
-		WHERE o.namespace = $1 AND s.service_account = $2 AND s.retired_at IS NULL AND o.deleted_at IS NULL`,
+		WHERE o.namespace = $1 AND s.service_account = $2 AND s.retired_at IS NULL AND o.deleted_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM native_pool_members p WHERE p.seat_id=s.id AND p.revoked_at IS NOT NULL)`,
 		namespace, serviceAccount).Scan(&id)
 	return id, notFound(err)
 }
@@ -51,7 +52,8 @@ func (s *Store) SeatByKey(ctx context.Context, orgID, key string) (*Seat, error)
 const seatQuery = `SELECT s.id, s.organization_id, s.key, s.config_revision, s.policy_revision, s.manifest,
 	CASE WHEN s.retiring_at IS NOT NULL THEN s.retire_by END
 	FROM seats s JOIN organizations o ON o.id = s.organization_id
-	WHERE s.retired_at IS NULL AND o.deleted_at IS NULL`
+	WHERE s.retired_at IS NULL AND o.deleted_at IS NULL
+ AND NOT EXISTS(SELECT 1 FROM native_pool_members p WHERE p.seat_id=s.id AND p.revoked_at IS NOT NULL)`
 
 func scanSeat(row pgx.Row) (*Seat, error) {
 	st := &Seat{}
@@ -71,6 +73,17 @@ func scanSeat(row pgx.Row) (*Seat, error) {
 func (s *Store) AcquireLease(ctx context.Context, seatID, podUID string) (*runtimeapi.LeaseResponse, error) {
 	out := &runtimeapi.LeaseResponse{SeatID: seatID, TTLSeconds: int(LeaseTTL.Seconds())}
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
+		// Lock identity before its lease, matching retirement. A retained or
+		// revoked seat must never be revived by a stale pod acquiring a lease.
+		var active string
+		if err := tx.QueryRow(ctx, `SELECT s.id FROM seats s JOIN organizations o ON o.id=s.organization_id
+            WHERE s.id=$1 AND s.retired_at IS NULL AND o.deleted_at IS NULL
+            AND (s.retire_by IS NULL OR s.retire_by > clock_timestamp()) FOR SHARE OF s`, seatID).Scan(&active); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrFenced
+			}
+			return err
+		}
 		err := tx.QueryRow(ctx, `UPDATE execution_leases SET generation = generation + 1, holder = $2,
 				expires_at = now() + make_interval(secs => $3), state = 'Provisioning', state_detail = '', updated_at = now()
 			WHERE seat_id = $1 AND (holder = '' OR holder = $2 OR expires_at < now())
@@ -93,7 +106,7 @@ func (s *Store) AcquireLease(ctx context.Context, seatID, podUID string) (*runti
 func (s *Store) RenewLease(ctx context.Context, seatID, podUID string, gen int64) (*runtimeapi.LeaseResponse, error) {
 	out := &runtimeapi.LeaseResponse{SeatID: seatID, Generation: gen, TTLSeconds: int(LeaseTTL.Seconds())}
 	err := s.pool.QueryRow(ctx, `UPDATE execution_leases SET expires_at = now() + make_interval(secs => $4), updated_at = now()
-		WHERE seat_id = $1 AND generation = $2 AND holder = $3 RETURNING expires_at`,
+		WHERE seat_id = $1 AND generation = $2 AND holder = $3 AND state NOT IN ('Retired','Revoked') RETURNING expires_at`,
 		seatID, gen, podUID, LeaseTTL.Seconds()).Scan(&out.ExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrFenced
@@ -107,7 +120,7 @@ func (s *Store) RenewLease(ctx context.Context, seatID, podUID string, gen int64
 // ReleaseLease gives up the lease at generation gen and records Stopped.
 func (s *Store) ReleaseLease(ctx context.Context, seatID string, gen int64) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE execution_leases SET holder = '', expires_at = 'epoch', state = 'Stopped',
-		last_activity = now(), updated_at = now() WHERE seat_id = $1 AND generation = $2`, seatID, gen)
+		last_activity = now(), updated_at = now() WHERE seat_id = $1 AND generation = $2 AND state NOT IN ('Retired','Revoked')`, seatID, gen)
 	if err != nil {
 		return err
 	}
@@ -121,7 +134,7 @@ func (s *Store) ReleaseLease(ctx context.Context, seatID string, gen int64) erro
 func (s *Store) ReportState(ctx context.Context, f Fence, req runtimeapi.StateRequest) error {
 	tag, err := s.pool.Exec(ctx, `UPDATE execution_leases SET state = $3, state_detail = $4,
 		adopted_revision = CASE WHEN $5 = '' THEN adopted_revision ELSE $5 END, last_activity = now(), updated_at = now()
-		WHERE seat_id = $1 AND generation = $2`, f.SeatID, f.Generation, req.State, req.Detail, req.AdoptedRevision)
+		WHERE seat_id = $1 AND generation = $2 AND state NOT IN ('Retired','Revoked')`, f.SeatID, f.Generation, req.State, req.Detail, req.AdoptedRevision)
 	if err != nil {
 		return err
 	}
@@ -139,7 +152,7 @@ func (s *Store) FenceSeat(ctx context.Context, orgID, seatID string, expected in
 	err := s.inTx(ctx, func(tx pgx.Tx) error {
 		err := tx.QueryRow(ctx, `UPDATE execution_leases l SET generation = generation + 1, holder = '', expires_at = 'epoch',
 				state = 'Recovering', state_detail = 'fenced by controller', updated_at = now()
-			FROM seats s WHERE s.id = l.seat_id AND l.seat_id = $1 AND s.organization_id = $2 AND l.generation = $3
+			FROM seats s WHERE s.id = l.seat_id AND l.seat_id = $1 AND s.organization_id = $2 AND l.generation = $3 AND l.state NOT IN ('Retired','Revoked')
 			RETURNING l.generation, l.expires_at`, seatID, orgID, expected).Scan(&out.Generation, &out.ExpiresAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			var exists bool

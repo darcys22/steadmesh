@@ -64,6 +64,16 @@ func (s *Store) ReserveModelOutput(ctx context.Context, org string, f Fence, exe
 			return notFound(err)
 		}
 		if len(raw) == 0 || string(raw) == "null" {
+			if _, err := uuid.Parse(f.SeatID); err != nil {
+				return nil
+			} // preserve unbudgeted legacy calls
+			var native bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM native_pool_members WHERE seat_id=$1)`, f.SeatID).Scan(&native); err != nil {
+				return err
+			}
+			if native {
+				return fmt.Errorf("%w: native pools require a shared model budget", ErrInvalid)
+			}
 			return nil
 		}
 		var b spec.ModelBudgets

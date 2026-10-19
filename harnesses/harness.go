@@ -207,6 +207,8 @@ type ResumeResult struct {
 
 // Delivery is one platform message with its execution context.
 type Delivery struct {
+	// Context is freshly loaded at the turn boundary, including native resumes.
+	Context     *runtimeapi.ParticipantContext
 	DeliveryID  int64
 	ExecutionID string
 	Attempt     int

@@ -7,8 +7,8 @@ package pgtest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -42,6 +42,15 @@ func URL(t *testing.T) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	once.Do(func() {
+		if local := os.Getenv("STEADMESH_TEST_DATABASE_URL"); local != "" {
+			u, err := url.Parse(local)
+			if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost" && u.Hostname() != "::1") || u.Path != "/steadmesh_test_admin" {
+				startErr = fmt.Errorf("STEADMESH_TEST_DATABASE_URL must point to loopback /steadmesh_test_admin, an explicitly disposable database")
+				return
+			}
+			adminURL = local
+			return
+		}
 		image := os.Getenv("STEADMESH_TEST_POSTGRES_IMAGE")
 		if image == "" {
 			image = "postgres:17-alpine"
@@ -65,5 +74,23 @@ func URL(t *testing.T) string {
 	if _, err := conn.Exec(ctx, "CREATE DATABASE "+name); err != nil {
 		t.Fatal(err)
 	}
-	return strings.Replace(adminURL, "/steadmesh?", "/"+name+"?", 1)
+	u, err := url.Parse(adminURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u.Path = "/" + name
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		c, err := pgx.Connect(ctx, adminURL)
+		if err != nil {
+			t.Errorf("connect for test DB cleanup: %v", err)
+			return
+		}
+		defer c.Close(ctx)
+		if _, err := c.Exec(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); err != nil {
+			t.Errorf("drop disposable test DB: %v", err)
+		}
+	})
+	return u.String()
 }

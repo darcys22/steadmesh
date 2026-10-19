@@ -581,6 +581,7 @@ var demoPage = template.Must(template.New("demo").Funcs(template.FuncMap{
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
       <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="native-teams.html">Composable native teams</a></li>
       <li><a href="task-workers.html">Disposable task workers</a></li>
       <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>

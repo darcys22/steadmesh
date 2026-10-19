@@ -33,6 +33,13 @@ func lockWorkerOrganization(ctx context.Context, tx pgx.Tx, seat string) (string
 // workerAdmission checks all task routes, including branches and legacy tasks.
 // Uncleaned terminal runs continue to consume capacity until cleanup is confirmed.
 func workerAdmission(ctx context.Context, tx pgx.Tx, org, seat, execution string, p *spec.OrganizationSpec, req runtimeapi.TaskRunRequest) error {
+	var native bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM native_pool_members WHERE seat_id=$1)`, seat).Scan(&native); err != nil {
+		return err
+	}
+	if native {
+		return fmt.Errorf("%w: native pool participants use peer admission, not inherited child workers", ErrInvalid)
+	}
 	e := p.ElasticTeams
 	if e == nil {
 		return nil

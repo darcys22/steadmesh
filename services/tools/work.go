@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -70,19 +71,41 @@ type workLog struct {
 
 // workItem is the structured data of a work record.
 type workItem struct {
-	ID         string     `json:"id"`
-	Objective  string     `json:"objective"`
-	Creator    string     `json:"creator"`
-	Owner      string     `json:"owner,omitempty"`
-	Status     string     `json:"status"`
-	Blocker    string     `json:"blocker,omitempty"`
-	Plan       []planStep `json:"plan,omitempty"`
-	DependsOn  []string   `json:"depends_on,omitempty"`
-	Acceptance []string   `json:"acceptance,omitempty"`
-	Evidence   []string   `json:"evidence,omitempty"`
-	Links      []string   `json:"links,omitempty"`
-	Parent     string     `json:"parent,omitempty"`
-	Log        []workLog  `json:"log,omitempty"`
+	ID         string      `json:"id"`
+	Objective  string      `json:"objective"`
+	Creator    string      `json:"creator"`
+	Owner      string      `json:"owner,omitempty"`
+	Status     string      `json:"status"`
+	Blocker    string      `json:"blocker,omitempty"`
+	Plan       []planStep  `json:"plan,omitempty"`
+	DependsOn  []string    `json:"depends_on,omitempty"`
+	Acceptance []string    `json:"acceptance,omitempty"`
+	Evidence   []string    `json:"evidence,omitempty"`
+	Links      []string    `json:"links,omitempty"`
+	Parent     string      `json:"parent,omitempty"`
+	Log        []workLog   `json:"log,omitempty"`
+	Review     *workReview `json:"review,omitempty"`
+}
+
+type workReview struct {
+	Reviewer string `json:"reviewer"`
+	Digest   string `json:"digest"`
+	Revision int    `json:"reviewed_revision"`
+	Note     string `json:"note"`
+}
+
+// reviewDigest binds approval to the deliverable, not incidental log entries.
+func (w *workItem) reviewDigest() string {
+	b, _ := json.Marshal(struct {
+		Objective            string
+		Acceptance, Evidence []string
+		Plan                 []planStep
+		Owner                string
+	}{w.Objective, w.Acceptance, w.Evidence, w.Plan, w.Owner})
+	return fmt.Sprintf("%x", sha256.Sum256(b))
+}
+func (w *workItem) reviewed() bool {
+	return w.Review != nil && w.Review.Reviewer != w.Owner && w.Review.Digest == w.reviewDigest()
 }
 
 func (w *workItem) note(seat, text string) {
@@ -156,6 +179,8 @@ const workIDProp = `"work_id":{"type":"string","description":"<store>/W-<n>"}`
 
 func (r *Registry) workTools() []*tool {
 	return []*tool{
+		{name: "work.review", description: "Approve or request changes on a team's in-review work item. Reviewer must be a different active team member with store revision permission. Approval is tied to the exact objective, acceptance, plan, owner and evidence; material changes invalidate it.", schema: `{"type":"object","properties":{"work_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"approve":{"type":"boolean"},"note":{"type":"string","maxLength":4096}},"required":["work_id","expected_revision","approve","note"],"additionalProperties":false}`, mutating: true, allowed: nativeTeamAllowed, handle: r.workReview},
+		{name: "work.refine", description: "Refine a team work item's objective and acceptance criteria. Requires explicit mission-editor authority and store revision permission; invalidates prior review and reopens completed work.", schema: `{"type":"object","properties":{"work_id":{"type":"string"},"expected_revision":{"type":"integer","minimum":1},"objective":{"type":"string"},"acceptance":{"type":"array","items":{"type":"string"}},"reason":{"type":"string"}},"required":["work_id","expected_revision","objective","acceptance","reason"],"additionalProperties":false}`, mutating: true, allowed: nativeTeamAllowed, handle: r.workRefine},
 		{name: "work.create", description: "Optionally record a shared work item in a team store: an objective with acceptance criteria, dependencies and an optional owner. Use it when explicit ownership helps (several people, long-running work); plain notes and messages are fine otherwise.",
 			schema: `{"type":"object","properties":{"store":{"type":"string"},"objective":{"type":"string","minLength":1},` +
 				`"acceptance":{"type":"array","items":{"type":"string"}},"depends_on":{"type":"array","items":{"type":"string"}},` +
@@ -197,6 +222,9 @@ func (r *Registry) workRef(ctx context.Context, c *Call, op, id string) (*store.
 	if m == nil {
 		return nil, nil, toolErr("invalid", "work_id must look like <store>/W-<n>")
 	}
+	if err := checkTeamWork(c, m[1]); err != nil {
+		return nil, nil, err
+	}
 	ids, err := r.authorisedStores(ctx, c, op, m[1])
 	if err != nil {
 		return nil, nil, err
@@ -223,7 +251,7 @@ func workView(rec *store.Record, w *workItem) map[string]any {
 	return map[string]any{"work_id": w.ID, "revision": rec.Revision, "objective": w.Objective, "status": w.Status,
 		"owner": w.Owner, "creator": w.Creator, "blocker": w.Blocker, "plan": nonNilSlice(w.Plan),
 		"acceptance": nonNilSlice(w.Acceptance), "depends_on": nonNilSlice(w.DependsOn), "evidence": nonNilSlice(w.Evidence),
-		"links": nonNilSlice(w.Links), "parent": w.Parent, "log": nonNilSlice(w.Log), "path": rec.Path, "updated_at": rec.UpdatedAt}
+		"links": nonNilSlice(w.Links), "parent": w.Parent, "review": w.Review, "review_current": w.reviewed(), "log": nonNilSlice(w.Log), "path": rec.Path, "updated_at": rec.UpdatedAt}
 }
 
 func checkWorkText(fields ...string) error {
@@ -256,6 +284,21 @@ func (r *Registry) workCreate(ctx context.Context, c *Call) (any, error) {
 	}
 	if a.Store == c.Seat.Manifest.PersonalMemory {
 		return nil, toolErr("invalid", "work items live in shared stores, not your personal store")
+	}
+	if a.Store == "" {
+		return nil, toolErr("invalid", "store is required")
+	}
+	if err := checkTeamWork(c, a.Store); err != nil {
+		return nil, err
+	}
+	if a.Owner != "" {
+		owner, err := r.d.Store.SeatByKey(ctx, c.Seat.OrganizationID, a.Owner)
+		if err != nil || owner.RetireBy != nil || !policy.Allows(&owner.Manifest, "memory:"+a.Store, "revise") {
+			return nil, toolErr("invalid", "owner must be an active participant with work-store revision permission")
+		}
+		if team, _ := policy.WorkTeam(&c.Org.Manifest, a.Store); team != "" && !slices.Contains(owner.Manifest.Teams, team) {
+			return nil, toolErr("forbidden", "owner must belong to the work team")
+		}
 	}
 	ids, err := r.authorisedStores(ctx, c, "write", a.Store)
 	if err != nil {
@@ -312,9 +355,31 @@ func (r *Registry) workList(ctx context.Context, c *Call) (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if a.Store != "" {
+		if err := checkTeamWork(c, a.Store); err != nil {
+			return nil, err
+		}
+	}
 	ids, err := r.authorisedStores(ctx, c, "read", a.Store)
 	if err != nil {
 		return nil, err
+	}
+	// Filter team-owned stores even if an unrelated broad memory grant exists.
+	if a.Store == "" {
+		allowed := []string{}
+		for _, key := range policy.MemoryStores(&c.Seat.Manifest, "read") {
+			if checkTeamWork(c, key) == nil {
+				allowed = append(allowed, key)
+			}
+		}
+		active, e := r.d.Store.ActiveStoreIDs(ctx, c.Seat.OrganizationID, allowed)
+		if e != nil {
+			return nil, e
+		}
+		ids = ids[:0]
+		for _, id := range active {
+			ids = append(ids, id)
+		}
 	}
 	owner := a.Owner
 	if owner == "me" {
@@ -435,6 +500,7 @@ func (r *Registry) workClaim(ctx context.Context, c *Call) (any, error) {
 			return toolErr("invalid", "%s is %s", w.ID, w.Status)
 		}
 		w.Owner = me
+		w.Review = nil
 		if w.Status == WorkReady {
 			w.Status = WorkInProgress
 		}
@@ -458,6 +524,7 @@ func (r *Registry) workRelease(ctx context.Context, c *Call) (any, error) {
 			return toolErr("forbidden", "only the owner (%s) can release %s", or(w.Owner, "nobody"), w.ID)
 		}
 		w.Owner = ""
+		w.Review = nil
 		if w.Status != WorkDone && w.Status != WorkCancelled {
 			w.Status, w.Blocker = WorkReady, ""
 		}
@@ -497,6 +564,11 @@ func (r *Registry) workUpdatePlan(ctx context.Context, c *Call) (any, error) {
 			return toolErr("forbidden", "only the owner (%s) can change the plan of %s; send them a message", or(w.Owner, w.Creator), w.ID)
 		}
 		w.Plan = a.Plan
+		w.Review = nil
+		if w.Status == WorkDone && teamReviewRequired(c, a.WorkID) {
+			w.Status = WorkInReview
+			w.note(me, "reopened for review after plan change")
+		}
 		w.note(me, strings.TrimSpace("plan updated. "+a.Explanation))
 		return nil
 	})
@@ -525,6 +597,11 @@ func (r *Registry) workUpdate(ctx context.Context, c *Call) (any, error) {
 	}
 	me := c.Seat.Key
 	return r.mutateWork(ctx, c, a.WorkID, a.ExpectedRevision, func(w *workItem) error {
+		if len(a.Evidence) > 0 && w.Status == WorkDone && teamReviewRequired(c, a.WorkID) {
+			w.Status = WorkInReview
+			w.Review = nil
+			w.note(me, "reopened for review after evidence change")
+		}
 		w.Evidence = append(w.Evidence, a.Evidence...)
 		if a.Status != "" && a.Status != w.Status {
 			if !mayDirect(w, me) {
@@ -535,6 +612,8 @@ func (r *Registry) workUpdate(ctx context.Context, c *Call) (any, error) {
 			switch {
 			case terminal && a.Status != WorkReady:
 				return toolErr("invalid", "%s is %s; set it back to ready to reopen it", w.ID, w.Status)
+			case a.Status == WorkDone && teamReviewRequired(c, a.WorkID) && !w.reviewed():
+				return toolErr("invalid", "done requires a current independent work.review approval of the evidence and acceptance criteria")
 			case a.Status == WorkDone && len(w.Evidence) == 0:
 				return toolErr("invalid", "done needs evidence that the acceptance criteria are met")
 			case a.Status == WorkBlocked && strings.TrimSpace(a.Blocker) == "":
@@ -617,4 +696,90 @@ func ReleaseRetired(seat string) store.WorkRelease {
 			"(summarised to the representatives) describe the progress; claim it to continue.", seat, was))
 		return w.encode()
 	}
+}
+
+func checkTeamWork(c *Call, storeKey string) error {
+	team, _ := policy.WorkTeam(&c.Org.Manifest, storeKey)
+	if team != "" && !slices.Contains(c.Seat.Manifest.Teams, team) {
+		return toolErr("forbidden", "work store is restricted to its team members")
+	}
+	return nil
+}
+func teamReviewRequired(c *Call, id string) bool {
+	key, _, _ := strings.Cut(id, "/")
+	_, p := policy.WorkTeam(&c.Org.Manifest, key)
+	return p != nil && p.ReviewPolicy == "required"
+}
+func (r *Registry) workReview(ctx context.Context, c *Call) (any, error) {
+	var a struct {
+		WorkID   string `json:"work_id"`
+		Expected int    `json:"expected_revision"`
+		Approve  *bool  `json:"approve"`
+		Note     string `json:"note"`
+	}
+	if err := decode(c, &a); err != nil {
+		return nil, err
+	}
+	if a.Approve == nil || strings.TrimSpace(a.Note) == "" || a.Expected < 1 {
+		return nil, toolErr("invalid", "approve, note and positive expected_revision are required")
+	}
+	if err := checkWorkText(a.Note); err != nil {
+		return nil, err
+	}
+	key, _, _ := strings.Cut(a.WorkID, "/")
+	team, _ := policy.WorkTeam(&c.Org.Manifest, key)
+	if team == "" || !slices.Contains(c.Seat.Manifest.Teams, team) {
+		return nil, toolErr("forbidden", "review requires membership of the work item's team")
+	}
+	return r.mutateWork(ctx, c, a.WorkID, a.Expected, func(w *workItem) error {
+		if w.Owner == "" || w.Owner == c.Seat.Key {
+			return toolErr("forbidden", "review requires a different owner")
+		}
+		if w.Status != WorkInReview {
+			return toolErr("invalid", "only in_review work can be reviewed")
+		}
+		if *a.Approve {
+			if len(w.Evidence) == 0 {
+				return toolErr("invalid", "approval needs evidence")
+			}
+			w.Review = &workReview{Reviewer: c.Seat.Key, Digest: w.reviewDigest(), Revision: a.Expected, Note: a.Note}
+			w.note(c.Seat.Key, "review approved: "+a.Note)
+		} else {
+			w.Review = nil
+			w.Status = WorkInProgress
+			w.note(c.Seat.Key, "review changes requested: "+a.Note)
+		}
+		return nil
+	})
+}
+func (r *Registry) workRefine(ctx context.Context, c *Call) (any, error) {
+	var a struct {
+		WorkID     string   `json:"work_id"`
+		Expected   int      `json:"expected_revision"`
+		Objective  string   `json:"objective"`
+		Acceptance []string `json:"acceptance"`
+		Reason     string   `json:"reason"`
+	}
+	if err := decode(c, &a); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(a.Objective) == "" || strings.TrimSpace(a.Reason) == "" || a.Expected < 1 {
+		return nil, toolErr("invalid", "objective, reason and positive expected_revision are required")
+	}
+	if err := checkWorkText(append([]string{a.Objective, a.Reason}, a.Acceptance...)...); err != nil {
+		return nil, err
+	}
+	key, _, _ := strings.Cut(a.WorkID, "/")
+	team, _ := policy.WorkTeam(&c.Org.Manifest, key)
+	if !policy.CanEditMission(&c.Seat.Manifest, &c.Org.Manifest, team) {
+		return nil, toolErr("forbidden", "only an explicitly configured mission editor may refine objectives")
+	}
+	return r.mutateWork(ctx, c, a.WorkID, a.Expected, func(w *workItem) error {
+		w.Objective, w.Acceptance, w.Review = a.Objective, a.Acceptance, nil
+		if w.Status == WorkDone || w.Status == WorkCancelled || w.Status == WorkInReview {
+			w.Status = WorkReady
+		}
+		w.note(c.Seat.Key, "objective refined: "+a.Reason)
+		return nil
+	})
 }

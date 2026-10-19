@@ -68,6 +68,7 @@ func New(cfg Config) http.Handler {
 
 	seat := func(pattern string, h seatHandler) { mux.Handle(pattern, s.seatAuth(h)) }
 	s.registerTaskRuns(seat)
+	s.registerNativePools(seat)
 	seat("POST "+runtimeapi.PathLeaseAcquire, s.leaseAcquire)
 	seat("POST "+runtimeapi.PathLeaseRenew, s.leaseRenew)
 	seat("POST "+runtimeapi.PathLeaseRelease, s.leaseRelease)

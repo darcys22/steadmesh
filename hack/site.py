@@ -40,6 +40,7 @@ NAV = [
         ("real-services.html", "Connect real services"),
         ("operations.html", "Operating an organisation"),
         ("model-budgets.html", "Model output budgets"),
+        ("native-teams.html", "Composable native teams"),
         ("task-workers.html", "Disposable task workers"),
         ("run-branches.html", "Compare run alternatives"),
         ("sandbox.html", "Sandbox access"),

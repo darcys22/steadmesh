@@ -49,6 +49,9 @@ func (c *compiler) checkElasticTeams(o *spec.OrganizationSpec) {
 	for _, k := range sortedKeys(p.Templates) {
 		t := p.Templates[k]
 		path := "elastic_teams.templates." + k
+		if t.Seat != nil {
+			c.errf(path+".seat", "independent seats are only supported in native team pools")
+		}
 		if !keyPattern.MatchString(k) || len(k) > 80 {
 			c.errf(path, "key must match %s and be at most 80 bytes", keyPattern.String())
 		}

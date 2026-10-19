@@ -3,6 +3,8 @@ package compile
 import (
 	"slices"
 	"strings"
+
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 // RequiredConnections reports, per declared connection, whether it must
@@ -14,10 +16,8 @@ import (
 // readiness or internal work.
 func RequiredConnections(m *Manifest, cat Catalog) map[string]bool {
 	used := map[string]bool{}
-	for _, s := range m.Seats {
-		if s.Harness.Model != nil {
-			used[s.Harness.Model.Connection] = true
-		}
+	for connection := range ModelUses(m) {
+		used[connection] = true
 	}
 	for _, b := range m.Spec.ChannelBindings {
 		used[b.Connection] = true
@@ -42,17 +42,30 @@ type ModelUse struct {
 }
 
 // ModelUses lists, per model connection, the models and APIs the seats'
-// harness profiles use, sorted. Readiness checks each of them.
+// harness profiles and declared native pool templates use, sorted. Readiness checks each of them.
 func ModelUses(m *Manifest) map[string][]ModelUse {
 	out := map[string][]ModelUse{}
-	for _, k := range sortedKeys(m.Seats) {
-		sel := m.Seats[k].Harness.Model
+	add := func(sel *spec.ModelSelection) {
 		if sel == nil {
-			continue
+			return
 		}
 		u := ModelUse{ID: sel.ID, API: sel.API}
 		if !slices.Contains(out[sel.Connection], u) {
 			out[sel.Connection] = append(out[sel.Connection], u)
+		}
+	}
+	for _, k := range sortedKeys(m.Seats) {
+		add(m.Seats[k].Harness.Model)
+	}
+	// Declared templates need verification even before the first admission.
+	// This never inserts a runtime participant in desired-state Seats.
+	for _, tk := range sortedKeys(m.Spec.Teams) {
+		if pool := m.Spec.Teams[tk].Pool; pool != nil {
+			for _, name := range sortedKeys(pool.Templates) {
+				if seat := pool.Templates[name].Seat; seat != nil {
+					add(m.Spec.HarnessProfiles[seat.HarnessProfile].Model)
+				}
+			}
 		}
 	}
 	for _, us := range out {

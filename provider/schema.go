@@ -70,6 +70,7 @@ func specAttributes() map[string]schema.Attribute {
 				"draining":                   optBool("Prevent all new disposable worker launches, including legacy tasks and branches, while existing workers finish. Defaults to false."),
 				"templates": schema.MapNestedAttribute{Required: true, Validators: []validator.Map{elasticNonemptyValidator{}}, Description: "Nonempty map of stable worker template keys.", NestedObject: schema.NestedAttributeObject{Attributes: map[string]schema.Attribute{
 					"instructions":      reqStr("Role instructions, nonempty UTF-8, at most 8192 bytes."),
+					"seat":              schema.SingleNestedAttribute{Optional: true, Description: "Native pool seat configuration; forbidden for legacy elastic teams.", Attributes: seatAttributes()},
 					"tool_names":        strList("Read-only tools: memory.stores, memory.list, memory.read, memory.search, memory.history, work.get, work.list. Further restricted by requester grants. Omitted or empty means no delegated tools."),
 					"harness_profile":   optStr("Optional assertion: must equal every enabled seat's harness profile. Omit to inherit each requester's pinned model and harness."),
 					"execution_profile": optStr("Optional assertion: must equal every enabled seat's execution profile. Omit to inherit each requester's pinned runtime resources."),
@@ -94,7 +95,10 @@ func specAttributes() map[string]schema.Attribute {
 			"shared_memory":    opsMap("Memory store key to operations granted to members of a team using this template."),
 			"parameters":       strMap("Template parameters."),
 		}),
-		"teams": keyed("Concrete teams. Membership is declared on seats.", map[string]schema.Attribute{
+		"teams": keyed("Concrete teams. Durable membership is declared on seats; runtime pool membership is not Terraform state.", map[string]schema.Attribute{
+			"coordination":     teamCoordinationAttribute(),
+			"pool":             teamPoolAttribute(),
+			"context":          teamContextAttribute(),
 			"template":         optStr("Team template to instantiate."),
 			"instruction_refs": strList("Additional ordered team instruction references."),
 			"shared_memory":    opsMap("Memory store key to operations granted to members."),
@@ -221,26 +225,7 @@ func specAttributes() map[string]schema.Attribute {
 			"required":   optBool("Whether the connection must authenticate before the organisation is ready. By default model connections a harness uses and communication connections with channel bindings are required; others, such as a work tracker, are optional: their failures are reported as IntegrationsDegraded but never block readiness or internal work."),
 			"config":     strMap("Adapter configuration, e.g. team_id for linear."),
 		}),
-		"seats": keyed("Seats: persistent agent identities.", map[string]schema.Attribute{
-			"role_ref":          reqStr("Role instruction reference, or role:<key> resolved from the seat's team templates."),
-			"teams":             strList("Ordered team memberships."),
-			"harness_profile":   reqStr("Harness profile key."),
-			"execution_profile": reqStr("Execution profile key."),
-			"sandbox_profile":   reqStr("Sandbox profile key."),
-			"personal_memory":   optStr("Personal memory store key."),
-			"workspace": schema.SingleNestedAttribute{
-				Optional:    true,
-				Description: "Workspace binding.",
-				Attributes: map[string]schema.Attribute{
-					"persistent": optBool("Persistent per-seat workspace."),
-					"shared":     strList("Shared workspace keys to mount (requires a grant)."),
-				},
-			},
-			"display_name":     optStr("Display name."),
-			"instruction_refs": strList("Additional seat-scoped instruction references."),
-			"access_profiles":  strList("Access profiles granted to this seat, in addition to its teams'."),
-			"adopt_from":       optStr("Explicitly adopt the retained data of a retired seat ID."),
-		}),
+		"seats": keyed("Seats: persistent agent identities.", seatAttributes()),
 		"grants": keyed("Access grants.", map[string]schema.Attribute{
 			"subject":    reqStr("seat:<key> or team:<key>."),
 			"resource":   reqStr("connection:<key>, memory:<key> or workspace:<key>."),
@@ -366,4 +351,28 @@ func organizationSchema(ctx context.Context) schema.Schema {
 			"timeouts": timeouts.Block(ctx, timeouts.Opts{Create: true, Update: true, Delete: true}),
 		},
 	}
+}
+
+func seatAttributes() map[string]schema.Attribute {
+	return map[string]schema.Attribute{
+		"role_ref":          reqStr("Role instruction reference, or role:<key> resolved from the seat's team templates."),
+		"teams":             strList("Ordered team memberships."),
+		"harness_profile":   reqStr("Harness profile key."),
+		"execution_profile": reqStr("Execution profile key."),
+		"sandbox_profile":   reqStr("Sandbox profile key."),
+		"personal_memory":   optStr("Personal memory store key."),
+		"workspace": schema.SingleNestedAttribute{
+			Optional:    true,
+			Description: "Workspace binding.",
+			Attributes: map[string]schema.Attribute{
+				"persistent": optBool("Persistent per-seat workspace."),
+				"shared":     strList("Shared workspace keys to mount (requires a grant)."),
+			},
+		},
+		"display_name":     optStr("Display name."),
+		"instruction_refs": strList("Additional seat-scoped instruction references."),
+		"access_profiles":  strList("Access profiles granted to this seat, in addition to its teams'."),
+		"adopt_from":       optStr("Explicitly adopt the retained data of a retired seat ID."),
+	}
+
 }

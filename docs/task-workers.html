@@ -57,6 +57,7 @@
       <li><a href="real-services.html">Connect real services</a></li>
       <li><a href="operations.html">Operating an organisation</a></li>
       <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="native-teams.html">Composable native teams</a></li>
       <li><a href="task-workers.html" aria-current="page">Disposable task workers</a></li>
       <li><a href="run-branches.html">Compare run alternatives</a></li>
       <li><a href="sandbox.html">Sandbox access</a></li>
@@ -82,6 +83,7 @@
 <p class="lede">A persistent seat can delegate a bounded piece of work to a fresh worker, then inspect its output and explicitly chosen artifacts. The parent keeps its identity, workspace, memory, harness session and one-turn lease. A worker is a separate short-lived Kubernetes Pod, not another persistent seat.</p>
 <p>Introduced in v0.6.0. Install matching platform, controller and seat images before trying these tools. See <a href="operations.html#upgrade">upgrade notes</a>.</p>
 <nav class="toc" aria-label="On this page"><strong>On this page</strong><ul><li><a href="#start-inspect-and-cancel">Start, inspect and cancel</a></li><li><a href="#bounds-and-authority">Bounds and authority</a></li><li><a href="#shared-model-budgets">Shared model budgets</a></li><li><a href="#completion-and-cleanup">Completion and cleanup</a></li><li><a href="#what-is-not-copied">What is not copied</a></li></ul></nav>
+<p>For independent teammates with their own inboxes, ordinary turns and private memory, use <a href="native-teams.html">native team pools</a>. Disposable tasks and legacy elastic workers remain a separate mode; they are not automatically migrated.</p>
 <h2 id="start-inspect-and-cancel">Start, inspect and cancel</h2>
 <p>During an active parent turn, call <code>tasks.start</code> with a unique UUID <code>request_id</code>, a <code>prompt</code>, optional <code>input_files</code> (<code>path</code>, <code>content</code>), and <code>artifact_paths</code> to return. Repeating an identical request ID returns the same run; reusing it for different input fails. Use <code>tasks.get</code> with its <code>id</code> to inspect state, bounded output and artifact names, and <code>tasks.cancel</code> to stop it. When runtime cleanup completes, a durable, deduplicated system message wakes the parent with the task ID and parent execution correlation. That message reports technical completion, not business success.</p>
 <p>Run this illustrative example <strong>inside an active seat</strong>, where the runner supplies its token, lease generation and execution ID. <code>steadmesh-tools</code> is not an unauthenticated operator command. Generate a new UUID for each new job; the UUID below is only an example.</p>
@@ -122,7 +124,7 @@ steadmesh-tools call tasks.cancel '{"id":"TASK_RUN_ID"}'</code></pre>
 <h2 id="what-is-not-copied">What is not copied</h2>
 <p>This first implementation uses explicit text snapshots and artifacts. It does not clone repositories, copy live files automatically, resume worker sessions, delegate credential access or support nested workers.</p>
 <!-- shell:pager -->
-<nav class="pager" aria-label="Previous and next page"><a class="previous" href="model-budgets.html" rel="prev"><small>Previous</small>Model output budgets</a><a class="next" href="run-branches.html" rel="next"><small>Next</small>Compare run alternatives</a></nav>
+<nav class="pager" aria-label="Previous and next page"><a class="previous" href="native-teams.html" rel="prev"><small>Previous</small>Composable native teams</a><a class="next" href="run-branches.html" rel="next"><small>Next</small>Compare run alternatives</a></nav>
 <!-- /shell:pager -->
 </main>
 </div>

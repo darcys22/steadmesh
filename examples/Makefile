@@ -168,3 +168,12 @@ plan-envtest: mirror init-foundation init-platform init-organisation
 	    -var kubeconfig_path=$(OUT)/envtest.kubeconfig 2>&1 | tee $(OUT)/$$s.envtest-plan.log; \
 	done
 .PHONY: plan-envtest
+
+# Native composable teams are independent organisation roots. These remain
+# opt-in apply targets; validate covers them without adding them to teardown.
+NATIVE_STAGES := native-hybrid native-self-organising native-fixed-prompts
+$(foreach s,$(NATIVE_STAGES),$(eval $(call stage,$(s),mirror,platform,)))
+validate-native: $(addprefix validate-,$(NATIVE_STAGES))
+validate: validate-native
+$(addprefix apply-,$(NATIVE_STAGES)): wait-crds
+.PHONY: validate-native

@@ -1,0 +1,2 @@
+/tool teams.discover {"team":"delivery"}
+/report

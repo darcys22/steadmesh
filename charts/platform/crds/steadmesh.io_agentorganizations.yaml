@@ -318,6 +318,56 @@ spec:
                           maxLength: 8192
                           minLength: 1
                           type: string
+                        seat:
+                          description: |-
+                            Seat is the explicit independent participant configuration for native pools.
+                            It is forbidden in legacy elastic_teams, whose authority stays read-only.
+                          properties:
+                            access_profiles:
+                              description: AccessProfiles are granted to this seat,
+                                in addition to its teams'.
+                              items:
+                                type: string
+                              type: array
+                            adopt_from:
+                              description: AdoptFrom explicitly adopts the retained
+                                data of a retired seat ID (§4.1).
+                              type: string
+                            display_name:
+                              type: string
+                            execution_profile:
+                              type: string
+                            harness_profile:
+                              type: string
+                            instruction_refs:
+                              items:
+                                type: string
+                              type: array
+                            personal_memory:
+                              type: string
+                            role_ref:
+                              type: string
+                            sandbox_profile:
+                              type: string
+                            teams:
+                              items:
+                                type: string
+                              type: array
+                            workspace:
+                              properties:
+                                persistent:
+                                  type: boolean
+                                shared:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                          required:
+                          - execution_profile
+                          - harness_profile
+                          - role_ref
+                          - sandbox_profile
+                          type: object
                         tool_names:
                           items:
                             type: string
@@ -639,6 +689,60 @@ spec:
                       items:
                         type: string
                       type: array
+                    context:
+                      description: TeamContext grants only self-context edits, independently
+                        from memory grants.
+                      properties:
+                        editable_instructions:
+                          type: boolean
+                        editable_summary:
+                          type: boolean
+                        instruction_approvers:
+                          description: InstructionApprovers are explicit seat:<member-key>
+                            or team:<this-team> subjects.
+                          items:
+                            type: string
+                          type: array
+                        require_instruction_approval:
+                          description: |-
+                            RequireInstructionApproval makes every instruction update a reviewed proposal.
+                            Across memberships, any approval requirement wins over direct self-edit.
+                          type: boolean
+                      type: object
+                    coordination:
+                      description: |-
+                        TeamCoordination controls collaboration independently of membership and authority.
+                        No role name, editor selector or coordination mode grants tools or message routes.
+                      properties:
+                        max_messages_per_execution:
+                          maximum: 1000
+                          minimum: 1
+                          type: integer
+                        mission:
+                          maxLength: 8192
+                          type: string
+                        mission_editors:
+                          description: |-
+                            MissionEditors are seat:<key> or team:<key> subjects, restricted to members.
+                            An empty list grants no agent mission-edit permission.
+                          items:
+                            type: string
+                          type: array
+                        mode:
+                          enum:
+                          - declared
+                          - self_organising
+                          type: string
+                        review_policy:
+                          enum:
+                          - none
+                          - required
+                          type: string
+                        work_store:
+                          description: WorkStore is an explicitly granted shared work
+                            board.
+                          type: string
+                      type: object
                     instruction_refs:
                       items:
                         type: string
@@ -646,6 +750,117 @@ spec:
                     parameters:
                       additionalProperties:
                         type: string
+                      type: object
+                    pool:
+                      description: |-
+                        TeamPool declares admission and lifecycle bounds, never runtime membership.
+                        Members receive independent ordinary seat identities from explicit templates.
+                      properties:
+                        drain_timeout_seconds:
+                          maximum: 3600
+                          minimum: 1
+                          type: integer
+                        draining:
+                          type: boolean
+                        idle_timeout_seconds:
+                          maximum: 86400
+                          minimum: 1
+                          type: integer
+                        max_members:
+                          maximum: 1024
+                          minimum: 1
+                          type: integer
+                        min_members:
+                          maximum: 1024
+                          minimum: 0
+                          type: integer
+                        retention_seconds:
+                          description: |-
+                            RetentionSeconds defaults to zero (retain indefinitely). A positive value
+                            explicitly authorizes cleanup of private retired-member data after this interval.
+                          maximum: 2592000
+                          minimum: 0
+                          type: integer
+                        templates:
+                          additionalProperties:
+                            description: |-
+                              WorkerTemplate fixes a role and a read-only subset of the requester's tools.
+                              Optional profile selectors assert the enabled requester's profiles; workers inherit
+                              its pinned runtime resources, model and authorization rather than escalating.
+                            properties:
+                              execution_profile:
+                                type: string
+                              harness_profile:
+                                type: string
+                              instructions:
+                                description: Instructions is nonempty and limited
+                                  to 8192 UTF-8 bytes by the compiler.
+                                maxLength: 8192
+                                minLength: 1
+                                type: string
+                              seat:
+                                description: |-
+                                  Seat is the explicit independent participant configuration for native pools.
+                                  It is forbidden in legacy elastic_teams, whose authority stays read-only.
+                                properties:
+                                  access_profiles:
+                                    description: AccessProfiles are granted to this
+                                      seat, in addition to its teams'.
+                                    items:
+                                      type: string
+                                    type: array
+                                  adopt_from:
+                                    description: AdoptFrom explicitly adopts the retained
+                                      data of a retired seat ID (§4.1).
+                                    type: string
+                                  display_name:
+                                    type: string
+                                  execution_profile:
+                                    type: string
+                                  harness_profile:
+                                    type: string
+                                  instruction_refs:
+                                    items:
+                                      type: string
+                                    type: array
+                                  personal_memory:
+                                    type: string
+                                  role_ref:
+                                    type: string
+                                  sandbox_profile:
+                                    type: string
+                                  teams:
+                                    items:
+                                      type: string
+                                    type: array
+                                  workspace:
+                                    properties:
+                                      persistent:
+                                        type: boolean
+                                      shared:
+                                        items:
+                                          type: string
+                                        type: array
+                                    type: object
+                                required:
+                                - execution_profile
+                                - harness_profile
+                                - role_ref
+                                - sandbox_profile
+                                type: object
+                              tool_names:
+                                items:
+                                  type: string
+                                maxItems: 7
+                                type: array
+                            required:
+                            - instructions
+                            type: object
+                          minProperties: 1
+                          type: object
+                      required:
+                      - max_members
+                      - templates
                       type: object
                     shared_memory:
                       additionalProperties:
