@@ -43,6 +43,7 @@ Evidence: `contract/pi-help.txt` (captured `--help`) and `coding-agent/src/cli/a
 | `--no-mcp` | yes. It disables the built-in `mcp` extension (main.ts:784 `disabledBuiltinExtensions: parsed.noMcp ? ["mcp"]`) | |
 | `--no-extensions`/`-ne` | **Caution:** it also disables built-in extensions, which include `mcp`, `codemode` and `tool-search` (help text; `extensions/index.ts:8-13`). Explicit `-e builtin:mcp` still loads (help: "explicit -e paths still work"; resource-loader.ts:724) | |
 | `--tools`, `--exclude-tools`, `--no-builtin-tools`, `--append-system-prompt`, `--system-prompt` | yes | help |
+| `--skill <path>` (repeatable, file or directory) | yes, captured help; selected marketplace skill directories use this flag | `contract/pi-help.txt` |
 
 RPC mode rejects `@file` prompt arguments (docs/rpc.md:20).
 
@@ -68,6 +69,17 @@ The full union is in `coding-agent/src/modes/rpc/rpc-types.ts:20-74`. Every comm
 A failed command returns `{type:"response", command, success:false, error}` (rpc-types.ts:245). Malformed JSON returns `command:"parse"` with no `id` (docs/rpc.md:81-85).
 
 The `prompt` response is emitted only after preflight. A failure after acceptance does not produce a second response; it appears in the event stream instead (rpc-mode.ts:394-414; docs/rpc-commands.md:40-42).
+
+The verified RPC command union has no resource/skill reload command. The adapter
+fetches the authorized marketplace skill set at startup and before each turn.
+An unchanged snapshot keeps the existing process; a changed or revoked set
+closes stdin, waits for orderly shutdown, removes the old snapshot, and starts a
+new process with the current native `--session` and explicit `--skill` paths.
+For an empty session not yet written to disk, `--session-id` preserves its ID.
+A failed refresh rejects the turn and retires the old process and snapshot;
+it never falls back to stale skills. Skills installed during a running turn
+take effect on the next delivery. These lifecycle rules are covered by fake
+executable/RPC tests in `skills_test.go`, not an additional live CLI claim.
 
 The following behaviour was observed live:
 

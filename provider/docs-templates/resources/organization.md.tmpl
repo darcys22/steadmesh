@@ -17,6 +17,22 @@ The provider validates and compiles the declaration during `plan`, as soon as it
 
 Instruction text (culture, team and role guidance) lives in ConfigMaps referenced as `configmap:<name>/<key>#sha256:<digest>`. The [`instruction-bundle`](https://github.com/darcys22/steadmesh/tree/main/modules/instruction-bundle) module publishes a Markdown file and returns that reference. The [`representative`](https://github.com/darcys22/steadmesh/tree/main/modules/representative), [`team-base`](https://github.com/darcys22/steadmesh/tree/main/modules/team-base) and [`team-engineering`](https://github.com/darcys22/steadmesh/tree/main/modules/team-engineering) modules produce ready-made entries for `spec`.
 
+## Marketplace skills
+
+`spec.skill_marketplaces` registers reviewed public GitHub repositories pinned to full lowercase 40-hex commit SHAs. Declaring a marketplace does not give every seat access. Each seat opts in with `skills.marketplaces`, an explicit allowlist of those stable keys. A key such as `reviewed` is an operator-chosen alias and need not match the upstream marketplace name. `skills.install` selects an individual `skill` inside a named `plugin`; it does not install an entire plugin.
+
+- `explicit` (the default) loads only the Terraform-selected skills.
+- `discover` additionally permits catalog discovery but not dynamic installation.
+- `agent_choice` lets the agent choose skills only from its allowlist, with `max_dynamic_skills` defaulting to 16 (1–128). Static installs do not consume this limit.
+
+Marketplace skill files work with Claude Code, Codex and Pi. The platform imports skill content, not plugin hooks, commands, agents, dependencies or MCP server configuration. Skills never add tool permissions, credentials or network access. Only public GitHub sources pinned to a commit are supported; URLs, local paths, private authenticated repositories, branches and tags are rejected. Review third-party content before allowing it.
+
+An organization may register at most 128 sources; a seat may allow at most 32 and statically install at most 128 skills. Changing a source pin, allowlist, mode, cap or static selection changes the affected seat's configuration revision. An unallowed source does not change that seat's revision. Agent-selected skills are runtime state, not Terraform declaration drift.
+
+Use the locals below in an existing organization: set `spec.skill_marketplaces = local.skill_marketplaces`, then set a seat's `skills = local.explicit_skills`, `local.discovery_only_skills` or `local.agent_choice_skills`. Supply a reviewed repository, real commit and separately specified plugin/skill identifiers; the example intentionally does not invent an immutable pin.
+
+{{ tffile "../../provider/docs-examples/resources/steadmesh_organization/skills.tf" }}
+
 ## Readiness
 
 With `wait_for_ready = true` (the default), create and update return only once the controller reports `OperationalReady=True` for the new generation. That means seats are provisioned, connections authenticated, channel ingress running and routes executable. If readiness is not reached within the timeout, the apply fails and lists the conditions that are not ready; the same conditions are in the `conditions` attribute.

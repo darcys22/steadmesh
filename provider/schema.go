@@ -116,6 +116,10 @@ func specAttributes() map[string]schema.Attribute {
 			"size_gb":       optInt("Size in GB."),
 			"retention":     optStr("retain (default) or delete."),
 		}),
+		"skill_marketplaces": keyed("Up to 128 approved immutable public GitHub skill marketplaces. Keys are operator-chosen aliases, independent of upstream marketplace names. Declaring a source grants nothing until a seat explicitly allows it.", map[string]schema.Attribute{
+			"repository": reqStr("Public GitHub owner/repo. URLs, local paths and private authenticated sources are not supported."),
+			"ref":        reqStr("Required full lowercase 40-hex commit SHA. Branches and tags are not allowed."),
+		}),
 		"harness_profiles": keyed("Harness profiles.", map[string]schema.Attribute{
 			"adapter":      reqStr("Harness adapter: claude-code, codex, pi or fake."),
 			"image_digest": reqStr("Pinned harness image."),
@@ -372,6 +376,7 @@ func seatAttributes() map[string]schema.Attribute {
 		"display_name":     optStr("Display name."),
 		"instruction_refs": strList("Additional seat-scoped instruction references."),
 		"access_profiles":  strList("Access profiles granted to this seat, in addition to its teams'."),
+		"skills":           skillPolicyAttribute(),
 		"adopt_from":       optStr("Explicitly adopt the retained data of a retired seat ID."),
 	}
 

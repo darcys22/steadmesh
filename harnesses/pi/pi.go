@@ -35,6 +35,7 @@ import (
 
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/skills"
 )
 
 const (
@@ -119,7 +120,8 @@ type Adapter struct {
 	handoff   *runtimeapi.Handoff
 	bootstrap string
 
-	proc *process
+	proc          *process
+	skillSnapshot *skills.Snapshot
 
 	// Tap, when set before StartOrResume, receives every raw stdout record.
 	Tap func(line []byte)
@@ -433,7 +435,20 @@ func (a *Adapter) startLocked(ctx context.Context) error {
 		args = append(args, "--thinking", t)
 	}
 	if a.session.SessionFile != "" {
-		args = append(args, "--session", a.session.SessionFile)
+		// Empty native sessions are not written until their first turn. Keep
+		// their identity too when a skill refresh restarts Pi before that turn.
+		if _, err := os.Stat(a.session.SessionFile); errors.Is(err, os.ErrNotExist) && a.session.Turns == 0 && a.session.SessionID != "" {
+			args = append(args, "--session-id", a.session.SessionID)
+		} else {
+			args = append(args, "--session", a.session.SessionFile)
+		}
+	} else if a.session.SessionID != "" {
+		args = append(args, "--session-id", a.session.SessionID)
+	}
+	if a.skillSnapshot != nil {
+		for _, dir := range a.skillSnapshot.SkillDirs {
+			args = append(args, "--skill", dir)
+		}
 	}
 	cmd := exec.Command(a.bin, args...)
 	cmd.Dir = a.env.WorkspaceDir
@@ -485,6 +500,63 @@ func (a *Adapter) killLocked() {
 		a.proc.kill()
 		a.proc = nil
 	}
+}
+
+// shutdownLocked uses the pinned RPC protocol's orderly shutdown. Pi has no
+// verified skill-reload RPC, so a changed skill set requires a new process.
+// Call only at a turn boundary (or after Stop has interrupted the active turn).
+func (a *Adapter) shutdownLocked(ctx context.Context) {
+	if a.proc == nil {
+		return
+	}
+	if ctx.Err() == nil {
+		_ = a.proc.stdin.Close()
+		timer := time.NewTimer(5 * time.Second)
+		select {
+		case <-a.proc.done:
+		case <-ctx.Done():
+		case <-timer.C:
+		}
+		timer.Stop()
+	}
+	a.killLocked()
+}
+
+func (a *Adapter) closeSkillsLocked() error {
+	if a.skillSnapshot == nil {
+		return nil
+	}
+	err := a.skillSnapshot.Close()
+	a.skillSnapshot = nil
+	return err
+}
+
+// syncSkillsLocked fetches the full desired set before any prompt is accepted.
+// Refresh failure retires the old process and snapshot rather than allowing
+// stale or revoked skills to serve a later turn. The TurnGuard ensures that an
+// installation during a turn cannot change that turn's loaded resources.
+func (a *Adapter) syncSkillsLocked(ctx context.Context) error {
+	if a.env.LoadSkills == nil {
+		return nil
+	}
+	bundle, err := a.env.LoadSkills(ctx)
+	var next *skills.Snapshot
+	if err == nil {
+		next, err = skills.Materialize(filepath.Join(a.dir, "skills"), bundle.Skills)
+	}
+	if err != nil {
+		a.shutdownLocked(ctx)
+		return errors.Join(fmt.Errorf("pi: synchronize skills: %w", err), a.closeSkillsLocked())
+	}
+	if a.skillSnapshot != nil && a.skillSnapshot.Digest == next.Digest {
+		return next.Close()
+	}
+	a.shutdownLocked(ctx)
+	if err := a.closeSkillsLocked(); err != nil {
+		return errors.Join(fmt.Errorf("pi: remove old skills: %w", err), next.Close())
+	}
+	a.skillSnapshot = next
+	return nil
 }
 
 // ---- state --------------------------------------------------------------------
@@ -567,7 +639,11 @@ func (a *Adapter) StartOrResume(ctx context.Context, rec harnesses.RecoveryDescr
 	default:
 		a.session = fresh
 	}
+	if err := a.syncSkillsLocked(ctx); err != nil {
+		return harnesses.ResumeResult{}, err
+	}
 	if err := a.startLocked(ctx); err != nil {
+		_ = a.closeSkillsLocked()
 		return harnesses.ResumeResult{}, err
 	}
 	if res.Mode == harnesses.RecoveryNativeResume {
@@ -597,13 +673,15 @@ func (a *Adapter) Checkpoint(ctx context.Context) (runtimeapi.Checkpoint, error)
 }
 
 func (a *Adapter) Stop(ctx context.Context) error {
+	// Cancel a turn before acquiring mu: its boundary refresh may be waiting
+	// on LoadSkills with the cancellable turn context while holding the lock.
+	done := a.guard.Stop()
 	a.mu.Lock()
 	a.stopping = true
 	if ctx.Err() != nil {
 		a.killLocked()
 	}
 	a.mu.Unlock()
-	done := a.guard.Stop()
 	select {
 	case <-done:
 	case <-ctx.Done():
@@ -613,18 +691,11 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		}
 	}
 	a.mu.Lock()
-	if a.proc != nil {
-		// Closing stdin is Pi's orderly shutdown.
-		_ = a.proc.stdin.Close()
-		select {
-		case <-a.proc.done:
-		case <-time.After(5 * time.Second):
-		}
-	}
-	a.killLocked()
+	a.shutdownLocked(ctx)
+	err := a.closeSkillsLocked()
 	a.mu.Unlock()
 	a.bus.Close()
-	return nil
+	return err
 }
 
 // ---- turns --------------------------------------------------------------------
@@ -689,8 +760,12 @@ func (a *Adapter) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.
 	}
 
 	a.mu.Lock()
-	if a.proc == nil || !a.proc.alive() {
+	err = a.syncSkillsLocked(tctx)
+	if err == nil && (a.proc == nil || !a.proc.alive()) {
 		err = a.startLocked(tctx)
+		if err != nil {
+			_ = a.closeSkillsLocked()
+		}
 	}
 	p, recovery := a.proc, a.recovery
 	a.mu.Unlock()

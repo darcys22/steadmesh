@@ -153,3 +153,26 @@ The recommended config was accepted by `codex app-server --strict-config` (`cont
 - **`thread/start.approvalPolicy:"never"` with `danger-full-access` and `default_tools_approval_mode="approve"`:** the bridge's tools run without an approval request.
 - The Linux binaries are installed from npm (`@openai/codex@0.160.1`, the registry's integrity check), not the GitHub release assets.
 - **MCP tools are deferred for catalog models (verified 2026-10-08).** For models in Codex's bundled catalog with `supports_search_tool` (e.g. `gpt-5.5`; `SRC/models-manager/models.json`), "MCP tools are always deferred when tool_search is available" (`SRC/features/src/lib.rs:238`, `SRC/core/src/tools/spec_plan.rs:654`). The request then carries a `{"type":"tool_search"}` tool and no `mcp__steadmesh` namespace; the model emits a `tool_search_call` (`execution:"client"`, `arguments:{query,limit}`), Codex answers with a `tool_search_output` whose `tools` hold the matching namespace, and the model can then call it. Unknown models get the namespace directly. Both paths are covered by conformance (`gpt-5.5` and `gpt-stub-1`).
+
+## 7. Managed marketplace skills
+
+The pinned generated schema defines `skills/extraRoots/set` with required
+`extraRoots: AbsolutePathBuf[]`, and `skills/list` with `cwds: string[]` and
+`forceReload: bool`. Steadmesh uses these APIs after initialization and before
+`thread/start` or `thread/resume`, and verifies that every selected `SKILL.md`
+was reported enabled. An empty roots array clears all managed skills. Native
+plugin marketplace synchronization remains disabled.
+
+The full authorized skill bundle is fetched before each turn. Equal content
+digests reuse the existing snapshot and process. A change, including removal,
+replaces the app-server process at the turn boundary and resumes the same
+native thread after installing the new roots. The schema establishes catalog
+refresh, not a guarantee that an already loaded thread refreshes its injected
+skills, so Steadmesh does not rely on that undocumented behavior. Source
+plugins' hooks, MCP servers, and installation scripts are never loaded.
+
+Fetch, validation, RPC, or missing-skill failures prevent a model turn and
+retire stale processes and snapshots. Fake JSON-RPC subprocess tests cover
+initial load, unchanged reuse, changed/empty roots, forced reloads, failures,
+thread continuity, cancellation, and cleanup. The new skill-loading path has
+not yet had live pinned-CLI conformance.

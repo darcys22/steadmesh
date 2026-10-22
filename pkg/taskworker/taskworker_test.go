@@ -17,3 +17,14 @@ func TestWorkerManifestNeverWidensParent(t *testing.T) {
 		t.Fatalf("intersection modified/widened parent: %+v", read)
 	}
 }
+
+func TestManifestDoesNotInheritMarketplaceSkills(t *testing.T) {
+	parent := compile.SeatManifest{Skills: &spec.SkillPolicy{Mode: spec.SkillModeAgentChoice, Marketplaces: []string{"approved"}}, SkillMarketplaces: map[string]spec.SkillMarketplace{"approved": {Repository: "owner/repo"}}}
+	worker := Manifest(parent, []string{"skills.list", "skills.install"})
+	if worker.Skills != nil || worker.SkillMarketplaces != nil {
+		t.Fatal("worker inherited persistent skill authority")
+	}
+	if parent.Skills == nil || len(parent.SkillMarketplaces) != 1 {
+		t.Fatal("parent manifest mutated")
+	}
+}

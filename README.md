@@ -47,6 +47,16 @@ remain separately controlled. Existing organizations keep their declared-team
 behavior unless these policies are enabled. Read the
 [v0.7.0 upgrade notes](docs/operations.html#v070-upgrade) before rollout.
 
+## Choose skills from approved marketplaces
+
+Register immutable public GitHub Claude marketplace sources with
+`skill_marketplaces`, then configure a seat's `skills` as explicit selections,
+read-only discovery, or bounded agent choice. Claude Code, Codex and Pi load
+only selected skill directories, not entire plugins. Runtime choices are kept
+separately from Terraform-owned selections and survive unchanged applies.
+See [marketplace skills](docs/marketplace-skills.html) for configuration,
+source-format support, revocation and safety limits.
+
 ## External representative MCP gateway
 
 The source tree includes an opt-in [representative MCP gateway](docs/representative-gateway.md)

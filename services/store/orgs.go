@@ -15,6 +15,7 @@ import (
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/names"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
 // SyncInput is a resolved organisation to establish identities for.
@@ -157,14 +158,16 @@ func activeSeats(ctx context.Context, tx pgx.Tx, orgID string) (map[string]*acti
 // is a new policy revision.
 func authority(sm compile.SeatManifest) string {
 	b, _ := json.Marshal(struct {
-		Capabilities    []compile.Capability
-		Access          *access.SeatAccess
-		SendTo          []compile.RouteEdge
-		ReceiveFrom     []compile.RouteEdge
-		ChannelBindings []string
-		PersonalMemory  string
-		Teams           []string
-	}{sm.Capabilities, sm.Access, sm.SendTo, sm.ReceiveFrom, sm.ChannelBindings, sm.PersonalMemory, sm.Teams})
+		Capabilities      []compile.Capability
+		Access            *access.SeatAccess
+		SendTo            []compile.RouteEdge
+		ReceiveFrom       []compile.RouteEdge
+		ChannelBindings   []string
+		PersonalMemory    string
+		Teams             []string
+		Skills            *spec.SkillPolicy
+		SkillMarketplaces map[string]spec.SkillMarketplace
+	}{sm.Capabilities, sm.Access, sm.SendTo, sm.ReceiveFrom, sm.ChannelBindings, sm.PersonalMemory, sm.Teams, sm.Skills, sm.SkillMarketplaces})
 	return string(b)
 }
 
@@ -189,6 +192,9 @@ func upsertSeat(ctx context.Context, tx pgx.Tx, orgID, orgKey string, sm compile
 			if err := pendingSeatCredentials(ctx, tx, cur.id); err != nil {
 				return "", 0, err
 			}
+		}
+		if err := pruneSkillSelections(ctx, tx, cur.id, &sm); err != nil {
+			return "", 0, err
 		}
 		rev := cur.policy
 		if authority(cur.manifest) != authority(sm) {

@@ -503,6 +503,11 @@ func (r *Runner) environment(boot runtimeapi.Bootstrap, m *compile.SeatManifest,
 		HarnessConfig:  hcfg,
 		ExtraEnv:       r.toolEnv(),
 	}
+	// Resolve the current committed selection before every native turn. The
+	// platform owns authority; a stale pod manifest is never the allowlist.
+	if m != nil && m.Skills != nil {
+		env.LoadSkills = r.c.SkillsBundle
+	}
 	r.mu.Lock()
 	sel, mf := r.model, r.mfwd
 	env.SandboxEnv = append([]string(nil), r.sandboxEnv...)

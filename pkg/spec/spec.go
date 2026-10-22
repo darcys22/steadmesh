@@ -43,6 +43,11 @@ type OrganizationSpec struct {
 	SharedWorkspaces map[string]SharedWorkspace `json:"shared_workspaces,omitempty"`
 	// +optional
 	HarnessProfiles map[string]HarnessProfile `json:"harness_profiles,omitempty"`
+	// SkillMarketplaces are pinned public GitHub sources, available only to seats
+	// that explicitly allow them in their skills policy.
+	// +optional
+	// +kubebuilder:validation:MaxProperties=128
+	SkillMarketplaces map[string]SkillMarketplace `json:"skill_marketplaces,omitempty"`
 	// +optional
 	ExecutionProfiles map[string]ExecutionProfile `json:"execution_profiles,omitempty"`
 	// +optional
@@ -364,6 +369,9 @@ type Seat struct {
 	// AdoptFrom explicitly adopts the retained data of a retired seat ID (§4.1).
 	// +optional
 	AdoptFrom string `json:"adopt_from,omitempty"`
+	// Skills selects approved individual marketplace skills for the seat harness.
+	// +optional
+	Skills *SkillPolicy `json:"skills,omitempty"`
 }
 
 type WorkspaceBinding struct {

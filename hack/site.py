@@ -66,6 +66,7 @@ PAGES = {
     "index.html": ("landing", "docs/index.html"),
     "docs/index.html": ("doc", "docs/docs/index.html"),
     "faq.html": ("doc", "docs/faq.html"),
+    "marketplace-skills.html": ("doc", "docs/marketplace-skills.html"),
     "404.html": ("error", "docs/404.html"),
     "demo-results.html": ("doc", "tests/e2e/demo_test.go"),
     "demo/pr-1.html": ("page", "docs/demo/pr-1.html"),

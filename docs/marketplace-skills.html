@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marketplace skills · Steadmesh</title>
+<meta name="description" content="Pin Claude marketplaces, select individual skills and bound agent discovery across Claude Code, Codex and Pi.">
+<link rel="stylesheet" href="assets/style.css">
+<!-- shell:meta -->
+<link rel="canonical" href="https://steadmesh.com/marketplace-skills.html">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/favicon.png" type="image/png" sizes="32x32">
+<meta name="theme-color" content="#10151f">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Steadmesh">
+<meta property="og:title" content="Marketplace skills · Steadmesh">
+<meta property="og:description" content="Pin Claude marketplaces, select individual skills and bound agent discovery across Claude Code, Codex and Pi.">
+<meta property="og:url" content="https://steadmesh.com/marketplace-skills.html">
+<meta property="og:image" content="https://steadmesh.com/assets/images/steadmesh-social.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Steadmesh: declare a persistent AI team in Terraform. A lead on Claude Code, an engineer on Codex and a reviewer on Pi.">
+<meta name="twitter:card" content="summary_large_image">
+<!-- /shell:meta -->
+</head>
+<body>
+<!-- shell:header -->
+<a class="skip" href="#content">Skip to content</a>
+<header class="topbar">
+  <a class="wordmark" href="./"><img src="assets/favicon.svg" alt="" width="22" height="22">Steadmesh</a>
+  <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="docs-nav">Docs menu</button>
+  <nav class="topnav" aria-label="Site">
+    <a href="./#how-it-works">How it works</a>
+    <a href="./#possibilities">What you can do</a>
+    <a href="docs/">Docs</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub</a>
+    <a class="btn btn-small" href="quickstart.html">Get started</a>
+  </nav>
+</header>
+<!-- /shell:header -->
+<div class="layout">
+<!-- shell:sidebar -->
+<aside class="sidebar">
+  <nav id="docs-nav" aria-label="Documentation">
+  <div class="brand-sub">Documentation for v0.7.0</div>
+    <div class="nav-group">Start</div>
+    <ul>
+      <li><a href="docs/">Overview</a></li>
+      <li><a href="quickstart.html">Quickstart</a></li>
+      <li><a href="from-source.html">Run from source</a></li>
+      <li><a href="tutorial.html">Tutorial</a></li>
+      <li><a href="faq.html">FAQ</a></li>
+    </ul>
+    <div class="nav-group">Operate</div>
+    <ul>
+      <li><a href="real-services.html">Connect real services</a></li>
+      <li><a href="operations.html">Operating an organisation</a></li>
+      <li><a href="model-budgets.html">Model output budgets</a></li>
+      <li><a href="native-teams.html">Composable native teams</a></li>
+      <li><a href="task-workers.html">Disposable task workers</a></li>
+      <li><a href="run-branches.html">Compare run alternatives</a></li>
+      <li><a href="sandbox.html">Sandbox access</a></li>
+    </ul>
+    <div class="nav-group">Reference</div>
+    <ul>
+      <li><a href="configuration.html">Configuration</a></li>
+      <li><a href="harnesses.html">Harnesses and models</a></li>
+      <li><a href="tools.html">Agent tools</a></li>
+      <li><a href="architecture.html">Architecture</a></li>
+      <li><a href="decisions.html">Design decisions</a></li>
+    </ul>
+    <div class="nav-group">Project</div>
+    <ul>
+      <li><a href="status.html">Status and limits</a></li>
+      <li><a href="demo-results.html">Example run</a></li>
+    </ul>
+  </nav>
+</aside>
+<!-- /shell:sidebar -->
+<main id="content">
+<h1>Marketplace skills</h1>
+<p class="lede">Give a seat a specific skill, let it inspect an approved catalog, or let it choose a bounded set of skills for its work. Use Claude marketplace repositories as a source for Claude Code, Codex and Pi.</p>
+<p>This feature is available when building from this source revision. It is not a claim that the previously released provider or seat images include it. Build and deploy matching platform, provider and seat-runner versions.</p>
+<h2 id="declare">Register a pinned marketplace and select skills</h2>
+<p>Add <code>skill_marketplaces</code> to the organisation and <code>skills</code> to the relevant seats. Registration is a Steadmesh source declaration, not a call to <code>claude plugin install</code>. A marketplace contains plugins, and a plugin can contain several skills: all three parts of each selection are explicit.</p>
+<p>The example below is illustrative. Replace the repository, commit and plugin/skill names with a marketplace you have reviewed. <code>company</code> is your stable alias; it need not equal the marketplace manifest's name. <code>var.reviewed_marketplace_commit</code> must be the full lowercase 40-character Git commit SHA, not a branch or tag.</p>
+<pre><code>skill_marketplaces = {
+  company = {
+    repository = "your-org/agent-skills"
+    ref        = var.reviewed_marketplace_commit
+  }
+}
+
+seats = {
+  analyst = {
+    # Keep this seat's existing harness, execution and other attributes.
+    skills = {
+      mode         = "agent_choice"
+      marketplaces = ["company"]
+      install = [{
+        marketplace = "company"
+        plugin      = "document-tools"
+        skill       = "pdf"
+      }]
+      max_dynamic_skills = 16
+    }
+  }
+}</code></pre>
+<p>The <code>install</code> list is Terraform-owned. The agent cannot remove entries from it. A marketplace declaration alone grants no seat access: each seat has its own explicit <code>marketplaces</code> allowlist.</p>
+<h2 id="modes">Choose the amount of autonomy</h2>
+<table><tr><th>Mode</th><th>Static selections</th><th>Catalog discovery</th><th>Agent installation</th></tr>
+<tr><td><code>explicit</code> (default)</td><td>Loaded</td><td>Only selected skills visible</td><td>No</td></tr>
+<tr><td><code>discover</code></td><td>Loaded</td><td>Allowed marketplaces; read without installation</td><td>No</td></tr>
+<tr><td><code>agent_choice</code></td><td>Loaded</td><td>Allowed marketplaces</td><td>Yes, within <code>max_dynamic_skills</code></td></tr></table>
+<p>Omit <code>skills</code> to disable this surface. The dynamic limit defaults to 16 and may be 1–128; it excludes Terraform selections. Up to 128 explicit selections and 32 allowed marketplaces may be declared for a seat, and up to 128 sources for an organisation.</p>
+<h2 id="tools">Let the seat inspect and choose</h2>
+<ul>
+<li><code>skills.list</code> lists the permitted catalog and reports <code>terraform</code> or <code>agent</code> ownership for selected skills. Follow pagination. Unsupported plugin sources appear as diagnostic entries, not installable skills.</li>
+<li><code>skills.read</code> reads a skill's instructions in bounded pages, without installing it.</li>
+<li><code>skills.install</code> selects a marketplace/plugin/skill triple for the next turn. It validates and fetches the entire candidate selection before recording the choice, checking aggregate size and file limits. Concurrent selection changes return a conflict so the seat can re-read and retry.</li>
+<li><code>skills.remove</code> removes an agent-owned selection for the next turn. It cannot remove Terraform-owned selections.</li>
+</ul>
+<p>Discovery is not an instruction to install everything. A seat should inspect relevant skills, treat their content as untrusted advice, and select only what its task needs. Selecting a skill does not grant credentials, network access or platform tools.</p>
+<h2 id="reconciliation">Apply and revocation</h2>
+<p>Runtime selections live separately from Terraform state. Applying an unchanged declaration preserves them. Removing a marketplace from a seat, changing its pinned source, disabling agent choice, or reducing its cap prunes choices that are no longer allowed. Reducing a cap keeps the lexicographically first eligible references. Promoting an agent selection into <code>install</code> transfers ownership to Terraform; removing it from Terraform later does not resurrect an older agent choice.</p>
+<p>The platform checks current committed policy on every tool call and every skill-bundle fetch, including a second check after network work. Mutations are lease-fenced and checked transactionally. Harnesses refresh before each turn. An install or removal made during a turn therefore takes effect on the next turn, not midway through a running reasoning loop. Previously read information cannot be erased from session history.</p>
+<p>On a fetch, validation or reload error, the next turn fails rather than running with a stale managed skill set. A missing explicit skill is a configuration error, not a reason to silently run without it. Fix the declaration/source or remove a bad dynamic choice through the authorised tool surface. Disposable task workers do not inherit the parent seat's persistent skill-management authority.</p>
+<h2 id="loading">How each harness loads the same files</h2>
+<ul>
+<li><strong>Claude Code:</strong> managed skills require <code>system_prompt_snapshot = "off"</code> (the default), so resumed turns cannot keep a stale prompt snapshot; generated skill-only plugin directories supplied explicitly with <code>--plugin-dir</code>, including in bare mode. Original plugin manifests are not enabled.</li>
+<li><strong>Codex:</strong> extra skill roots and a verified forced skill scan. A changed selection restarts the app-server and resumes the same native thread, so it cannot keep a stale skill catalog.</li>
+<li><strong>Pi:</strong> explicit skill paths; a changed selection restarts the harness process and resumes its saved native session.</li>
+</ul>
+<p>Native skill names use <code>sm-&lt;skill&gt;-&lt;stable reference hash&gt;</code> so equally named skills from different plugins cannot shadow one another. The generated frontmatter name and directory are changed together; other supported metadata and the instruction body are preserved. Refer to skills by their original marketplace/plugin/skill triple in platform tools. Each turn receives a fresh, bounded snapshot. Removing all selections unloads the managed set. Existing local skills and the harness's own built-in skills are separate; this policy controls marketplace acquisition through Steadmesh, not every file an agent can create using already-authorised workspace tools.</p>
+<h2 id="sources">Supported source format and safety limits</h2>
+<p>Sources must be public GitHub repositories pinned to a full commit. The platform reads a fixed-host HTTPS archive and <code>.claude-plugin/marketplace.json</code>. Plugin sources must be relative paths inside that repository. Standard <code>skills/&lt;name&gt;/SKILL.md</code> layouts and explicit skill paths from supported marketplace/plugin manifests are recognised.</p>
+<p>Remote plugin repositories, <code>git-subdir</code>, npm, command, archive and arbitrary-URL sources are not followed. Private repositories and credentialed fetching are not supported. Vendor a reviewed skill directory into the pinned marketplace repository instead. Fetching requires platform outbound access to <code>codeload.github.com</code>; it does not add seat egress permissions.</p>
+<p>Only the selected skill directory and its supporting files are copied. Plugin hooks, MCP/LSP servers, agents, commands, dependencies and install scripts are not installed. Skill frontmatter that adds hooks or <code>allowed-tools</code>, and shell preprocessing using bang-backtick commands, are rejected rather than silently executed or stripped. Nested <code>SKILL.md</code> files are rejected to prevent extra skills being loaded implicitly. Supporting scripts are copied as mode 0600, without execute bits; an agent can invoke an explicit interpreter such as Python or Bash using tools it already has. No script runs during acquisition. This is not a sandbox for malicious skill instructions.</p>
+<p>Archive fetching rejects redirects, traversal, absolute paths, symlinks and ambiguous entries. Limits are 16 MiB compressed, 64 MiB expanded, 10,000 archive entries and 8 MiB per file. One skill is limited to 8 MiB and 512 files; the entire wire bundle is limited to 16 MiB including base64, and the native snapshot to 4,096 files. Oversized content fails clearly rather than being truncated. Apply validates policy and references structurally without fetching marketplace content. Missing, unsupported or oversized Terraform selections fail closed at turn start and must be corrected in the declaration; dynamic installs validate the complete candidate set before committing.</p>
+<p>Format references: <a href="https://code.claude.com/docs/en/plugin-marketplaces">Claude marketplace documentation</a>, <a href="https://code.claude.com/docs/en/plugins-reference">plugin manifest reference</a>, and <a href="https://code.claude.com/docs/en/skills">skill documentation</a>. Steadmesh intentionally supports the safe, portable subset described above, not every native plugin feature.</p>
+
+</main>
+</div>
+<!-- shell:footer -->
+<footer class="sitefoot">
+  <nav aria-label="Footer">
+    <a href="docs/">Documentation</a>
+    <a href="faq.html">FAQ</a>
+    <a href="https://github.com/darcys22/steadmesh">GitHub repository</a>
+    <a href="https://github.com/darcys22/steadmesh/releases">Releases</a>
+    <a href="https://github.com/darcys22/steadmesh/blob/main/LICENSE">License (Apache 2.0)</a>
+    <a href="status.html">Status and limits</a>
+    <a href="demo-results.html">Example run</a>
+  </nav>
+  <p class="edit"><a href="https://github.com/darcys22/steadmesh/blob/main/docs/marketplace-skills.html">Edit this page on GitHub</a> (needs a GitHub account; changes go through a pull request).</p>
+  <p>Steadmesh is open-source software. This site uses no first-party analytics. The introduction is embedded from YouTube in privacy-enhanced mode.</p>
+</footer>
+<!-- /shell:footer -->
+<script src="assets/site.js"></script>
+</body>
+</html>

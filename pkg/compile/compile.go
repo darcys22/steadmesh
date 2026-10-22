@@ -117,6 +117,10 @@ type SeatManifest struct {
 	// human's for a representative, otherwise the organisation's.
 	Timezone string            `json:"timezone"`
 	Context  *spec.TeamContext `json:"context,omitempty"`
+	// Skills and SkillMarketplaces contain only this seat's approved policy
+	// and sources. They are included in the configuration revision.
+	Skills            *spec.SkillPolicy                `json:"skills,omitempty"`
+	SkillMarketplaces map[string]spec.SkillMarketplace `json:"skill_marketplaces,omitempty"`
 	// Access is what the seat may do from its sandbox (access profiles).
 	Access         *access.SeatAccess `json:"access,omitempty"`
 	ConfigRevision string             `json:"config_revision"`
@@ -162,6 +166,7 @@ func (c *compiler) run() *Manifest {
 	c.checkConnections(&out)
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
+	c.checkSkills(&out)
 	c.checkElasticTeams(&c.in)
 	c.checkTeamPolicies(&out)
 	c.checkWorkPublication(&out)
@@ -251,6 +256,7 @@ func (c *compiler) checkKeys(o *spec.OrganizationSpec) {
 	check("memory_stores", sortedKeys(o.MemoryStores))
 	check("shared_workspaces", sortedKeys(o.SharedWorkspaces))
 	check("harness_profiles", sortedKeys(o.HarnessProfiles))
+	check("skill_marketplaces", sortedKeys(o.SkillMarketplaces))
 	check("execution_profiles", sortedKeys(o.ExecutionProfiles))
 	check("sandbox_profiles", sortedKeys(o.SandboxProfiles))
 	check("connections", sortedKeys(o.Connections))
@@ -924,6 +930,13 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 		PersonalMemory:   s.PersonalMemory,
 		Workspace:        *s.Workspace,
 		AdoptFrom:        s.AdoptFrom,
+		Skills:           s.Skills.DeepCopy(),
+	}
+	if s.Skills != nil {
+		sm.SkillMarketplaces = make(map[string]spec.SkillMarketplace, len(s.Skills.Marketplaces))
+		for _, key := range s.Skills.Marketplaces {
+			sm.SkillMarketplaces[key] = o.SkillMarketplaces[key]
+		}
 	}
 	order := 0
 	seen := map[string]bool{}
