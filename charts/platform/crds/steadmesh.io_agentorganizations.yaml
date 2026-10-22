@@ -349,6 +349,61 @@ spec:
                               type: string
                             sandbox_profile:
                               type: string
+                            skills:
+                              description: Skills selects approved individual marketplace
+                                skills for the seat harness.
+                              properties:
+                                install:
+                                  description: |-
+                                    Install selects individual skills, not entire plugins. Each marketplace
+                                    must appear in marketplaces. No plugin executable components are enabled.
+                                  items:
+                                    description: SkillRef identifies one skill inside
+                                      one plugin of a pinned marketplace.
+                                    properties:
+                                      marketplace:
+                                        type: string
+                                      plugin:
+                                        pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                        type: string
+                                      skill:
+                                        pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                        type: string
+                                    required:
+                                    - marketplace
+                                    - plugin
+                                    - skill
+                                    type: object
+                                  maxItems: 128
+                                  type: array
+                                marketplaces:
+                                  description: Marketplaces is the explicit allowlist
+                                    of organization marketplace keys.
+                                  items:
+                                    type: string
+                                  maxItems: 32
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: set
+                                max_dynamic_skills:
+                                  description: |-
+                                    MaxDynamicSkills bounds agent-selected skills, excluding static installs.
+                                    Only valid in agent_choice mode; omitted/zero defaults to 16 in the compiler.
+                                  format: int64
+                                  maximum: 128
+                                  minimum: 1
+                                  type: integer
+                                mode:
+                                  description: Mode is explicit (default), discover
+                                    (read-only catalog), or agent_choice.
+                                  enum:
+                                  - explicit
+                                  - discover
+                                  - agent_choice
+                                  type: string
+                              required:
+                              - marketplaces
+                              type: object
                             teams:
                               items:
                                 type: string
@@ -611,6 +666,61 @@ spec:
                       type: string
                     sandbox_profile:
                       type: string
+                    skills:
+                      description: Skills selects approved individual marketplace
+                        skills for the seat harness.
+                      properties:
+                        install:
+                          description: |-
+                            Install selects individual skills, not entire plugins. Each marketplace
+                            must appear in marketplaces. No plugin executable components are enabled.
+                          items:
+                            description: SkillRef identifies one skill inside one
+                              plugin of a pinned marketplace.
+                            properties:
+                              marketplace:
+                                type: string
+                              plugin:
+                                pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                type: string
+                              skill:
+                                pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                type: string
+                            required:
+                            - marketplace
+                            - plugin
+                            - skill
+                            type: object
+                          maxItems: 128
+                          type: array
+                        marketplaces:
+                          description: Marketplaces is the explicit allowlist of organization
+                            marketplace keys.
+                          items:
+                            type: string
+                          maxItems: 32
+                          minItems: 1
+                          type: array
+                          x-kubernetes-list-type: set
+                        max_dynamic_skills:
+                          description: |-
+                            MaxDynamicSkills bounds agent-selected skills, excluding static installs.
+                            Only valid in agent_choice mode; omitted/zero defaults to 16 in the compiler.
+                          format: int64
+                          maximum: 128
+                          minimum: 1
+                          type: integer
+                        mode:
+                          description: Mode is explicit (default), discover (read-only
+                            catalog), or agent_choice.
+                          enum:
+                          - explicit
+                          - discover
+                          - agent_choice
+                          type: string
+                      required:
+                      - marketplaces
+                      type: object
                     teams:
                       items:
                         type: string
@@ -647,6 +757,32 @@ spec:
                   required:
                   - access_mode
                   type: object
+                type: object
+              skill_marketplaces:
+                additionalProperties:
+                  description: |-
+                    SkillMarketplace is an immutable public GitHub marketplace source. Only
+                    skill files are imported: plugin hooks, commands, agents and MCP servers are
+                    not installed, and skills never grant tools, credentials or network access.
+                  properties:
+                    ref:
+                      description: Ref must be a full lowercase 40-hex commit SHA;
+                        branches and tags are forbidden.
+                      pattern: ^[a-f0-9]{40}$
+                      type: string
+                    repository:
+                      description: Repository is a public GitHub owner/repo, not a
+                        URL or local path.
+                      pattern: ^[A-Za-z0-9]([A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[A-Za-z0-9_.-]{1,100}$
+                      type: string
+                  required:
+                  - ref
+                  - repository
+                  type: object
+                description: |-
+                  SkillMarketplaces are pinned public GitHub sources, available only to seats
+                  that explicitly allow them in their skills policy.
+                maxProperties: 128
                 type: object
               team_templates:
                 additionalProperties:
@@ -829,6 +965,61 @@ spec:
                                     type: string
                                   sandbox_profile:
                                     type: string
+                                  skills:
+                                    description: Skills selects approved individual
+                                      marketplace skills for the seat harness.
+                                    properties:
+                                      install:
+                                        description: |-
+                                          Install selects individual skills, not entire plugins. Each marketplace
+                                          must appear in marketplaces. No plugin executable components are enabled.
+                                        items:
+                                          description: SkillRef identifies one skill
+                                            inside one plugin of a pinned marketplace.
+                                          properties:
+                                            marketplace:
+                                              type: string
+                                            plugin:
+                                              pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                              type: string
+                                            skill:
+                                              pattern: ^[a-z0-9][a-z0-9_-]{0,127}$
+                                              type: string
+                                          required:
+                                          - marketplace
+                                          - plugin
+                                          - skill
+                                          type: object
+                                        maxItems: 128
+                                        type: array
+                                      marketplaces:
+                                        description: Marketplaces is the explicit
+                                          allowlist of organization marketplace keys.
+                                        items:
+                                          type: string
+                                        maxItems: 32
+                                        minItems: 1
+                                        type: array
+                                        x-kubernetes-list-type: set
+                                      max_dynamic_skills:
+                                        description: |-
+                                          MaxDynamicSkills bounds agent-selected skills, excluding static installs.
+                                          Only valid in agent_choice mode; omitted/zero defaults to 16 in the compiler.
+                                        format: int64
+                                        maximum: 128
+                                        minimum: 1
+                                        type: integer
+                                      mode:
+                                        description: Mode is explicit (default), discover
+                                          (read-only catalog), or agent_choice.
+                                        enum:
+                                        - explicit
+                                        - discover
+                                        - agent_choice
+                                        type: string
+                                    required:
+                                    - marketplaces
+                                    type: object
                                   teams:
                                     items:
                                       type: string

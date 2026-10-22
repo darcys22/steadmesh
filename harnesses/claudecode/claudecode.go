@@ -40,6 +40,7 @@ import (
 
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/skills"
 )
 
 const (
@@ -193,6 +194,9 @@ func (a *Adapter) Prepare(ctx context.Context, env harnesses.Environment) error 
 	cfg, err := parseConfig(env.HarnessConfig)
 	if err != nil {
 		return err
+	}
+	if env.LoadSkills != nil && cfg.promptSnapshot != "off" {
+		return errors.New("claudecode: managed skills require system_prompt_snapshot=off so changes and revocations take effect on the next turn")
 	}
 	if env.Model == nil || env.Model.BaseURL == "" || env.Model.ID == "" {
 		return errors.New("claudecode: a model is required")
@@ -474,7 +478,32 @@ func (a *Adapter) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.
 	a.mu.Unlock()
 
 	res := harnesses.TurnResult{MessageID: d.Message.MessageID}
-	run, err := a.runOnce(tctx, d, sessionID, recovery, emit)
+	// Each turn starts a fresh Claude process. Resolve the authorized set once
+	// for this turn (including a possible resume retry), never install or load
+	// the original marketplace plugin and its hooks or MCP configuration.
+	var snapshot *skills.Snapshot
+	if a.env.LoadSkills != nil {
+		var bundle runtimeapi.SkillsBundleResponse
+		bundle, err = a.env.LoadSkills(tctx)
+		if err == nil {
+			snapshot, err = skills.Materialize(filepath.Join(a.stateDir, "skills"), bundle.Skills)
+		}
+		if err != nil {
+			res.Status, res.Error = harnesses.TurnFailed, "claudecode: refresh skills: "+err.Error()
+			if st, msg := harnesses.StatusFor(tctx); st != "" {
+				res.Status, res.Error = st, msg
+			}
+			res.Duration = time.Since(start)
+			emit(harnesses.EventCompletion, "", map[string]any{"status": res.Status, "error": res.Error, "duration_ms": res.Duration.Milliseconds()})
+			return res, nil
+		}
+		defer snapshot.Close()
+	}
+	var pluginDirs []string
+	if snapshot != nil {
+		pluginDirs = snapshot.PluginDirs
+	}
+	run, err := a.runOnce(tctx, d, sessionID, recovery, pluginDirs, emit)
 	if err == nil && sessionID != "" && run.parser.ResumeFailed() {
 		note := fmt.Sprintf("Claude Code could not resume session %s (%s); started a new session from the portable handoff (not a continuation of the previous native session)", sessionID, strings.Join(run.parser.Result.Errors, "; "))
 		emit(harnesses.EventProgress, "", map[string]any{"phase": "resume_failed", "session_id": sessionID, "note": note})
@@ -484,7 +513,7 @@ func (a *Adapter) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.
 		a.recovery = recovery
 		_ = os.Remove(a.sessionPath())
 		a.mu.Unlock()
-		run, err = a.runOnce(tctx, d, "", recovery, emit)
+		run, err = a.runOnce(tctx, d, "", recovery, pluginDirs, emit)
 	}
 
 	res.Duration = time.Since(start)
@@ -617,14 +646,20 @@ func (a *Adapter) prompt(d harnesses.Delivery, recovery *harnesses.ResumeResult,
 	return sb.String()
 }
 
-func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID string, recovery *harnesses.ResumeResult, emit func(string, string, any)) (*runResult, error) {
+func (a *Adapter) runOnce(ctx context.Context, d harnesses.Delivery, sessionID string, recovery *harnesses.ResumeResult, pluginDirs []string, emit func(string, string, any)) (*runResult, error) {
 	a.mu.Lock()
 	env := a.env
 	sys := a.bootstrap
 	cfg := a.cfg
 	a.mu.Unlock()
 
-	cmd := exec.Command(a.bin, a.Args(sessionID, sys)...)
+	args := a.Args(sessionID, sys)
+	for _, dir := range pluginDirs {
+		// Explicit --plugin-dir remains supported with --bare. Only the
+		// generated, skill-only plugin is exposed to Claude.
+		args = append(args, "--plugin-dir", dir)
+	}
+	cmd := exec.Command(a.bin, args...)
 	cmd.Dir = env.WorkspaceDir
 	cmd.Env = a.baseEnv(env)
 	cmd.Env = append(cmd.Env, "CLAUDE_CODE_MAX_RETRIES="+strconv.Itoa(cfg.maxRetries))

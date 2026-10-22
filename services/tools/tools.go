@@ -34,10 +34,11 @@ var (
 
 // Deps are the services tools use.
 type Deps struct {
-	Store   *store.Store
-	Gateway *gateway.Gateway
-	Metrics *metrics.Metrics
-	Log     *slog.Logger
+	Store        *store.Store
+	Gateway      *gateway.Gateway
+	Metrics      *metrics.Metrics
+	Log          *slog.Logger
+	SkillCatalog SkillCatalog
 }
 
 // Call is one authenticated tool invocation.
@@ -71,6 +72,9 @@ type Registry struct {
 
 // New returns the registry of all platform tools.
 func New(d Deps) *Registry {
+	if d.SkillCatalog == nil {
+		d.SkillCatalog = defaultSkillCatalog()
+	}
 	r := &Registry{d: d}
 	r.tools = append(r.tools, r.selfTools()...)
 	r.tools = append(r.tools, r.memoryTools()...)
@@ -83,6 +87,7 @@ func New(d Deps) *Registry {
 	r.tools = append(r.tools, r.branchTools()...)
 	r.tools = append(r.tools, r.nativeTeamTools()...)
 	r.tools = append(r.tools, r.contextTools()...)
+	r.tools = append(r.tools, r.skillTools()...)
 	return r
 }
 

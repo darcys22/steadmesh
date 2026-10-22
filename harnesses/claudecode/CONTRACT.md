@@ -99,3 +99,21 @@ Sessions are stored as `$CLAUDE_CONFIG_DIR` (default `~/.claude`) `/projects/<sa
 ## Verified by conformance (2026-10-07)
 
 `harnesses/claudecode/conformance_integration_test.go` runs the pinned binary (locally and in `steadmesh/seat-claudecode`) against a scripted Anthropic Messages endpoint: `-p --output-format stream-json --verbose` works in 2.1.289; `ANTHROPIC_API_KEY` with `ANTHROPIC_BASE_URL` reports `apiKeySource: "ANTHROPIC_API_KEY"`; the `mcpServers` wrapper key in `--mcp-config` is accepted and tools appear as `mcp__steadmesh__<tool>`; SIGINT to the process group ends a streaming turn; `--resume` restores the session in the same `HOME` and cwd.
+
+## Managed marketplace skills
+
+The pinned `--bare` help explicitly allows context from `--plugin-dir`.
+Steadmesh resolves the authorized skill bundle before each delivered turn and
+passes repeated `--plugin-dir <generated-directory>` arguments. The generated
+plugins contain only a synthetic name manifest and selected skill files, never
+the source plugin's hooks, MCP configuration, commands, or agents. Skill names
+are stable and source-qualified to avoid collisions across marketplaces.
+
+A new process loads the current set even when `--resume` preserves the native
+session. Managed skills require `system_prompt_snapshot=off` (the adapter
+default); pinning the old system prompt is rejected because it can retain
+revoked skill instructions. The snapshot is retained through a resume retry and deleted only once
+that turn's child processes have exited. Fetch or validation failure prevents
+execution. Fake-executable tests verify arguments, available files, revocation,
+session continuity, fail-closed behavior, and unchanged no-skills defaults.
+The new marketplace-loading path has not yet had live pinned-CLI conformance.

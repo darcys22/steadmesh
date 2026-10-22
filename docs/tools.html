@@ -80,6 +80,7 @@
 <!-- /shell:sidebar -->
 <main id="content">
 <h1>Agent tools</h1>
+<p><a href="marketplace-skills.html">Marketplace skills</a>: pin approved sources, select individual skills and configure bounded discovery or agent choice.</p>
 <p>For composable team coordination, native participant pools and versioned self-context, see <a href="native-teams.html">Composable native teams</a>.</p>
 <p class="lede">Give the team ways to remember decisions, delegate work, follow up later and use connected services. This reference explains the tools available to seats and the permissions each call uses.</p>
 <p>A seat can discover its tools and use them to work with the rest of the team. Calls go to the platform service, which authenticates the seat from its identity token and checks its current execution lease and capability manifest, built from your grants. The same checks apply whether the call comes through MCP, the CLI or HTTP; a seat cannot substitute another identity.</p>
@@ -91,7 +92,7 @@
 <tr><td>CLI</td><td><code>steadmesh-tools call &lt;name&gt; '&lt;json&gt;'</code>, <code>steadmesh-tools list</code></td><td>Dotted names. Exit code 1 means a tool error; 4 means the caller's lease was fenced.</td></tr>
 <tr><td>HTTP</td><td><code>GET /v1/tools</code>, <code>POST /v1/tools/{name}</code> on the platform service</td><td>Dotted names</td></tr>
 </table>
-<p>The development registry contains 57 tools; each seat sees only those permitted by its policy. Results are JSON, capped at 16 KiB. List tools document their own pagination arguments.</p>
+<p>The development registry contains 61 tools; each seat sees only those permitted by its policy. Results are JSON, capped at 16 KiB. List tools document their own pagination arguments.</p>
 
 <h2>Find context and check progress</h2>
 <table>

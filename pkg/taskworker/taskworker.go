@@ -21,6 +21,9 @@ func Manifest(parent compile.SeatManifest, toolNames []string) compile.SeatManif
 	out := parent
 	out.Capabilities = nil
 	out.Access = nil
+	// Disposable workers do not inherit persistent skill-management authority.
+	out.Skills = nil
+	out.SkillMarketplaces = nil
 	out.SendTo = nil
 	out.ReceiveFrom = nil
 	out.ChannelBindings = nil

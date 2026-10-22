@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -35,6 +36,7 @@ import (
 
 	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/skills"
 )
 
 const (
@@ -109,6 +111,10 @@ type Adapter struct {
 	// procDone is closed when the app-server exits.
 	procDone chan struct{}
 	stderr   *tailBuffer
+	// The snapshot belongs only to this adapter. The server's skill roots are
+	// configured before starting or resuming a thread. Changed skills replace
+	// the process at the next turn boundary without replacing the native thread.
+	skillSnapshot *skills.Snapshot
 
 	// Tap, when set before StartOrResume, receives every raw protocol line.
 	Tap func(line []byte)
@@ -346,7 +352,18 @@ func (a *Adapter) startProcessLocked(ctx context.Context) error {
 		a.killLocked()
 		return fmt.Errorf("codex: initialize: %w%s", err, a.stderrNote())
 	}
-	return a.rpc.notify("initialized", nil)
+	if err := a.rpc.notify("initialized", nil); err != nil {
+		a.killLocked()
+		return err
+	}
+	if a.env.LoadSkills != nil {
+		if err := a.applySkillsLocked(ictx, a.skillSnapshot); err != nil {
+			a.killLocked()
+			a.clearSkillsLocked()
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *Adapter) stderrNote() string {
@@ -370,6 +387,110 @@ func (a *Adapter) killLocked() {
 		}
 	}
 	a.proc, a.rpc, a.procDone = nil, nil, nil
+}
+
+// shutdownLocked gives app-server EOF to flush native thread state before a
+// skill-set change. The bounded fallback reaps the entire process group.
+func (a *Adapter) shutdownLocked(ctx context.Context) {
+	if a.rpc != nil && ctx.Err() == nil {
+		if stdin, ok := a.rpc.w.(io.Closer); ok {
+			_ = stdin.Close()
+			timer := time.NewTimer(5 * time.Second)
+			select {
+			case <-a.procDone:
+			case <-ctx.Done():
+			case <-timer.C:
+			}
+			timer.Stop()
+		}
+	}
+	a.killLocked()
+}
+
+// clearSkillsLocked removes only generated skill files, never session data.
+func (a *Adapter) clearSkillsLocked() {
+	if a.skillSnapshot != nil {
+		_ = a.skillSnapshot.Close()
+		a.skillSnapshot = nil
+	}
+}
+
+// applySkillsLocked uses the pinned app-server API instead of modifying
+// persistent Codex configuration or enabling its native plugin marketplace.
+// Replacing with [] is important: a revoked final skill must unload too.
+func (a *Adapter) applySkillsLocked(ctx context.Context, snapshot *skills.Snapshot) error {
+	roots := []string{}
+	if snapshot != nil {
+		roots = append(roots, snapshot.SkillDirs...)
+	}
+	if err := a.rpc.call(ctx, "skills/extraRoots/set", map[string]any{"extraRoots": roots}, nil); err != nil {
+		return fmt.Errorf("codex: set skill roots: %w", err)
+	}
+	var result struct {
+		Data []struct {
+			Skills []struct {
+				Path    string `json:"path"`
+				Enabled bool   `json:"enabled"`
+			} `json:"skills"`
+			Errors []struct {
+				Path    string `json:"path"`
+				Message string `json:"message"`
+			} `json:"errors"`
+		} `json:"data"`
+	}
+	if err := a.rpc.call(ctx, "skills/list", map[string]any{"cwds": []string{a.env.WorkspaceDir}, "forceReload": true}, &result); err != nil {
+		return fmt.Errorf("codex: reload skills: %w", err)
+	}
+	loaded := map[string]bool{}
+	for _, entry := range result.Data {
+		for _, skill := range entry.Skills {
+			loaded[filepath.Clean(skill.Path)] = skill.Enabled
+		}
+	}
+	for _, dir := range roots {
+		path := filepath.Join(dir, "SKILL.md")
+		if !loaded[path] {
+			for _, entry := range result.Data {
+				for _, issue := range entry.Errors {
+					if filepath.Clean(issue.Path) == path {
+						return fmt.Errorf("codex: managed skill %s: %s", path, issue.Message)
+					}
+				}
+			}
+			return fmt.Errorf("codex: managed skill was not loaded and enabled: %s", path)
+		}
+	}
+	return nil
+}
+
+// syncSkillsLocked resolves current authorization before any model turn. An
+// unavailable bundle or uncertain reload shuts down the server, so it cannot
+// keep using a stale skill cache; the next successful turn resumes its thread.
+func (a *Adapter) syncSkillsLocked(ctx context.Context) error {
+	if a.env.LoadSkills == nil {
+		return nil
+	}
+	bundle, err := a.env.LoadSkills(ctx)
+	var next *skills.Snapshot
+	if err == nil {
+		next, err = skills.Materialize(filepath.Join(a.env.RunnerDir, "codex-skills"), bundle.Skills)
+	}
+	if err != nil {
+		a.killLocked()
+		a.clearSkillsLocked()
+		return fmt.Errorf("codex: refresh skills: %w", err)
+	}
+	if a.skillSnapshot != nil && a.skillSnapshot.Digest == next.Digest {
+		return next.Close()
+	}
+	// extraRoots/set and skills/list are process-level catalog APIs. The
+	// pinned contract does not guarantee that an already loaded thread adopts
+	// a new skill set. Reinitialize the process and resume the existing native
+	// thread so revocations do not depend on an undocumented cache behavior.
+	a.shutdownLocked(ctx)
+	a.clearSkillsLocked()
+	a.skillSnapshot = next
+	return nil
 }
 
 func (a *Adapter) aliveLocked() bool {
@@ -523,6 +644,9 @@ func (a *Adapter) StartOrResume(ctx context.Context, rec harnesses.RecoveryDescr
 	// Start the app-server now so a broken installation fails at start.
 	sctx, cancel := context.WithTimeout(ctx, startTimeout)
 	defer cancel()
+	if err := a.syncSkillsLocked(sctx); err != nil {
+		return harnesses.ResumeResult{}, err
+	}
 	if err := a.openThreadLocked(sctx); err != nil {
 		return harnesses.ResumeResult{}, err
 	}
@@ -552,6 +676,9 @@ func (a *Adapter) Checkpoint(ctx context.Context) (runtimeapi.Checkpoint, error)
 }
 
 func (a *Adapter) Stop(ctx context.Context) error {
+	// Cancel an in-flight bundle fetch or reload before taking mu: both are
+	// performed at a guarded turn boundary while holding that mutex.
+	done := a.guard.Stop()
 	a.mu.Lock()
 	a.stopping = true
 	a.mu.Unlock()
@@ -560,7 +687,6 @@ func (a *Adapter) Stop(ctx context.Context) error {
 		a.killLocked()
 		a.mu.Unlock()
 	}
-	done := a.guard.Stop()
 	select {
 	case <-done:
 	case <-ctx.Done():
@@ -571,6 +697,7 @@ func (a *Adapter) Stop(ctx context.Context) error {
 	}
 	a.mu.Lock()
 	a.killLocked()
+	a.clearSkillsLocked()
 	a.mu.Unlock()
 	a.bus.Close()
 	return nil
@@ -627,7 +754,10 @@ func (a *Adapter) Deliver(ctx context.Context, d harnesses.Delivery) (harnesses.
 	}
 
 	a.mu.Lock()
-	err = a.openThreadLocked(tctx)
+	err = a.syncSkillsLocked(tctx)
+	if err == nil {
+		err = a.openThreadLocked(tctx)
+	}
 	recovery := a.recovery
 	threadID := a.session.ThreadID
 	rpc := a.rpc

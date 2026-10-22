@@ -122,6 +122,12 @@ type Environment struct {
 	// Bootstrap is the platform bootstrap (identity, guidance, recovery).
 	Bootstrap runtimeapi.Bootstrap
 
+	// LoadSkills returns the complete, currently authorized marketplace-skill
+	// set. Adapters refresh it at every turn boundary so additions and
+	// revocations apply to the next turn; errors must fail closed. Nil disables
+	// managed marketplace skills without changing native harness defaults.
+	LoadSkills func(context.Context) (runtimeapi.SkillsBundleResponse, error)
+
 	// ToolCommand is the steadmesh-tools binary.
 	ToolCommand string
 	// Model is the seat's model selection; nil when the profile has none.

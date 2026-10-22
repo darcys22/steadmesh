@@ -163,6 +163,85 @@ output "representatives" {
 
 Instruction text (culture, team and role guidance) lives in ConfigMaps referenced as `configmap:<name>/<key>#sha256:<digest>`. The [`instruction-bundle`](https://github.com/darcys22/steadmesh/tree/main/modules/instruction-bundle) module publishes a Markdown file and returns that reference. The [`representative`](https://github.com/darcys22/steadmesh/tree/main/modules/representative), [`team-base`](https://github.com/darcys22/steadmesh/tree/main/modules/team-base) and [`team-engineering`](https://github.com/darcys22/steadmesh/tree/main/modules/team-engineering) modules produce ready-made entries for `spec`.
 
+## Marketplace skills
+
+`spec.skill_marketplaces` registers reviewed public GitHub repositories pinned to full lowercase 40-hex commit SHAs. Declaring a marketplace does not give every seat access. Each seat opts in with `skills.marketplaces`, an explicit allowlist of those stable keys. A key such as `reviewed` is an operator-chosen alias and need not match the upstream marketplace name. `skills.install` selects an individual `skill` inside a named `plugin`; it does not install an entire plugin.
+
+- `explicit` (the default) loads only the Terraform-selected skills.
+- `discover` additionally permits catalog discovery but not dynamic installation.
+- `agent_choice` lets the agent choose skills only from its allowlist, with `max_dynamic_skills` defaulting to 16 (1–128). Static installs do not consume this limit.
+
+Marketplace skill files work with Claude Code, Codex and Pi. The platform imports skill content, not plugin hooks, commands, agents, dependencies or MCP server configuration. Skills never add tool permissions, credentials or network access. Only public GitHub sources pinned to a commit are supported; URLs, local paths, private authenticated repositories, branches and tags are rejected. Review third-party content before allowing it.
+
+An organization may register at most 128 sources; a seat may allow at most 32 and statically install at most 128 skills. Changing a source pin, allowlist, mode, cap or static selection changes the affected seat's configuration revision. An unallowed source does not change that seat's revision. Agent-selected skills are runtime state, not Terraform declaration drift.
+
+Use the locals below in an existing organization: set `spec.skill_marketplaces = local.skill_marketplaces`, then set a seat's `skills = local.explicit_skills`, `local.discovery_only_skills` or `local.agent_choice_skills`. Supply a reviewed repository, real commit and separately specified plugin/skill identifiers; the example intentionally does not invent an immutable pin.
+
+```terraform
+# Add local.skill_marketplaces to an organization's spec.skill_marketplaces.
+# Add local.explicit_skills or local.agent_choice_skills to a seat's skills.
+# Review a public marketplace's .claude-plugin/marketplace.json and skill files
+# at the selected commit before applying. This example does not supply a pin.
+variable "skill_marketplace_repository" {
+  type        = string
+  description = "Reviewed public GitHub marketplace in owner/repo form."
+}
+
+variable "skill_marketplace_commit" {
+  type        = string
+  description = "Reviewed full immutable commit SHA, never a branch or tag."
+  validation {
+    condition     = can(regex("^[a-f0-9]{40}$", var.skill_marketplace_commit))
+    error_message = "Use a full lowercase 40-hex commit SHA."
+  }
+}
+
+variable "skill_plugin" {
+  type        = string
+  description = "Plugin name from the pinned marketplace manifest."
+}
+
+variable "skill_name" {
+  type        = string
+  description = "Individual skill within that plugin, specified separately."
+}
+
+locals {
+  skill_marketplaces = {
+    reviewed = {
+      repository = var.skill_marketplace_repository
+      ref        = var.skill_marketplace_commit
+    }
+  }
+
+  # Static Terraform selection: no catalog discovery or dynamic installation.
+  explicit_skills = {
+    mode         = "explicit"
+    marketplaces = ["reviewed"]
+    install = [{
+      marketplace = "reviewed"
+      plugin      = var.skill_plugin
+      skill       = var.skill_name
+    }]
+  }
+
+  # Opt in to selection by the agent, only from the approved pinned source.
+  # Static installs remain enforced and do not consume the dynamic cap.
+  agent_choice_skills = {
+    mode               = "agent_choice"
+    marketplaces       = ["reviewed"]
+    install            = local.explicit_skills.install
+    max_dynamic_skills = 16
+  }
+
+  # Discovery alone permits listing, not agent-selected installation.
+  discovery_only_skills = {
+    mode         = "discover"
+    marketplaces = ["reviewed"]
+  }
+}
+```
+
 ## Readiness
 
 With `wait_for_ready = true` (the default), create and update return only once the controller reports `OperationalReady=True` for the new generation. That means seats are provisioned, connections authenticated, channel ingress running and routes executable. If readiness is not reached within the timeout, the apply fails and lists the conditions that are not ready; the same conditions are in the `conditions` attribute.
@@ -222,6 +301,7 @@ Optional:
 - `sandbox_profiles` (Attributes Map) Sandbox profiles. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--sandbox_profiles))
 - `seats` (Attributes Map) Seats: persistent agent identities. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--seats))
 - `shared_workspaces` (Attributes Map) Shared workspaces. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--shared_workspaces))
+- `skill_marketplaces` (Attributes Map) Up to 128 approved immutable public GitHub skill marketplaces. Keys are operator-chosen aliases, independent of upstream marketplace names. Declaring a source grants nothing until a seat explicitly allows it. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--skill_marketplaces))
 - `team_templates` (Attributes Map) Reusable team templates. Resolved by the provider before the object is written. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--team_templates))
 - `teams` (Attributes Map) Concrete teams. Durable membership is declared on seats; runtime pool membership is not Terraform state. Keyed by stable key. (see [below for nested schema](#nestedatt--spec--teams))
 - `timezone` (String) IANA time zone in which seats read and schedule times of day, e.g. Australia/Melbourne. A channel binding can set its human's own. Default UTC.
@@ -409,8 +489,33 @@ Optional:
 - `display_name` (String) Display name.
 - `instruction_refs` (List of String) Additional seat-scoped instruction references.
 - `personal_memory` (String) Personal memory store key.
+- `skills` (Attributes) Marketplace skills for Claude Code, Codex and Pi. Omitted means disabled. Only selected skill files are loaded, never plugin hooks, commands, agents or MCP servers; skills grant no additional access. (see [below for nested schema](#nestedatt--spec--elastic_teams--templates--seat--skills))
 - `teams` (List of String) Ordered team memberships.
 - `workspace` (Attributes) Workspace binding. (see [below for nested schema](#nestedatt--spec--elastic_teams--templates--seat--workspace))
+
+<a id="nestedatt--spec--elastic_teams--templates--seat--skills"></a>
+### Nested Schema for `spec.elastic_teams.templates.seat.skills`
+
+Required:
+
+- `marketplaces` (List of String) Nonempty allowlist of up to 32 organization skill_marketplaces keys. Every static or dynamic install must belong to one of these marketplaces.
+
+Optional:
+
+- `install` (Attributes List) Up to 128 individual skills to install before execution, in every mode. A plugin and a skill are distinct identifiers; installing a skill does not enable the rest of its plugin. (see [below for nested schema](#nestedatt--spec--elastic_teams--templates--seat--skills--install))
+- `max_dynamic_skills` (Number) Maximum active agent-selected skills, excluding static installs. Only valid for agent_choice; 1–128, default 16.
+- `mode` (String) explicit (default): static installs only; discover: also allow catalog listing without dynamic installation; agent_choice: allow bounded agent-selected installs from the allowlist.
+
+<a id="nestedatt--spec--elastic_teams--templates--seat--skills--install"></a>
+### Nested Schema for `spec.elastic_teams.templates.seat.skills.install`
+
+Required:
+
+- `marketplace` (String) An allowed skill_marketplaces key.
+- `plugin` (String) Plugin identifier in that marketplace: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+- `skill` (String) Individual skill identifier inside the plugin: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+
+
 
 <a id="nestedatt--spec--elastic_teams--templates--seat--workspace"></a>
 ### Nested Schema for `spec.elastic_teams.templates.seat.workspace`
@@ -551,8 +656,33 @@ Optional:
 - `display_name` (String) Display name.
 - `instruction_refs` (List of String) Additional seat-scoped instruction references.
 - `personal_memory` (String) Personal memory store key.
+- `skills` (Attributes) Marketplace skills for Claude Code, Codex and Pi. Omitted means disabled. Only selected skill files are loaded, never plugin hooks, commands, agents or MCP servers; skills grant no additional access. (see [below for nested schema](#nestedatt--spec--seats--skills))
 - `teams` (List of String) Ordered team memberships.
 - `workspace` (Attributes) Workspace binding. (see [below for nested schema](#nestedatt--spec--seats--workspace))
+
+<a id="nestedatt--spec--seats--skills"></a>
+### Nested Schema for `spec.seats.skills`
+
+Required:
+
+- `marketplaces` (List of String) Nonempty allowlist of up to 32 organization skill_marketplaces keys. Every static or dynamic install must belong to one of these marketplaces.
+
+Optional:
+
+- `install` (Attributes List) Up to 128 individual skills to install before execution, in every mode. A plugin and a skill are distinct identifiers; installing a skill does not enable the rest of its plugin. (see [below for nested schema](#nestedatt--spec--seats--skills--install))
+- `max_dynamic_skills` (Number) Maximum active agent-selected skills, excluding static installs. Only valid for agent_choice; 1–128, default 16.
+- `mode` (String) explicit (default): static installs only; discover: also allow catalog listing without dynamic installation; agent_choice: allow bounded agent-selected installs from the allowlist.
+
+<a id="nestedatt--spec--seats--skills--install"></a>
+### Nested Schema for `spec.seats.skills.install`
+
+Required:
+
+- `marketplace` (String) An allowed skill_marketplaces key.
+- `plugin` (String) Plugin identifier in that marketplace: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+- `skill` (String) Individual skill identifier inside the plugin: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+
+
 
 <a id="nestedatt--spec--seats--workspace"></a>
 ### Nested Schema for `spec.seats.workspace`
@@ -576,6 +706,15 @@ Optional:
 - `retention` (String) retain (default) or delete.
 - `size_gb` (Number) Size in GB.
 - `storage_class` (String) Storage class.
+
+
+<a id="nestedatt--spec--skill_marketplaces"></a>
+### Nested Schema for `spec.skill_marketplaces`
+
+Required:
+
+- `ref` (String) Required full lowercase 40-hex commit SHA. Branches and tags are not allowed.
+- `repository` (String) Public GitHub owner/repo. URLs, local paths and private authenticated sources are not supported.
 
 
 <a id="nestedatt--spec--team_templates"></a>
@@ -675,8 +814,33 @@ Optional:
 - `display_name` (String) Display name.
 - `instruction_refs` (List of String) Additional seat-scoped instruction references.
 - `personal_memory` (String) Personal memory store key.
+- `skills` (Attributes) Marketplace skills for Claude Code, Codex and Pi. Omitted means disabled. Only selected skill files are loaded, never plugin hooks, commands, agents or MCP servers; skills grant no additional access. (see [below for nested schema](#nestedatt--spec--teams--pool--templates--seat--skills))
 - `teams` (List of String) Ordered team memberships.
 - `workspace` (Attributes) Workspace binding. (see [below for nested schema](#nestedatt--spec--teams--pool--templates--seat--workspace))
+
+<a id="nestedatt--spec--teams--pool--templates--seat--skills"></a>
+### Nested Schema for `spec.teams.pool.templates.seat.skills`
+
+Required:
+
+- `marketplaces` (List of String) Nonempty allowlist of up to 32 organization skill_marketplaces keys. Every static or dynamic install must belong to one of these marketplaces.
+
+Optional:
+
+- `install` (Attributes List) Up to 128 individual skills to install before execution, in every mode. A plugin and a skill are distinct identifiers; installing a skill does not enable the rest of its plugin. (see [below for nested schema](#nestedatt--spec--teams--pool--templates--seat--skills--install))
+- `max_dynamic_skills` (Number) Maximum active agent-selected skills, excluding static installs. Only valid for agent_choice; 1–128, default 16.
+- `mode` (String) explicit (default): static installs only; discover: also allow catalog listing without dynamic installation; agent_choice: allow bounded agent-selected installs from the allowlist.
+
+<a id="nestedatt--spec--teams--pool--templates--seat--skills--install"></a>
+### Nested Schema for `spec.teams.pool.templates.seat.skills.install`
+
+Required:
+
+- `marketplace` (String) An allowed skill_marketplaces key.
+- `plugin` (String) Plugin identifier in that marketplace: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+- `skill` (String) Individual skill identifier inside the plugin: lowercase letters, digits, underscores or hyphens; 1–128 characters, starting with a letter or digit.
+
+
 
 <a id="nestedatt--spec--teams--pool--templates--seat--workspace"></a>
 ### Nested Schema for `spec.teams.pool.templates.seat.workspace`

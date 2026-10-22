@@ -75,6 +75,7 @@ func New(cfg Config) http.Handler {
 	seat("POST "+runtimeapi.PathState, s.state)
 	seat("GET "+runtimeapi.PathSelf, s.self)
 	seat("GET "+runtimeapi.PathBootstrap, s.bootstrap)
+	seat("GET "+runtimeapi.PathSkillsBundle, s.skillsBundle)
 	seat("GET "+runtimeapi.PathTools, s.listTools)
 	seat("GET "+runtimeapi.PathModelBudgets, s.modelBudgets)
 	seat("POST "+runtimeapi.PathToolCall+"{name}", s.callTool)
