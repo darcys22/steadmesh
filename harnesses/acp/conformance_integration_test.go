@@ -209,4 +209,23 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 		}
 		t.Logf("pinned ACP round trip passed through local forwarder; %d model requests", len(requests))
 	})
+	t.Run("ReadOnlyToolBridge", func(t *testing.T) {
+		stop, err := client.Prompt(ctx, harnesses.ProbePrompt, nil)
+		if err != nil {
+			fail(t, "tool probe", err)
+		}
+		if stop.StopReason != "end_turn" {
+			t.Fatalf("tool probe stop: %+v", stop)
+		}
+		called := false
+		for _, c := range ts.Calls() {
+			if c.Name == "self" {
+				called = true
+			}
+		}
+		if !called {
+			t.Fatalf("platform self tool was not called: %+v", ts.Calls())
+		}
+		t.Log("read-only platform self tool reached fixture bridge")
+	})
 }
