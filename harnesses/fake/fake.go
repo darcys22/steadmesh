@@ -10,6 +10,7 @@
 //	/reply <text>            messages.reply to the triggering message
 //	/file write <path> <text> write a workspace file (relative to /seat/workspace)
 //	/file read <path>        read a workspace file into the turn output
+//	/output <text>           append exact final output text (for schema tests)
 //	/sleep <duration>        sleep (interruptible; max 10m)
 //	/delegate <seat> <text>  messages.send to <seat> with correlation_id = the
 //	                         triggering message; all following lines are part of
@@ -116,6 +117,7 @@ var _ harnesses.Adapter = (*Adapter)(nil)
 
 func (a *Adapter) DescribeCapabilities() harnesses.Capabilities {
 	return harnesses.Capabilities{
+		StructuredOutputMode: harnesses.StructuredOutputPlatform,
 		Adapter:              AdapterName,
 		Version:              FormatVersion,
 		ToolTransports:       []string{"cli"},
@@ -433,6 +435,8 @@ func (t *turn) exec(lines []string) {
 		}
 		cmd, rest := splitWord(line[1:])
 		switch cmd {
+		case "output":
+			t.out(rest)
 		case "tool":
 			name, args := splitWord(rest)
 			if name == "" {

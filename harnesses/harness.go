@@ -91,6 +91,9 @@ type Capabilities struct {
 	GracefulSuspension bool `json:"graceful_suspension"`
 	// SessionFormat identifies the native session format family.
 	SessionFormat string `json:"session_format,omitempty"`
+	// StructuredOutputMode is none, platform_validated, or native. All results
+	// are revalidated by the platform; native is not a trust boundary.
+	StructuredOutputMode string `json:"structured_output_mode,omitempty"`
 }
 
 // Environment is what the platform supplies to a harness (§7, §7.2).
@@ -213,6 +216,7 @@ type ResumeResult struct {
 
 // Delivery is one platform message with its execution context.
 type Delivery struct {
+	OutputSchema json.RawMessage
 	// Context is freshly loaded at the turn boundary, including native resumes.
 	Context     *runtimeapi.ParticipantContext
 	DeliveryID  int64
@@ -243,8 +247,9 @@ type TurnResult struct {
 	SessionID string `json:"session_id,omitempty"`
 	// Output is the harness's final text for the turn. It is not delivered to
 	// anyone; agents reply through the messages tools.
-	Output   string        `json:"output,omitempty"`
-	Duration time.Duration `json:"duration"`
+	Output           string          `json:"output,omitempty"`
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
+	Duration         time.Duration   `json:"duration"`
 	// Claim is the agent's own statement about business completion, if the
 	// adapter can identify one. It is informational and agent-owned.
 	Claim *Claim `json:"claim,omitempty"`

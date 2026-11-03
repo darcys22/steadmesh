@@ -198,7 +198,7 @@ func (s *Store) FinishTaskRun(ctx context.Context, seatID, id, podUID string, fi
 	if finish.State != runtimeapi.TaskCompleted && finish.State != runtimeapi.TaskFailed && finish.State != runtimeapi.TaskTimedOut {
 		return ErrInvalid
 	}
-	if len(finish.Result.Output) > runtimeapi.MaxTaskOutputBytes || len(finish.Result.Error) > 2048 {
+	if len(finish.Result.Output) > runtimeapi.MaxTaskOutputBytes || len(finish.Result.Error) > 2048 || len(finish.Result.StructuredOutput) > runtimeapi.MaxTaskOutputBytes || len(finish.Result.ErrorKind) > 64 {
 		return ErrInvalid
 	}
 	if err := runtimeapi.ValidateTaskFiles(finish.Result.Artifacts); err != nil {
@@ -207,6 +207,9 @@ func (s *Store) FinishTaskRun(ctx context.Context, seatID, id, podUID string, fi
 	t, err := s.TaskRun(ctx, seatID, id)
 	if err != nil {
 		return err
+	}
+	if err := runtimeapi.ValidateTaskStructuredResult(t.Request, finish); err != nil {
+		return fmt.Errorf("%w: %s", ErrInvalid, err)
 	}
 	for _, file := range finish.Result.Artifacts {
 		found := false
