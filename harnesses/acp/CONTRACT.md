@@ -70,7 +70,7 @@ self-reported version is not proof of executable integrity or confinement.
    `app-server socket directory must be a user-owned directory with mode 0700`.
    Retrying with private test directories mode 0700 produced the same failure.
    No model request ran. The root cause is not established; sandboxing was not
-   disabled. Full proxy/tool/permission runtime conformance remains blocked.
+   disabled. A later clean isolated CI run passes session creation and a model-forwarder round trip after supplying native startup provider configuration. Tool execution, adversarial permission behavior and the other promotion gates remain unverified.
 
 ## Why not wrap acpx and enable it?
 
@@ -138,8 +138,9 @@ go test -tags integration -run TestCodexACPProtocolConformance/Initialize -v ./h
 go test -tags integration -run TestCodexACPProtocolConformance -v ./harnesses/acp
 ```
 
-The first command passed. The full command is **blocked/failing** at
-`session/new` as described above, before the forwarder/model assertions can run.
+The first command passed in the cloud workspace. The full command was initially
+blocked there at `session/new`; the isolated CI image now passes the complete
+model-forwarder round trip without weakening sandboxing.
 Without explicitly selected runtimes this test skips; a skipped test is not
 runtime verification.
 
@@ -158,11 +159,19 @@ container or native sandbox. The test must reach the local model forwarder and
 assert its model and seat authority; initialization alone does not pass the job.
 A sandbox/preflight failure is a failing check, not an optional skipped success.
 This job still does not enable the production adapter or prove all promotion
-gates. The first clean-runner outcome must be inspected before merging it.
+gates. The clean-runner outcome is recorded below.
 
 The first isolated CI run built the image, initialized ACP, and created a session
 without the cloud sandbox preflight failure. It then exposed a pinned-target
 provider mismatch before any model response: the thread used `steadmesh`, but
 the native app-server process still used its default `openai` provider. The
-follow-up startup configuration above addresses this mismatch; a fresh complete
-CI run must verify it. This is distinct from the earlier cloud preflight failure.
+follow-up startup configuration above addresses this mismatch. This is distinct
+from the earlier cloud preflight failure.
+
+The corrected run [41742408565](https://github.com/darcys22/steadmesh/actions/runs/41742408565)
+passed the complete fixture at commit479fa56: exact runtime initialization,
+session creation, streamed local-model output, and model ID plus seat token,
+generation and execution assertions. It made one request to the local modelstub,
+with external networking disabled. This verifies that narrow round trip, not
+real-model quality, native tool permissions, workspace-config safety, managed
+skills or durable recovery. The production adapter remains unregistered.
