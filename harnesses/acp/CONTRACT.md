@@ -147,3 +147,15 @@ Promotion requires a separate reviewed change: pin one real target, implement
 and verify every boundary above with the real model forwarder and tool bridge,
 then register it and add runtime image/profile support. Do not enable first and
 silently downgrade missing capabilities later.
+
+### Isolated CI runtime check
+
+`ACP isolated conformance` builds a test-only image with the approved package
+versions and an integrity-pinned npm dependency tree. It runs the complete real
+runtime fixture with no external network, no host mounts or credentials, a
+read-only root filesystem and a private writable `/tmp`. It does not relax the
+container or native sandbox. The test must reach the local model forwarder and
+assert its model and seat authority; initialization alone does not pass the job.
+A sandbox/preflight failure is a failing check, not an optional skipped success.
+This job still does not enable the production adapter or prove all promotion
+gates. The first clean-runner outcome must be inspected before merging it.
