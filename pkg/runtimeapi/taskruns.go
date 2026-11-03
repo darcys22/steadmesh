@@ -1,6 +1,7 @@
 package runtimeapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -43,10 +44,15 @@ type TaskRunRequest struct {
 	ToolNames      []string   `json:"tool_names,omitempty"`
 	InputFiles     []TaskFile `json:"input_files,omitempty"`
 	ArtifactPaths  []string   `json:"artifact_paths,omitempty"`
+	// OutputSchema requests one JSON result matching the bounded schema subset.
+	OutputSchema json.RawMessage `json:"output_schema,omitempty"`
 }
 
 type TaskRunResult struct {
-	Output    string     `json:"output,omitempty"`
+	Output           string          `json:"output,omitempty"`
+	StructuredOutput json.RawMessage `json:"structured_output,omitempty"`
+	// ErrorKind distinguishes schema failures from transport failures.
+	ErrorKind string     `json:"error_kind,omitempty"`
 	Artifacts []TaskFile `json:"artifacts,omitempty"`
 	Error     string     `json:"error,omitempty"`
 }
@@ -127,6 +133,9 @@ func ValidateTaskFiles(files []TaskFile) error {
 }
 
 func ValidateTaskRun(req *TaskRunRequest) error {
+	if err := ValidateOutputSchema(req.OutputSchema); err != nil {
+		return err
+	}
 	if strings.TrimSpace(req.Prompt) == "" || len(req.Prompt) > MaxTaskPromptBytes {
 		return fmt.Errorf("prompt is required and limited to %d bytes", MaxTaskPromptBytes)
 	}

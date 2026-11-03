@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/darcys22/steadmesh/harnesses"
 	"io"
 	"log/slog"
 	"net/http"
@@ -74,5 +76,70 @@ func TestTaskWorkerRunsFreshAndReturnsArtifactsWithoutSeatLease(t *testing.T) {
 	}
 	if len(calls) != 2 {
 		t.Fatalf("calls: %v", calls)
+	}
+}
+
+type structuredWorkerAdapter struct {
+	harnesses.Adapter
+	output string
+}
+
+func (a *structuredWorkerAdapter) Deliver(_ context.Context, d harnesses.Delivery) (harnesses.TurnResult, error) {
+	if len(d.OutputSchema) == 0 {
+		return harnesses.TurnResult{}, fmt.Errorf("schema not propagated")
+	}
+	return harnesses.TurnResult{Status: harnesses.TurnCompleted, Output: a.output}, nil
+}
+
+func TestTaskWorkerStructuredOutput(t *testing.T) {
+	for _, tc := range []struct {
+		name, output string
+		success      bool
+	}{
+		{"valid-negative", `{"accepted":false}`, true},
+		{"wrong-type", `{"accepted":"yes"}`, false},
+		{"oversized", `{"accepted":true,"extra":"` + strings.Repeat("x", runtimeapi.MaxTaskOutputBytes) + `"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			token := filepath.Join(root, "token")
+			if err := os.WriteFile(token, []byte("worker-token"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var got runtimeapi.TaskRunFinish
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case runtimeapi.PathTaskWorker + "/claim":
+					_ = json.NewEncoder(w).Encode(taskworker.Bootstrap{Run: runtimeapi.TaskRun{ID: "run", Deadline: time.Now().Add(time.Minute), Request: runtimeapi.TaskRunRequest{Prompt: "/output " + tc.output, OutputSchema: []byte(`{"type":"object","properties":{"accepted":{"type":"boolean"}},"required":["accepted"],"additionalProperties":false}`)}}, Manifest: compile.SeatManifest{Harness: spec.HarnessProfile{Adapter: "fake"}}})
+				case runtimeapi.PathTaskWorker + "/finish":
+					_ = json.NewDecoder(r.Body).Decode(&got)
+					w.WriteHeader(204)
+				default:
+					t.Errorf("unexpected endpoint %s", r.URL.Path)
+					w.WriteHeader(403)
+				}
+			}))
+			defer srv.Close()
+			cfg := Config{PlatformURL: srv.URL, TokenFile: token, ToolCommand: "/bin/false", WorkspaceDir: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"), RunnerDir: filepath.Join(root, "runner"), TmpDir: filepath.Join(root, "tmp")}
+			factory := func(name string) (harnesses.Adapter, error) {
+				a, err := DefaultAdapters(name)
+				if tc.name != "oversized" {
+					return a, err
+				}
+				return &structuredWorkerAdapter{Adapter: a, output: tc.output}, err
+			}
+			r, err := NewRunner(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), factory)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = r.runTaskWorker(context.Background(), "run")
+			if tc.success {
+				if err != nil || got.State != runtimeapi.TaskCompleted || string(got.Result.StructuredOutput) != tc.output {
+					t.Fatalf("%+v %v", got, err)
+				}
+			} else if err == nil || got.State != runtimeapi.TaskFailed || got.Result.ErrorKind != runtimeapi.StructuredOutputInvalid || len(got.Result.StructuredOutput) > 0 {
+				t.Fatalf("%+v %v", got, err)
+			}
+		})
 	}
 }

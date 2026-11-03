@@ -8,7 +8,7 @@ import (
 func (r *Registry) taskTools() []*tool {
 	return []*tool{
 		{name: "tasks.start", description: "Start a bounded disposable worker beneath this seat. Fresh workspace/session, inherited model/runtime, default no tools. Provide explicit UTF-8 input files and requested artifact paths; no persistent workspace is mounted. request_id is a UUID idempotency key. At most 4 active children and 16 children per parent execution.", mutating: true, allowed: legacyWorkerAllowed,
-			schema: `{"type":"object","properties":{"request_id":{"type":"string"},"prompt":{"type":"string","maxLength":32768},"timeout_seconds":{"type":"integer","minimum":1,"maximum":1200},"tool_names":{"type":"array","items":{"type":"string","enum":["memory.stores","memory.list","memory.read","memory.search","memory.history","work.get","work.list"]}},"input_files":{"type":"array","maxItems":64,"items":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"],"additionalProperties":false}},"artifact_paths":{"type":"array","maxItems":64,"items":{"type":"string"}}},"required":["request_id","prompt"],"additionalProperties":false}`,
+			schema: `{"type":"object","properties":{"request_id":{"type":"string"},"prompt":{"type":"string","maxLength":32768},"output_schema":{"type":"object","description":"Optional bounded reference-free JSON Schema subset; see structured task output documentation."},"timeout_seconds":{"type":"integer","minimum":1,"maximum":1200},"tool_names":{"type":"array","items":{"type":"string","enum":["memory.stores","memory.list","memory.read","memory.search","memory.history","work.get","work.list"]}},"input_files":{"type":"array","maxItems":64,"items":{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"],"additionalProperties":false}},"artifact_paths":{"type":"array","maxItems":64,"items":{"type":"string"}}},"required":["request_id","prompt"],"additionalProperties":false}`,
 			handle: func(ctx context.Context, c *Call) (any, error) {
 				var req runtimeapi.TaskRunRequest
 				if err := decode(c, &req); err != nil {
@@ -65,6 +65,10 @@ func taskSummary(t runtimeapi.TaskRun) any {
 	if t.Result != nil {
 		out["output"] = clipTaskOutput(t.Result.Output, 8192)
 		out["error"] = t.Result.Error
+		out["error_kind"] = t.Result.ErrorKind
+		if len(t.Result.StructuredOutput) > 0 {
+			out["structured_output"] = t.Result.StructuredOutput
+		}
 		files := []map[string]any{}
 		for _, f := range t.Result.Artifacts {
 			files = append(files, map[string]any{"path": f.Path, "bytes": len(f.Content)})

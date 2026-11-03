@@ -127,6 +127,7 @@ var _ harnesses.Adapter = (*Adapter)(nil)
 
 func (a *Adapter) DescribeCapabilities() harnesses.Capabilities {
 	return harnesses.Capabilities{
+		StructuredOutputMode: harnesses.StructuredOutputPlatform,
 		Adapter:              AdapterName,
 		Version:              PinnedVersion,
 		ToolTransports:       []string{"mcp"},
