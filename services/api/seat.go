@@ -507,7 +507,7 @@ func modelAllowed(q *seatReq, conn, api, id string) string {
 	if id == "" {
 		return "the request names no model"
 	}
-	return fmt.Sprintf("model %q over API %s is not an approved harness selection on connection %q", id, api, conn)
+	return fmt.Sprintf("model %q over API %s is not allowed by the approved harness selections on connection %q", id, api, conn)
 }
 
 // hostOf is the upstream host of a model connection, when it reports one.

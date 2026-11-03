@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/darcys22/steadmesh/harnesses"
@@ -114,5 +115,15 @@ func TestNoStartupFallbackPreservesPrimaryRestriction(t *testing.T) {
 	}
 	if modelAllowed(q, "explicit", harnesses.APIOpenAIChat, "anything") != "" {
 		t.Fatal("unrelated explicit grant narrowed")
+	}
+}
+
+// Console events retain the established denial wording for consumers of the
+// recorded model_request event, while the decision still uses exact tuples.
+func TestModelDenialEventWording(t *testing.T) {
+	q := &seatReq{seat: &store.Seat{Manifest: fallbackProxyManifest()}}
+	reason := modelAllowed(q, "primary", harnesses.APIAnthropicMessages, "another")
+	if !strings.Contains(reason, "not allowed") {
+		t.Fatalf("denial event wording changed: %q", reason)
 	}
 }
