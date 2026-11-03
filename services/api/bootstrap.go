@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
 	"github.com/darcys22/steadmesh/services/tools"
 )
@@ -59,12 +60,7 @@ func (s *server) bootstrap(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	}
 	adapter := q.seat.Manifest.Harness.Adapter
 	var notes []string
-	for i := range cps {
-		if cps[i].HarnessAdapter == adapter {
-			out.Recovery.Session = &cps[i]
-			break
-		}
-	}
+	out.Recovery.Session = bootstrapCheckpoint(&q.seat.Manifest, cps)
 	if out.Recovery.Session == nil && len(cps) > 0 {
 		notes = append(notes, fmt.Sprintf("native session from harness %q (format %s) cannot be converted to %q; resume from the portable handoff and recent messages",
 			cps[0].HarnessAdapter, cps[0].FormatVersion, adapter))
@@ -90,4 +86,28 @@ func (s *server) bootstrap(w http.ResponseWriter, r *http.Request, q *seatReq) {
 	}
 	out.Recovery.Note = strings.Join(notes, "; ")
 	writeJSON(w, http.StatusOK, out)
+}
+
+// bootstrapCheckpoint preserves durable route ownership before considering a
+// legacy adapter match. Checkpoints arrive newest first. A revoked or changed
+// route must still reach the runner, which fails closed against the committed
+// manifest; dropping it would incorrectly turn recovery into a fresh startup.
+func bootstrapCheckpoint(m *compile.SeatManifest, cps []runtimeapi.Checkpoint) *runtimeapi.Checkpoint {
+	for i := range cps {
+		if cps[i].HarnessProfile != "" || cps[i].RouteBinding != "" {
+			return &cps[i]
+		}
+	}
+	// Enabling fallback cannot silently discard a legacy session from another
+	// adapter. Pass it through so the runner requires explicit migration.
+	if m.Harness.StartupFallback != nil && len(cps) > 0 {
+		return &cps[0]
+	}
+	// Preserve ordinary, non-fallback legacy selection behavior.
+	for i := range cps {
+		if cps[i].HarnessAdapter == m.Harness.Adapter {
+			return &cps[i]
+		}
+	}
+	return nil
 }

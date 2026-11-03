@@ -28,3 +28,18 @@ func TestManifestDoesNotInheritMarketplaceSkills(t *testing.T) {
 		t.Fatal("parent manifest mutated")
 	}
 }
+
+func TestWorkerManifestDoesNotInheritStartupFallback(t *testing.T) {
+	parent := compile.SeatManifest{
+		Harness:          spec.HarnessProfile{Model: &spec.ModelSelection{Connection: "primary", ID: "pinned"}, StartupFallback: &spec.StartupFallbackPolicy{Profiles: []string{"alternate"}, MaxAttempts: 2, TotalTimeout: "30s"}},
+		StartupFallbacks: []compile.StartupFallbackCandidate{{Profile: "alternate", Harness: spec.HarnessProfile{Model: &spec.ModelSelection{Connection: "secondary", ID: "other"}}}},
+		Capabilities:     []compile.Capability{{Resource: "connection:primary", Operations: []string{"model.infer"}}, {Resource: "connection:secondary", Operations: []string{"model.infer"}}},
+	}
+	worker := Manifest(parent, nil)
+	if worker.Harness.StartupFallback != nil || len(worker.StartupFallbacks) != 0 || len(worker.Capabilities) != 1 || worker.Capabilities[0].Resource != "connection:primary" {
+		t.Fatalf("worker inherited fallback authority: %+v", worker)
+	}
+	if parent.Harness.StartupFallback == nil || len(parent.StartupFallbacks) != 1 || len(parent.Capabilities) != 2 {
+		t.Fatal("worker narrowing mutated parent")
+	}
+}

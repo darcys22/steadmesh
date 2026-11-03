@@ -134,6 +134,7 @@ func specAttributes() map[string]schema.Attribute {
 					"settings":   strMap("Harness-specific model settings: effort (claude-code); reasoning_effort (codex); thinking, context_window, max_tokens, reasoning (pi)."),
 				},
 			},
+			"startup_fallback":      startupFallbackAttribute(),
 			"required_capabilities": strList("Capabilities the adapter must support."),
 			"config":                strMap("Adapter configuration."),
 		}),

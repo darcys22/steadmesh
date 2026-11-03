@@ -27,7 +27,7 @@ jobs:
       - name: Native policy and runtime race checks
         run: go test -race ./pkg/compile ./provider ./services/policy ./services/tools ./services/api ./cmd/seat-runner ./harnesses/...
       - name: PostgreSQL migrations, concurrency and regressions
-        run: go test -count=1 -tags integration -timeout 15m ./services/store ./services/platform
+        run: go test -count=1 -tags integration -timeout 15m ./services/store ./services/platform ./services/api
       - name: Terraform example schemas
         run: |
           for dir in examples/native-hybrid examples/native-self-organising examples/native-fixed-prompts; do terraform fmt -check -recursive "$dir"; done

@@ -56,6 +56,9 @@ func ModelUses(m *Manifest) map[string][]ModelUse {
 	}
 	for _, k := range sortedKeys(m.Seats) {
 		add(m.Seats[k].Harness.Model)
+		for _, candidate := range m.Seats[k].StartupFallbacks {
+			add(candidate.Harness.Model)
+		}
 	}
 	// Declared templates need verification even before the first admission.
 	// This never inserts a runtime participant in desired-state Seats.
@@ -63,7 +66,13 @@ func ModelUses(m *Manifest) map[string][]ModelUse {
 		if pool := m.Spec.Teams[tk].Pool; pool != nil {
 			for _, name := range sortedKeys(pool.Templates) {
 				if seat := pool.Templates[name].Seat; seat != nil {
-					add(m.Spec.HarnessProfiles[seat.HarnessProfile].Model)
+					h := m.Spec.HarnessProfiles[seat.HarnessProfile]
+					add(h.Model)
+					if h.StartupFallback != nil {
+						for _, profile := range h.StartupFallback.Profiles {
+							add(m.Spec.HarnessProfiles[profile].Model)
+						}
+					}
 				}
 			}
 		}

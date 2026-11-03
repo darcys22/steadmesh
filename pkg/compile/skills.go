@@ -38,9 +38,18 @@ func (c *compiler) checkSkills(o *spec.OrganizationSpec) {
 			continue
 		}
 		path := "seats." + key + ".skills"
-		adapter := o.HarnessProfiles[seat.HarnessProfile].Adapter
+		profile := o.HarnessProfiles[seat.HarnessProfile]
+		adapter := profile.Adapter
 		if !slices.Contains(c.cat.Harnesses[adapter].Capabilities, harnesses.CapabilityManagedSkills) {
 			c.errf(path, "harness %q does not declare the %s capability required for marketplace skills", adapter, harnesses.CapabilityManagedSkills)
+		}
+		if profile.StartupFallback != nil {
+			for _, name := range profile.StartupFallback.Profiles {
+				candidate := o.HarnessProfiles[name]
+				if !slices.Contains(c.cat.Harnesses[candidate.Adapter].Capabilities, harnesses.CapabilityManagedSkills) {
+					c.errf(path, "startup fallback profile %q harness %q does not declare the %s capability required for marketplace skills", name, candidate.Adapter, harnesses.CapabilityManagedSkills)
+				}
+			}
 		}
 		if p.Mode == "" {
 			p.Mode = spec.SkillModeExplicit

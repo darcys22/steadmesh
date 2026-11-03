@@ -16,6 +16,7 @@ import (
 	"github.com/darcys22/steadmesh/connectors"
 	"github.com/darcys22/steadmesh/connectors/model"
 	"github.com/darcys22/steadmesh/pkg/runtimeapi"
+	"github.com/darcys22/steadmesh/pkg/spec"
 	"github.com/darcys22/steadmesh/services/auth"
 	"github.com/darcys22/steadmesh/services/connections"
 	"github.com/darcys22/steadmesh/services/policy"
@@ -327,6 +328,10 @@ func (s *server) checkpoint(w http.ResponseWriter, r *http.Request, q *seatReq) 
 		writeError(w, http.StatusBadRequest, "invalid", "only application_checkpoint is supported in this release")
 		return
 	}
+	if !checkpointRouteAllowed(&q.seat.Manifest, cp) {
+		writeError(w, http.StatusForbidden, "forbidden", "checkpoint route is not approved by the current manifest")
+		return
+	}
 	if err := s.Store.SaveCheckpoint(r.Context(), f, cp); err != nil {
 		s.storeError(w, r, err)
 		return
@@ -475,24 +480,34 @@ func (s *server) modelProxy(w http.ResponseWriter, r *http.Request, q *seatReq) 
 	hold.replay()
 }
 
-// modelAllowed returns why a seat may not request model over api through
-// conn, or "" when it may. Through its harness profile's connection a seat
-// may only use the profile's model and API; through another connection
-// granted model.infer explicitly, any model.
+// modelAllowed restricts every approved harness connection to exact model/API
+// tuples. A separately granted, unrelated connection keeps its existing policy.
+// seatAuth reloads the committed manifest, so removed candidates cannot keep
+// using a stale pod's allowlist.
 func modelAllowed(q *seatReq, conn, api, id string) string {
-	sel := q.seat.Manifest.Harness.Model
-	if sel == nil || sel.Connection != conn {
+	restricted := false
+	allows := func(sel *spec.ModelSelection) bool {
+		if sel == nil || sel.Connection != conn {
+			return false
+		}
+		restricted = true
+		return id != "" && sel.ID == id && sel.API == api
+	}
+	if allows(q.seat.Manifest.Harness.Model) {
 		return ""
 	}
-	switch {
-	case id == "":
-		return "the request names no model"
-	case id != sel.ID:
-		return fmt.Sprintf("model %q is not allowed for this seat; its harness profile selects %q", id, sel.ID)
-	case api != sel.API:
-		return fmt.Sprintf("API %s is not allowed for this seat; its harness profile uses %s", api, sel.API)
+	for _, candidate := range q.seat.Manifest.StartupFallbacks {
+		if allows(candidate.Harness.Model) {
+			return ""
+		}
 	}
-	return ""
+	if !restricted {
+		return ""
+	}
+	if id == "" {
+		return "the request names no model"
+	}
+	return fmt.Sprintf("model %q over API %s is not allowed by the approved harness selections on connection %q", id, api, conn)
 }
 
 // hostOf is the upstream host of a model connection, when it reports one.

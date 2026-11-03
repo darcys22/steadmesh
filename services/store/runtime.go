@@ -51,19 +51,20 @@ func (s *Store) SaveCheckpoint(ctx context.Context, f Fence, cp runtimeapi.Check
 		if err := checkFence(ctx, tx, f); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO sessions (seat_id, harness_adapter, format_version, checkpoint_ref, guarantee, lease_generation)
-			VALUES ($1, $2, $3, $4, $5, $6)
+		_, err := tx.Exec(ctx, `INSERT INTO sessions (seat_id, harness_adapter, format_version, checkpoint_ref, guarantee, lease_generation, harness_profile, route_binding)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			ON CONFLICT (seat_id, harness_adapter) DO UPDATE SET format_version = EXCLUDED.format_version,
 				checkpoint_ref = EXCLUDED.checkpoint_ref, guarantee = EXCLUDED.guarantee,
-				lease_generation = EXCLUDED.lease_generation, updated_at = now()`,
-			f.SeatID, cp.HarnessAdapter, cp.FormatVersion, cp.CheckpointRef, cp.Guarantee, f.Generation)
+				lease_generation = EXCLUDED.lease_generation, harness_profile = EXCLUDED.harness_profile,
+				route_binding = EXCLUDED.route_binding, updated_at = now()`,
+			f.SeatID, cp.HarnessAdapter, cp.FormatVersion, cp.CheckpointRef, cp.Guarantee, f.Generation, cp.HarnessProfile, cp.RouteBinding)
 		return err
 	})
 }
 
 // Checkpoints returns the seat's checkpoints, most recent first.
 func (s *Store) Checkpoints(ctx context.Context, seatID string) ([]runtimeapi.Checkpoint, error) {
-	rows, err := s.pool.Query(ctx, `SELECT harness_adapter, format_version, checkpoint_ref, guarantee FROM sessions
+	rows, err := s.pool.Query(ctx, `SELECT harness_adapter, format_version, checkpoint_ref, guarantee, harness_profile, route_binding FROM sessions
 		WHERE seat_id = $1 ORDER BY updated_at DESC`, seatID)
 	if err != nil {
 		return nil, err

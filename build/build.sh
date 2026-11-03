@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build steadmesh images with a filtered context (no bin/, examples/, modules/).
 # Usage: build/build.sh <image>... [-- extra docker build args]
-#   images: controller platform console fakes seat-fake seat-claudecode seat-codex seat-pi
+#   images: controller platform console fakes seat-fake seat-claudecode seat-codex seat-pi seat-bundle
 #           <seat image>-browser (after its base), e.g. seat-pi-browser
 #   TAG (default dev) and REGISTRY (default steadmesh) set the image name.
 set -euo pipefail
