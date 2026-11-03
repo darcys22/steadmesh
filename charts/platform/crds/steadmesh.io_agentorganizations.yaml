@@ -531,6 +531,12 @@ spec:
                         connection:
                           description: Connection names a model connection.
                           type: string
+                        effort:
+                          description: |-
+                            Effort is a portable reasoning-effort label translated by the harness.
+                            Unsupported labels and conflicts with native settings fail compilation.
+                            Empty preserves the harness default. Labels do not guarantee equal cost.
+                          type: string
                         id:
                           description: |-
                             ID is the model identifier sent to the endpoint. The platform rejects

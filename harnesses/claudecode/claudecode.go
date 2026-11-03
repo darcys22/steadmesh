@@ -127,7 +127,8 @@ func init() {
 		Settings: map[string]harnesses.Setting{
 			SettingEffort: {Description: "effort level (--effort)", Values: []string{"low", "medium", "high", "xhigh", "max"}},
 		},
-		Capabilities: []string{"tools", "mcp", "event_stream", "session_resume", "interrupt", "application_checkpoint"},
+		Effort:       &harnesses.EffortMapping{Setting: SettingEffort, Values: map[string]string{"low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max"}},
+		Capabilities: []string{harnesses.CapabilityManagedSkills, "tools", "mcp", "event_stream", "session_resume", "interrupt", "application_checkpoint"},
 		New:          func() harnesses.Adapter { return New() },
 	})
 }

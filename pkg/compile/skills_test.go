@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/compile"
 	"github.com/darcys22/steadmesh/pkg/spec"
 )
@@ -285,5 +286,25 @@ func TestSkillCollectionLimits(t *testing.T) {
 				t.Fatalf("missing bound: %v", err)
 			}
 		})
+	}
+}
+
+func TestSkillSupportUsesCapabilities(t *testing.T) {
+	// New adapter names must not require editing the skills compiler.
+	s := skillSpec(t)
+	h := s.HarnessProfiles["h"]
+	h.Adapter = "new-harness"
+	s.HarnessProfiles["h"] = h
+	cat := compile.DefaultCatalog()
+	cat.Harnesses["new-harness"] = cat.Harnesses["claude-code"]
+	if _, err := compile.Compile(s, cat); err != nil {
+		t.Fatal(err)
+	}
+	// A familiar name is not enough if this build lacks secure managed loading.
+	info := cat.Harnesses["new-harness"]
+	info.Capabilities = nil
+	cat.Harnesses["new-harness"] = info
+	if _, err := compile.Compile(s, cat); err == nil || !strings.Contains(err.Error(), harnesses.CapabilityManagedSkills) {
+		t.Fatalf("expected capability rejection, got %v", err)
 	}
 }
