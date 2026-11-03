@@ -577,6 +577,7 @@ Optional:
 - `config` (Map of String) Adapter configuration.
 - `model` (Attributes) The model the harness uses and the connection that serves it. (see [below for nested schema](#nestedatt--spec--harness_profiles--model))
 - `required_capabilities` (List of String) Capabilities the adapter must support.
+- `startup_fallback` (Attributes) Explicit pre-start failover for a missing harness executable only. Never replays deliveries or switches native sessions. All profiles must use the same operator-provided multi-harness image; task workers keep the primary only. (see [below for nested schema](#nestedatt--spec--harness_profiles--startup_fallback))
 
 <a id="nestedatt--spec--harness_profiles--model"></a>
 ### Nested Schema for `spec.harness_profiles.model`
@@ -591,6 +592,16 @@ Optional:
 - `api` (String) anthropic_messages, openai_responses or openai_chat. When unset, the first API the harness speaks that the connection and model also serve.
 - `effort` (String) Portable reasoning effort; translated by the pinned harness. Unsupported values and conflicting native settings fail compilation. Omit for harness defaults. Labels do not imply equal cost across models.
 - `settings` (Map of String) Harness-specific model settings: effort (claude-code); reasoning_effort (codex); thinking, context_window, max_tokens, reasoning (pi).
+
+
+<a id="nestedatt--spec--harness_profiles--startup_fallback"></a>
+### Nested Schema for `spec.harness_profiles.startup_fallback`
+
+Required:
+
+- `max_attempts` (Number) Total attempts including the primary, 1–8 and no greater than the approved chain length.
+- `profiles` (List of String) Ordered list of 1–7 existing alternative profiles. No duplicates, self-references or nested fallback. Every alternative preserves the primary's required capabilities.
+- `total_timeout` (String) Positive Go duration at most 5m, shared by all startup attempts and additionally bounded by the parent context.
 
 
 

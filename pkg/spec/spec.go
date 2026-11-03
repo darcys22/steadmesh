@@ -161,6 +161,10 @@ type HarnessProfile struct {
 	// Config holds adapter-specific options (docs/harnesses.html).
 	// +optional
 	Config map[string]string `json:"config,omitempty"`
+	// StartupFallback explicitly approves alternate profiles for pre-start
+	// executable-unavailable failures only. All profiles use the same image.
+	// +optional
+	StartupFallback *StartupFallbackPolicy `json:"startup_fallback,omitempty"`
 }
 
 // ModelSelection is a harness profile's model.

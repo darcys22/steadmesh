@@ -1,8 +1,10 @@
 # Secure seat failover integration plan
 
-Status: proposed follow-on design. PR #17 implements the primitive and attempt
-telemetry only. None of the configuration or lifecycle behavior below is
-enabled by that PR.
+Status: design and remaining-work record. PR #17 implements the primitive and
+attempt telemetry. The subsequent [startup fallback integration](startup-fallback.md)
+implements explicit profiles, exact grants, a pinned bundle definition, durable
+route checkpoints and missing-executable fallback before session startup.
+Controller replacement and mid-turn quota failover below remain proposals.
 
 ## Current constraints verified in the code
 

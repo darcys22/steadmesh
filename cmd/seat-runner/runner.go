@@ -84,6 +84,9 @@ type Runner struct {
 	fwd     *forwarder
 	// model is the harness profile's model selection, nil without one.
 	model *spec.ModelSelection
+	// Approved startup-route identity, persisted with every checkpoint.
+	activeProfile string
+	activeBinding string
 	// mfwd is the local model forwarder, started when the seat has a model.
 	mfwd *modelforward.Forwarder
 	// efwd is the local egress proxy, started when the seat's access uses
@@ -382,6 +385,14 @@ func (r *Runner) start(stop context.Context) error {
 			return err
 		}
 	}
+	if (manifest != nil && manifest.Harness.StartupFallback != nil) || (boot.Recovery.Session != nil && (boot.Recovery.Session.HarnessProfile != "" || boot.Recovery.Session.RouteBinding != "")) {
+		r.bootLoaded.Store(false)
+		err := r.startApprovedRoute(stop, boot, manifest, instructions)
+		if err == nil {
+			r.bootLoaded.Store(true)
+		}
+		return err
+	}
 	a, err := r.newAdapter(r.cfg.Harness)
 	if err != nil {
 		return err
@@ -677,6 +688,9 @@ func (r *Runner) checkpoint(ctx context.Context) {
 		r.log.Warn("checkpoint failed", "err", err)
 		return
 	}
+	r.mu.Lock()
+	cp.HarnessProfile, cp.RouteBinding = r.activeProfile, r.activeBinding
+	r.mu.Unlock()
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	if err := r.check(r.c.PutCheckpoint(cctx, cp)); err != nil {

@@ -19,6 +19,9 @@ type Bootstrap struct {
 // surface. It never adds a grant, route, access profile or workspace binding.
 func Manifest(parent compile.SeatManifest, toolNames []string) compile.SeatManifest {
 	out := parent
+	// Task workers keep the primary model only, never the parent's startup chain.
+	out.StartupFallbacks = nil
+	out.Harness.StartupFallback = nil
 	out.Capabilities = nil
 	out.Access = nil
 	// Disposable workers do not inherit persistent skill-management authority.

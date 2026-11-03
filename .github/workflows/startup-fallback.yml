@@ -1,0 +1,57 @@
+name: startup fallback bundle
+on:
+  pull_request:
+    paths:
+      - "build/seat-bundle.Dockerfile"
+      - "harnesses/**"
+      - "cmd/seat-runner/**"
+      - "pkg/compile/**"
+      - "pkg/runtimeapi/**"
+      - "pkg/spec/**"
+      - "services/api/**"
+      - "services/store/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/startup-fallback.yml"
+  push:
+    branches: [main]
+    paths:
+      - "build/seat-bundle.Dockerfile"
+      - "harnesses/**"
+      - "cmd/seat-runner/**"
+      - "pkg/compile/**"
+      - "pkg/runtimeapi/**"
+      - "pkg/spec/**"
+      - "services/api/**"
+      - "services/store/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/startup-fallback.yml"
+permissions:
+  contents: read
+jobs:
+  bundle-conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build the pinned multi-harness image
+        run: docker build -f build/seat-bundle.Dockerfile -t steadmesh/seat-bundle:test .
+      - name: Exercise each bundled CLI against scripted model endpoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/bundle-conformance
+          for pair in claudecode:claude codex:codex pi:pi; do
+            IFS=: read -r pkg bin <<< "$pair"
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go test -c -tags integration -o "out/bundle-conformance/$pkg.test" "./harnesses/$pkg"
+            docker run --rm --network none \
+              -v "$PWD/out/bundle-conformance:/t:ro" \
+              -e "STEADMESH_$(echo "$bin" | tr a-z A-Z)_BIN=$bin" \
+              --entrypoint "/t/$pkg.test" steadmesh/seat-bundle:test \
+              -test.run ModelConformance -test.count=1 -test.timeout=5m
+          done

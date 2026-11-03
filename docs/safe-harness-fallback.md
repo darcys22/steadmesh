@@ -3,8 +3,9 @@
 Steadmesh seats authorize a single adapter and model connection. Their native
 session and checkpoint belong to that adapter. Unlike a stateless CLI fallback
 chain, changing either at runtime needs platform authorization and explicit
-lifecycle management. This change does **not** enable cross-model or
-cross-adapter failover in seat manifests.
+lifecycle management. The original primitive does not itself enable cross-model or cross-adapter
+failover. The opt-in [startup fallback integration](startup-fallback.md) now
+supports approved missing-executable fallback before any session or turn starts.
 
 The seat runner now records per-attempt operational telemetry for the existing
 single authorized adapter. `harnesses.RunApprovedFallback` provides an opt-in,
@@ -30,7 +31,7 @@ create adapters, handle credentials, transfer native sessions or bypass the
 model proxy. Callers must not pass model-authored candidate lists or replay
 safety assertions.
 
-## Remaining integration for seat failover
+## Wider seat failover
 
 To enable alternative adapters/models, add a platform-owned manifest contract
 that approves every candidate endpoint and adapter, validate proxy model grants
@@ -38,8 +39,10 @@ for that set, and implement the seat runner's stop/prepare/start/checkpoint and
 event-stream ownership transitions. Native checkpoints must stay adapter-owned;
 any portable handoff must be identified as a new session. Adapters must obtain
 non-execution proof from trusted launch/protocol evidence, not error prose.
-These changes require coordinated model authorization and recovery work and are
-not silently approximated here.
+The startup-only integration implements explicit candidates, exact grants,
+shared deadlines and durable checkpoint ownership. Mid-turn replay and
+controller-driven image transitions remain unsupported; see the secure design
+plan for the remaining requirements.
 
 Inspired by no-mistakes' ordered, bounded operational fallback and per-attempt
 reporting; implemented independently around Steadmesh's seat security model.

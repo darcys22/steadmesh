@@ -124,6 +124,9 @@ type SeatManifest struct {
 	// Access is what the seat may do from its sandbox (access profiles).
 	Access         *access.SeatAccess `json:"access,omitempty"`
 	ConfigRevision string             `json:"config_revision"`
+
+	// StartupFallbacks are the approved alternatives, in declared order.
+	StartupFallbacks []StartupFallbackCandidate `json:"startup_fallbacks,omitempty"`
 }
 
 // Compile validates and resolves an organisation specification.
@@ -163,6 +166,7 @@ func (c *compiler) run() *Manifest {
 	lineage := c.resolveTemplates(&out)
 	c.applyDefaults(&out)
 	c.checkProfiles(&out)
+	c.checkStartupFallbacks(&out)
 	c.checkConnections(&out)
 	c.checkMemoryAndWorkspaces(&out)
 	c.checkSeats(&out)
@@ -972,6 +976,7 @@ func (c *compiler) seatManifest(o *spec.OrganizationSpec, k string) SeatManifest
 	if m := sm.Harness.Model; m != nil {
 		sm.addCapability("connection:"+m.Connection, []string{"model.infer"}, nil, "implicit:harness_model")
 	}
+	c.resolveStartupFallbacks(o, &sm)
 	profiles := append([]string(nil), s.AccessProfiles...)
 	for _, t := range s.Teams {
 		profiles = append(profiles, o.Teams[t].AccessProfiles...)

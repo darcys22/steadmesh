@@ -271,6 +271,10 @@ type Checkpoint struct {
 	CheckpointRef  string `json:"checkpoint_ref"`
 	// Guarantee is application_checkpoint or process_snapshot (§6.4).
 	Guarantee string `json:"guarantee"`
+	// HarnessProfile and RouteBinding bind a configured startup route to its
+	// native checkpoint. Empty values are legacy single-harness checkpoints.
+	HarnessProfile string `json:"harness_profile,omitempty"`
+	RouteBinding   string `json:"route_binding,omitempty"`
 }
 
 type Handoff struct {

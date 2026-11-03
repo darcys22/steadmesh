@@ -44,6 +44,7 @@ type fakePlatform struct {
 	states         []runtimeapi.StateRequest
 	nextDelID      int64
 	workingContext runtimeapi.ParticipantContext
+	checkpoint     *runtimeapi.Checkpoint
 }
 
 func newFakePlatform() *fakePlatform {
@@ -121,7 +122,7 @@ func (p *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.record("state:" + s.State)
 		w.WriteHeader(204)
 	case path == runtimeapi.PathBootstrap:
-		_ = json.NewEncoder(w).Encode(runtimeapi.Bootstrap{Context: p.workingContext, Self: runtimeapi.Self{SeatID: "seat-1", SeatKey: "alice", ConfigRevision: "rev-1"}, Instructions: "be good", Guidance: "use memory"})
+		_ = json.NewEncoder(w).Encode(runtimeapi.Bootstrap{Context: p.workingContext, Recovery: runtimeapi.Recovery{Session: p.checkpoint}, Self: runtimeapi.Self{SeatID: "seat-1", SeatKey: "alice", ConfigRevision: "rev-1"}, Instructions: "be good", Guidance: "use memory"})
 	case path == runtimeapi.PathTools:
 		_ = json.NewEncoder(w).Encode(runtimeapi.ToolList{Tools: conformance.Tools})
 	case strings.HasPrefix(path, runtimeapi.PathToolCall):

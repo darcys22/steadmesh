@@ -556,6 +556,35 @@ spec:
                       items:
                         type: string
                       type: array
+                    startup_fallback:
+                      description: |-
+                        StartupFallback explicitly approves alternate profiles for pre-start
+                        executable-unavailable failures only. All profiles use the same image.
+                      properties:
+                        max_attempts:
+                          description: MaxAttempts includes the primary, and cannot
+                            exceed the chain length.
+                          maximum: 8
+                          minimum: 1
+                          type: integer
+                        profiles:
+                          description: Profiles lists one to seven existing profiles.
+                            Nested fallback is forbidden.
+                          items:
+                            type: string
+                          maxItems: 7
+                          minItems: 1
+                          type: array
+                        total_timeout:
+                          description: |-
+                            TotalTimeout is a required positive Go duration, at most 5m, shared by
+                            the entire startup chain and bounded further by the parent context.
+                          type: string
+                      required:
+                      - max_attempts
+                      - profiles
+                      - total_timeout
+                      type: object
                   required:
                   - adapter
                   - image_digest
