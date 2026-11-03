@@ -41,7 +41,7 @@ sets read-only/on-request mode, supplies
 the platform MCP bridge with the token-file path, retains authorized extra MCP
 servers, and allow-lists access-plugin proxy environment settings. It copies no
 ambient environment. Unsupported settings or environment overrides are errors.
-This plan is data, not permission to launch an executable.
+The plan also supplies placeholder-only `StartupConfigTOML`. A trusted host must write it into a fresh private CODEX_HOME before launch: pinned ACP 2.5.0 otherwise applies the provider only to the thread, while native app-server startup defaults to openai. The integration fixture creates this file exclusively with mode0600. This plan is data, not permission to launch an executable.
 
 `OpenCodexSession` negotiates the exact target identity/version and starts a fresh
 session on a transport the trusted host already launched using that plan. It
@@ -159,3 +159,10 @@ assert its model and seat authority; initialization alone does not pass the job.
 A sandbox/preflight failure is a failing check, not an optional skipped success.
 This job still does not enable the production adapter or prove all promotion
 gates. The first clean-runner outcome must be inspected before merging it.
+
+The first isolated CI run built the image, initialized ACP, and created a session
+without the cloud sandbox preflight failure. It then exposed a pinned-target
+provider mismatch before any model response: the thread used `steadmesh`, but
+the native app-server process still used its default `openai` provider. The
+follow-up startup configuration above addresses this mismatch; a fresh complete
+CI run must verify it. This is distinct from the earlier cloud preflight failure.

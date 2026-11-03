@@ -21,7 +21,7 @@ func TestPlanUsesOnlyForwarderAndPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(plan.Env, "\n")
+	joined := strings.Join(plan.Env, "\n") + "\n" + plan.StartupConfigTOML
 	for _, secret := range []string{"ambient-secret", "must-not-copy"} {
 		if strings.Contains(joined, secret) {
 			t.Fatalf("credential copied: %s", secret)
@@ -82,5 +82,17 @@ func TestManagedSkillsAreRechecked(t *testing.T) {
 	}
 	if err := CheckManagedSkills(context.Background(), e); err == nil {
 		t.Fatal("unsupported skill set accepted")
+	}
+}
+
+func TestPlanPinsProviderAtNativeStartup(t *testing.T) {
+	p, err := PlanCodex(context.Background(), planEnv(), "/opt/codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`model_provider = "steadmesh"`, `[model_providers.steadmesh]`, `base_url = "http://127.0.0.1:5555/v1"`, `sandbox_mode = "read-only"`, `approval_policy = "on-request"`, `hooks = false`, `plugins = false`} {
+		if !strings.Contains(p.StartupConfigTOML, want) {
+			t.Fatalf("missing startup boundary %s", want)
+		}
 	}
 }

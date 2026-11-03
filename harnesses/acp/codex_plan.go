@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -64,6 +65,11 @@ func (p SessionParams) validate() error {
 type CodexPlan struct {
 	Env     []string
 	Session SessionParams
+	// StartupConfigTOML must be written by the trusted host to a fresh private
+	// CODEX_HOME/config.toml before launching the pinned runtime. ACP 2.5.0
+	// otherwise applies the provider only to the thread, not the app-server.
+	// It contains a placeholder, never a provider credential.
+	StartupConfigTOML string
 }
 
 // PlanCodex binds the official pinned target to the seat model forwarder and
@@ -116,6 +122,26 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	if err != nil {
 		return plan, err
 	}
+	quote := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	plan.StartupConfigTOML = fmt.Sprintf(`model = %s
+model_provider = "steadmesh"
+approval_policy = "on-request"
+sandbox_mode = "read-only"
+check_for_update_on_startup = false
+[features]
+hooks = false
+plugins = false
+[analytics]
+enabled = false
+[feedback]
+enabled = false
+[model_providers.steadmesh]
+name = "Steadmesh model proxy"
+base_url = %s
+wire_api = "responses"
+experimental_bearer_token = "steadmesh-placeholder"
+requires_openai_auth = false
+`, quote(env.Model.ID), quote(strings.TrimSuffix(env.Model.BaseURL, "/")+"/v1"))
 	plan.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + env.HomeDir, "CODEX_HOME=" + filepath.Join(env.RunnerDir, "acp-codex"),
 		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8",

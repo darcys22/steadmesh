@@ -98,6 +98,19 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(env.RunnerDir, "acp-codex"), 0700); err != nil {
 		t.Fatal(err)
 	}
+	// This is a fresh fixture-owned directory, not user configuration. The
+	// pinned ACP target needs the custom provider at app-server startup too.
+	f, err := os.OpenFile(filepath.Join(env.RunnerDir, "acp-codex", "config.toml"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.WriteString(plan.StartupConfigTOML); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	for _, check := range []struct {
 		bin  string
 		args []string
