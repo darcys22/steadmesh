@@ -23,6 +23,10 @@ func TestClassifyFailure(t *testing.T) {
 		{"canceled", context.Canceled, FailureCanceled},
 		{"quiesce", ErrInterruptedByQuiesce, FailureCanceled},
 		{"stop", ErrInterruptedByStop, FailureCanceled},
+		{"conflicting joined failures", errors.Join(&OperationalError{Kind: FailureQuota}, &OperationalError{Kind: FailurePolicy}), FailureUnknown},
+		{"joined unknown evidence", errors.Join(&OperationalError{Kind: FailureQuota}, errors.New("uncertain failure")), FailureUnknown},
+		{"policy wraps unavailable", &OperationalError{Kind: FailurePolicy, Err: exec.ErrNotFound}, FailureUnknown},
+		{"nested unknown classification", &OperationalError{Kind: FailureQuota, Err: &OperationalError{Kind: FailureUnknown}}, FailureUnknown},
 		{"unknown kind", &OperationalError{Kind: "invented"}, FailureUnknown},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
