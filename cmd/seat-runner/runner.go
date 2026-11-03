@@ -607,8 +607,21 @@ func (r *Runner) handleDelivery(stop context.Context, d runtimeapi.InboxDelivery
 		log.Warn("working context refresh failed; delivery left for redelivery", "err", err)
 		return
 	}
-	tr, err := r.adapter.Deliver(tctx, harnesses.Delivery{Context: &latest.Context, DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive,
-		Timezone: r.boot.Self.Timezone})
+	delivery := harnesses.Delivery{Context: &latest.Context, DeliveryID: d.DeliveryID, ExecutionID: d.ExecutionID, Attempt: d.Attempt, Message: d.Message, Passive: d.Passive,
+		Timezone: r.boot.Self.Timezone}
+	// The seat manifest authorizes one adapter and model. Keep that boundary:
+	// telemetry is enabled, but no alternate adapter is implicitly authorized.
+	tr, err := harnesses.RunApprovedFallback(tctx, delivery, []harnesses.ApprovedAttempt{{
+		Name: r.adapter.DescribeCapabilities().Adapter,
+		Run: func(ctx context.Context, delivery harnesses.Delivery) harnesses.AttemptOutcome {
+			result, err := r.adapter.Deliver(ctx, delivery)
+			return harnesses.AttemptOutcome{Result: result, Err: err}
+		},
+	}}, harnesses.FallbackPolicy{}, func(attempt harnesses.AttemptReport) {
+		log.Info("harness attempt finished", "harness", attempt.Name, "attempt_index", attempt.Index,
+			"status", attempt.Status, "failure_kind", attempt.Failure, "duration", attempt.Duration,
+			"not_executed", attempt.NotExecuted, "will_fallback", attempt.WillFallback)
+	})
 	fctx, fcancel := context.WithTimeout(context.Background(), 30*time.Second)
 	r.fwd.Flush(fctx)
 	fcancel()
