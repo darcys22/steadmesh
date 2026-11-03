@@ -97,6 +97,11 @@
 <p>The table describes the pinned releases. Their integration details and checks are recorded under <code>harnesses/&lt;name&gt;/CONTRACT.md</code>; the shared conformance suite covers each harness's supported APIs (see <a href="#verifying">Run the integration checks</a>).</p>
 <p>API compatibility does not mean every model or provider has been tested. The conformance suite uses a scripted model; real endpoints are exercised by <code>make live-harnesses</code> and the example run for the models they name. Check tool calling, context window and output limits for the model you choose, and set <code>context_window</code> and <code>max_tokens</code> to its real values. A harness is not a model provider: Pi, for example, still needs a model connection and its credential (<a href="faq.html#pi-key">Where is the Pi key?</a>, <a href="faq.html#which-llm">Which LLM does it use?</a>).</p>
 
+<h2>Use the same effort field across harnesses</h2>
+<p>Set <code>model.effort</code> to express reasoning effort without vendor-specific setting names. Compilation translates it into Claude's <code>effort</code>, Codex's <code>reasoning_effort</code> or Pi's <code>thinking</code>. Claude accepts low, medium, high, xhigh and max. Codex and Pi additionally accept none and minimal; Pi maps none to off. These are request labels, not a guarantee of equal reasoning, latency or cost. The selected model must support the requested level.</p>
+<p>Omitting effort preserves native settings or harness defaults. Native settings remain available for model-specific controls. If common effort and its native setting conflict, compilation fails rather than silently choosing one. The resolved manifest records both the intent and translated native setting. Model identity, API routing and credentials remain controlled by the platform.</p>
+<p>Marketplace skills require the harness descriptor's <code>managed_skills</code> capability. This promises current authorization refresh at every turn boundary, including revocation, rather than merely accepting native skill files. New adapters must implement and test that contract before advertising it.</p>
+
 <h2>Connect a model and assign it to a role</h2>
 <p>A model connection is declared once, with the APIs it serves and optionally its models. A harness profile then selects a connection and a model.</p>
 <pre><code>connections = {
@@ -114,9 +119,9 @@
 }
 harness_profiles = {
   claude = { adapter = "claude-code", image_digest = "…/seat-claudecode@sha256:…",
-             model = { connection = "anthropic", id = "claude-sonnet-5-5", settings = { effort = "high" } } }
+             model = { connection = "anthropic", id = "claude-sonnet-5-5", effort = "high" } }
   codex  = { adapter = "codex", image_digest = "…/seat-codex@sha256:…",
-             model = { connection = "openai", id = "gpt-5.5", settings = { reasoning_effort = "high" } } }
+             model = { connection = "openai", id = "gpt-5.5", effort = "high" } }
   pi_selfhosted = { adapter = "pi", image_digest = "…/seat-pi@sha256:…",
              model = { connection = "selfhosted", id = "qwen3.8-27b" } }          <span class="c"># api resolves to openai_chat</span>
 }</code></pre>

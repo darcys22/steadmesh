@@ -130,6 +130,7 @@ func specAttributes() map[string]schema.Attribute {
 					"connection": reqStr("A model connection."),
 					"id":         reqStr("Model identifier sent to the endpoint. The platform rejects requests from the seat for any other model."),
 					"api":        optStr("anthropic_messages, openai_responses or openai_chat. When unset, the first API the harness speaks that the connection and model also serve."),
+					"effort":     optStr("Portable reasoning effort; translated by the pinned harness. Unsupported values and conflicting native settings fail compilation. Omit for harness defaults. Labels do not imply equal cost across models."),
 					"settings":   strMap("Harness-specific model settings: effort (claude-code); reasoning_effort (codex); thinking, context_window, max_tokens, reasoning (pi)."),
 				},
 			},

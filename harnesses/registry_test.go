@@ -15,6 +15,8 @@ func TestRegistry(t *testing.T) {
 		{Name: "x", Aliases: []string{"test-reg-alias"}, New: func() Adapter { return nil }},
 		{Name: "y", APIs: []string{"grpc"}, New: func() Adapter { return nil }},
 		{Name: "z"},
+		{Name: "bad-effort-key", Effort: &EffortMapping{Setting: "missing", Values: map[string]string{"high": "high"}}, New: func() Adapter { return nil }},
+		{Name: "bad-effort-value", Settings: map[string]Setting{"effort": {Values: []string{"low"}}}, Effort: &EffortMapping{Setting: "effort", Values: map[string]string{"high": "high"}}, New: func() Adapter { return nil }},
 	} {
 		func() {
 			defer func() {

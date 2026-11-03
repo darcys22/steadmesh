@@ -25,6 +25,19 @@ type Setting struct {
 	Values []string
 }
 
+// CapabilityManagedSkills means the adapter loads the platform's currently
+// authorized portable marketplace skills at every turn boundary and fails closed
+// on refresh errors. Merely accepting native skills is not sufficient.
+const CapabilityManagedSkills = "managed_skills"
+
+// EffortMapping translates portable effort intent into a native model setting.
+// Values list only labels supported by this pinned adapter. The labels do not
+// promise identical reasoning, latency or cost across models.
+type EffortMapping struct {
+	Setting string
+	Values  map[string]string
+}
+
 // Descriptor describes a harness adapter. Compile validation reads
 // descriptors; the seat runner constructs adapters with New. Adding a harness
 // means a new package that registers its descriptor, an image and a contract
@@ -40,6 +53,8 @@ type Descriptor struct {
 	NeedsModel bool
 	// Settings are the model.settings keys the harness understands.
 	Settings map[string]Setting
+	// Effort is the optional portable-to-native effort translation.
+	Effort *EffortMapping
 	// Capabilities are values a profile's required_capabilities may name.
 	Capabilities []string
 	// New returns an unprepared adapter.
@@ -70,6 +85,17 @@ func Register(d Descriptor) {
 	for _, api := range d.APIs {
 		if !slices.Contains(ModelAPIs, api) {
 			panic(fmt.Sprintf("harnesses: %s declares unknown model API %q", d.Name, api))
+		}
+	}
+	if d.Effort != nil {
+		setting, ok := d.Settings[d.Effort.Setting]
+		if !ok || len(d.Effort.Values) == 0 {
+			panic(fmt.Sprintf("harnesses: %s has an invalid effort mapping", d.Name))
+		}
+		for label, native := range d.Effort.Values {
+			if label == "" || native == "" || (len(setting.Values) > 0 && !slices.Contains(setting.Values, native)) {
+				panic(fmt.Sprintf("harnesses: %s has an invalid effort mapping for %q", d.Name, label))
+			}
 		}
 	}
 	registry[d.Name] = d

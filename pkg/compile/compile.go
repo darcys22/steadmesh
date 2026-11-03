@@ -692,6 +692,12 @@ func (c *compiler) checkModel(o *spec.OrganizationSpec, key string, h spec.Harne
 			return
 		}
 	}
+	resolvedSettings, err := harnesses.ResolveEffort(m.Effort, m.Settings, info.Effort)
+	if err != nil {
+		c.errf(path+".effort", "%v", err)
+	} else {
+		m.Settings = resolvedSettings
+	}
 	for _, sk := range sortedKeys(m.Settings) {
 		st, ok := info.Settings[sk]
 		switch {

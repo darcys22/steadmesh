@@ -264,3 +264,32 @@ func TestCompileErrorsMapToAttributes(t *testing.T) {
 	}
 	t.Fatalf("no diagnostic at %s: %v", want, diags)
 }
+
+func TestPortableEffortRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	original := loadFixture(t)
+	h := original.HarnessProfiles["fake"]
+	h.Model = &spec.ModelSelection{Connection: "model", ID: "test", Effort: "high"}
+	original.HarnessProfiles["fake"] = h
+	d, err := declarationFromSpec(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := treeToAttr(ctx, specType(ctx), d.Spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := fixtureModel(t)
+	m.Spec = value.(types.Object)
+	decoded, err := declarationFromModel(ctx, &m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := decoded.toOrganizationSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HarnessProfiles["fake"].Model.Effort != "high" {
+		t.Fatal("effort lost in Terraform round trip")
+	}
+}

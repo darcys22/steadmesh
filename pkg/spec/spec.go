@@ -175,6 +175,11 @@ type ModelSelection struct {
 	// connection and model also serve is used.
 	// +optional
 	API string `json:"api,omitempty"`
+	// Effort is a portable reasoning-effort label translated by the harness.
+	// Unsupported labels and conflicts with native settings fail compilation.
+	// Empty preserves the harness default. Labels do not guarantee equal cost.
+	// +optional
+	Effort string `json:"effort,omitempty"`
 	// Settings are harness-specific model settings, e.g. reasoning_effort.
 	// +optional
 	Settings map[string]string `json:"settings,omitempty"`
