@@ -102,7 +102,7 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	config := map[string]any{
 		"model": env.Model.ID, "model_provider": "steadmesh", "approval_policy": "on-request", "sandbox_mode": "read-only",
 		"check_for_update_on_startup": false, "developer_instructions": harnesses.RenderBootstrap(env, ""),
-		"features":  map[string]bool{"plugins": false},
+		"features":  map[string]bool{"plugins": false, "hooks": false},
 		"analytics": map[string]bool{"enabled": false}, "feedback": map[string]bool{"enabled": false},
 		"model_providers": map[string]any{"steadmesh": map[string]any{
 			"name": "Steadmesh model proxy", "base_url": strings.TrimSuffix(env.Model.BaseURL, "/") + "/v1", "wire_api": "responses",
@@ -119,6 +119,7 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	plan.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + env.HomeDir, "CODEX_HOME=" + filepath.Join(env.RunnerDir, "acp-codex"),
 		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8",
+		`DEFAULT_AUTH_REQUEST={"methodId":"api-key","_meta":{"api-key":{"apiKey":"steadmesh-placeholder"}}}`,
 	}
 	if env.TmpDir != "" {
 		if !filepath.IsAbs(env.TmpDir) {
@@ -141,8 +142,11 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	bridgeEnv := map[string]string{"STEADMESH_PLATFORM_URL": env.PlatformURL, "STEADMESH_TOKEN_FILE": env.TokenFile, "STEADMESH_RUNNER_DIR": env.RunnerDir}
 	for _, value := range env.ExtraEnv {
 		key, val, ok := strings.Cut(value, "=")
-		if !ok || !strings.HasPrefix(key, "STEADMESH_") || key == "STEADMESH_PLATFORM_URL" || key == "STEADMESH_TOKEN_FILE" || key == "STEADMESH_RUNNER_DIR" {
+		if !ok || !strings.HasPrefix(key, "STEADMESH_") {
 			return CodexPlan{}, errors.New("acp: unsupported extra environment override")
+		}
+		if existing, exists := bridgeEnv[key]; exists && existing != val {
+			return CodexPlan{}, errors.New("acp: conflicting bridge environment override")
 		}
 		bridgeEnv[key] = val
 	}

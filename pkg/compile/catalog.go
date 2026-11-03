@@ -24,6 +24,7 @@ type HarnessInfo struct {
 	APIs []string
 	// Settings are the model.settings keys the harness accepts.
 	Settings map[string]harnesses.Setting
+	Effort   *harnesses.EffortMapping
 }
 
 type BackendInfo struct {
@@ -88,7 +89,7 @@ func DefaultCatalog() Catalog {
 func registeredHarnesses() map[string]HarnessInfo {
 	out := map[string]HarnessInfo{}
 	for _, d := range harnesses.Registered() {
-		info := HarnessInfo{Capabilities: d.Capabilities, NeedsModel: d.NeedsModel, APIs: d.APIs, Settings: d.Settings}
+		info := HarnessInfo{Capabilities: d.Capabilities, NeedsModel: d.NeedsModel, APIs: d.APIs, Settings: d.Settings, Effort: d.Effort}
 		out[d.Name] = info
 		for _, a := range d.Aliases {
 			out[a] = info

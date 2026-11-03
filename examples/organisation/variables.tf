@@ -52,11 +52,12 @@ variable "harness" {
 }
 
 variable "model" {
-  description = "Model for the default harness: connection (a key of model_connections), id, and optionally api and settings. Required unless harness is fake."
+  description = "Model for the default harness: connection (a key of model_connections), id, and optionally api, effort and settings. Required unless harness is fake."
   type = object({
     connection = string
     id         = string
     api        = optional(string)
+    effort     = optional(string)
     settings   = optional(map(string))
   })
   default = null
@@ -72,6 +73,7 @@ variable "seat_harnesses" {
       connection = string
       id         = string
       api        = optional(string)
+      effort     = optional(string)
       settings   = optional(map(string))
     }))
   }))

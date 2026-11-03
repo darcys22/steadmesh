@@ -198,3 +198,59 @@ func TestSeatClientChecksSkillAuthorizationBeforePrompt(t *testing.T) {
 	}
 	<-done
 }
+
+func TestClientBurstAppliesBackpressure(t *testing.T) {
+	c, done := connectPeer(t, func(p peer) {
+		p.setup()
+		m := p.recv()
+		for i := 0; i < 100; i++ {
+			p.send(map[string]any{"jsonrpc": "2.0", "method": "session/update", "params": map[string]any{"sessionId": "s1", "update": map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]string{"type": "text", "text": "x"}}}})
+		}
+		p.result(m, map[string]string{"stopReason": "end_turn"})
+	})
+	initSession(t, c)
+	count := 0
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := c.Prompt(ctx, "burst", func(o Observation) { count += len(o.Text); time.Sleep(100 * time.Microsecond) })
+	if err != nil || count != 100 {
+		t.Fatalf("valid burst truncated: count=%d err=%v", count, err)
+	}
+	<-done
+}
+
+func TestClientTerminalResponseBeforeEOF(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		c, done := connectPeer(t, func(p peer) {
+			p.setup()
+			m := p.recv()
+			p.result(m, map[string]string{"stopReason": "end_turn"})
+			_ = p.conn.Close()
+		})
+		initSession(t, c)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		o, err := c.Prompt(ctx, "hello", nil)
+		cancel()
+		if err != nil || o.StopReason != "end_turn" {
+			t.Fatalf("iteration %d lost terminal response: %+v %v", i, o, err)
+		}
+		_ = c.Close()
+		<-done
+	}
+}
+
+func TestClientRejectsAlreadyBufferedStaleOutput(t *testing.T) {
+	hold := make(chan struct{})
+	c, done := connectPeer(t, func(p peer) { p.setup(); <-hold })
+	initSession(t, c)
+	c.records <- inboundRecord{raw: json.RawMessage(strings.Replace(chunk, "session-1", "s1", 1)), turn: 0}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	emitted := false
+	_, err := c.Prompt(ctx, "next", func(Observation) { emitted = true })
+	close(hold)
+	<-done
+	if err == nil || emitted {
+		t.Fatalf("stale output attributed to next prompt: %v", err)
+	}
+}

@@ -28,12 +28,16 @@ correlation, bounded asynchronous framing, session-bound updates and deny-only
 server requests. Context cancellation closes the transport, including blocked
 writes. Known advisory updates are ignored without turning them into permissions
 or accounting. Callers must supply deadline-bound contexts and a transport whose
-Close unblocks reads and writes. A prompt callback must return promptly.
+Close unblocks reads and writes. A prompt callback must return promptly. Local turn tags cover already-read
+records only: ACP v1 has no per-update turn ID, so the peer must obey the prompt
+response boundary. These tags cannot identify stale bytes still in OS buffers.
 
 `PlanCodex` constructs configuration for the official
 `@agentclientprotocol/codex-acp` 2.5.0 with Codex 0.166.0. The plan pins the model
 and Responses endpoint to a numeric loopback forwarder, uses a fixed placeholder
-key rather than a provider credential, sets read-only/on-request mode, supplies
+key rather than a provider credential (including the target's automatic API-key
+authentication request), disables hooks/plugins in the session configuration,
+sets read-only/on-request mode, supplies
 the platform MCP bridge with the token-file path, retains authorized extra MCP
 servers, and allow-lists access-plugin proxy environment settings. It copies no
 ambient environment. Unsupported settings or environment overrides are errors.
@@ -60,10 +64,13 @@ self-reported version is not proof of executable integrity or confinement.
    Do not silently replace that guarantee with prompt text or cached files.
 3. Native session persistence, checkpoint ownership, process-group cancellation,
    quiesce ordering and portable recovery need end-to-end conformance.
-4. The published npm packages' version commands were inspected, but no real ACP
-   agent/model session has been exercised. Current duplex tests use a scripted
-   protocol peer. Runtime conformance remains pending authorization and the
-   security-boundary checks above.
+4. Real target initialization passes with the pinned package identity and ACP
+   v1, without model requests. `session/new` currently fails in this cloud test
+   environment while loading AGENTS.md, with the native sandbox helper reporting
+   `app-server socket directory must be a user-owned directory with mode 0700`.
+   Retrying with private test directories mode 0700 produced the same failure.
+   No model request ran. The root cause is not established; sandboxing was not
+   disabled. Full proxy/tool/permission runtime conformance remains blocked.
 
 ## Why not wrap acpx and enable it?
 
@@ -112,11 +119,29 @@ Mock tests cover cancellation-only permission replies, exact large request IDs,
 wrong sessions/IDs, malformed and oversized records, unsupported agent requests,
 non-success stop reasons, incomplete EOF and a permanently disabled lifecycle.
 Additional duplex tests cover handshake/version validation, session creation,
-permission cancellation with exact large IDs, unsupported requests, cancellation
+permission cancellation with exact large IDs, unsupported requests, bounded
+backpressure under output bursts, terminal-response draining before clean EOF,
+rejection of already-buffered stale output, cancellation
 during a blocked write, malformed framing, wrong-session updates, incomplete EOF
 and per-turn skill-authorization failure. Configuration tests verify proxy-only
 model routing, placeholder credentials and environment/MCP override rejection.
-These tests are not real-agent conformance or a security audit.
+The duplex-peer tests are not real-agent conformance or a security audit.
+
+An opt-in integration test runs installed, explicitly selected pinned binaries
+against a local scripted model through the real forwarder. It inherits no user
+credentials, uses a dummy token and placeholder API key, and rejects proxy-aware
+external HTTP(S) traffic. Set `STEADMESH_ACP_NODE`, `STEADMESH_ACP_SCRIPT` and
+`STEADMESH_ACP_CODEX_BIN` to absolute paths, then run:
+
+```
+go test -tags integration -run TestCodexACPProtocolConformance/Initialize -v ./harnesses/acp
+go test -tags integration -run TestCodexACPProtocolConformance -v ./harnesses/acp
+```
+
+The first command passed. The full command is **blocked/failing** at
+`session/new` as described above, before the forwarder/model assertions can run.
+Without explicitly selected runtimes this test skips; a skipped test is not
+runtime verification.
 
 Promotion requires a separate reviewed change: pin one real target, implement
 and verify every boundary above with the real model forwarder and tool bridge,

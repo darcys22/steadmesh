@@ -67,6 +67,9 @@ func (r *Runner) runTaskWorker(ctx context.Context, id string) (retErr error) {
 	}()
 	fail := func(err error) error {
 		result.Result.Error = harnesses.TruncateUTF8(err.Error(), 2048)
+		if errors.Is(err, harnesses.ErrStructuredOutput) {
+			result.Result.ErrorKind = runtimeapi.StructuredOutputInvalid
+		}
 		if errors.Is(taskCtx.Err(), context.DeadlineExceeded) {
 			result.State = runtimeapi.TaskTimedOut
 		}
@@ -119,7 +122,7 @@ func (r *Runner) runTaskWorker(ctx context.Context, id string) (retErr error) {
 	if _, err = a.StartOrResume(taskCtx, harnesses.RecoveryDescriptor{}); err != nil {
 		return fail(err)
 	}
-	turn, err := a.Deliver(taskCtx, harnesses.Delivery{ExecutionID: boot.Run.ID, Attempt: 1, Timezone: boot.Manifest.Timezone,
+	turn, err := harnesses.DeliverValidated(taskCtx, a, harnesses.Delivery{OutputSchema: boot.Run.Request.OutputSchema, ExecutionID: boot.Run.ID, Attempt: 1, Timezone: boot.Manifest.Timezone,
 		Message: runtimeapi.Envelope{MessageID: boot.Run.ID, OrganizationID: r.cfg.OrgID, Origin: "seat", SenderSeat: r.cfg.SeatKey, SenderSeatID: r.cfg.SeatID, Body: boot.Run.Request.Prompt, CorrelationID: boot.Run.ParentExecutionID, CreatedAt: time.Now()}})
 	stop() // Artifact collection happens only after all harness processes stop.
 	if err != nil {
@@ -133,7 +136,7 @@ func (r *Runner) runTaskWorker(ctx context.Context, id string) (retErr error) {
 		return fail(err)
 	}
 	result.State = runtimeapi.TaskCompleted
-	result.Result = runtimeapi.TaskRunResult{Output: harnesses.TruncateUTF8(turn.Output, runtimeapi.MaxTaskOutputBytes), Artifacts: artifacts}
+	result.Result = runtimeapi.TaskRunResult{Output: harnesses.TruncateUTF8(turn.Output, runtimeapi.MaxTaskOutputBytes), Artifacts: artifacts, StructuredOutput: turn.StructuredOutput}
 	return nil
 }
 

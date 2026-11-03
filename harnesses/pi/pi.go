@@ -88,7 +88,8 @@ func init() {
 			SettingMaxTokens:     {Description: "maximum output tokens per response (default 16384)"},
 			SettingReasoning:     {Description: "whether the model supports thinking", Values: []string{"true", "false"}},
 		},
-		Capabilities: []string{"tools", "mcp", "event_stream", "session_resume", "interrupt", "application_checkpoint"},
+		Effort:       &harnesses.EffortMapping{Setting: SettingThinking, Values: map[string]string{"none": "off", "minimal": "minimal", "low": "low", "medium": "medium", "high": "high", "xhigh": "xhigh", "max": "max"}},
+		Capabilities: []string{harnesses.CapabilityManagedSkills, "tools", "mcp", "event_stream", "session_resume", "interrupt", "application_checkpoint"},
 		New:          func() harnesses.Adapter { return New() },
 	})
 }
@@ -134,6 +135,7 @@ var _ harnesses.Adapter = (*Adapter)(nil)
 
 func (a *Adapter) DescribeCapabilities() harnesses.Capabilities {
 	return harnesses.Capabilities{
+		StructuredOutputMode: harnesses.StructuredOutputPlatform,
 		Adapter:              AdapterName,
 		Version:              PinnedVersion,
 		ToolTransports:       []string{"mcp"},

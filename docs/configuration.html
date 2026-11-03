@@ -182,6 +182,7 @@
 <li><code>connection</code>: a model connection;</li>
 <li><code>id</code>: the model identifier sent to the endpoint. The platform rejects requests from the seat for any other model;</li>
 <li><code>api</code> (optional): <code>anthropic_messages</code>, <code>openai_responses</code> or <code>openai_chat</code>. When unset, the first API the harness speaks that the connection and model also serve is chosen. No overlap is an error naming both lists and the harnesses that would work;</li>
+<li><code>effort</code> (optional): portable reasoning effort, translated into the pinned harness's native setting. Unsupported labels and conflicting native settings fail compilation. Omit to preserve defaults. See <a href="harnesses.html">harness support and model-specific limits</a>.</li>
 <li><code>settings</code> (optional): harness model settings, validated per harness: <code>effort</code> (claude-code); <code>reasoning_effort</code> (codex); <code>thinking</code>, <code>context_window</code>, <code>max_tokens</code>, <code>reasoning</code> (pi).</li>
 </ul></td></tr>
 <tr><td><code>required_capabilities</code></td><td>Must be a subset of the adapter's capabilities. <code>claude-code</code>, <code>codex</code>, <code>pi</code>: tools, mcp, event_stream, session_resume, interrupt, application_checkpoint. <code>fake</code>: tools, event_stream, interrupt, application_checkpoint.</td></tr>

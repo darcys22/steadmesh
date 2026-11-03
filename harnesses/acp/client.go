@@ -16,20 +16,29 @@ import (
 // It does not start arbitrary executables or authorize their external effects.
 // Calls are serialized; cancellation closes the transport rather than leaving
 // an uncertain request running. Close must unblock reads and writes on transport.
+// turn tags already-read records, not bytes still in an OS buffer. ACP v1
+// has no per-update turn ID: the peer must obey the prompt-response boundary.
+type inboundRecord struct {
+	raw  json.RawMessage
+	turn uint64
+}
+
 type Client struct {
 	transport    io.ReadWriteCloser
-	records      chan json.RawMessage
+	records      chan inboundRecord
 	done         chan struct{}
 	once         sync.Once
 	busy         sync.Mutex
 	next         atomic.Uint64
+	turn         atomic.Uint64
+	turnSequence uint64
 	session      string
 	initialized  bool
 	beforePrompt func(context.Context) error
 }
 
 func NewClient(transport io.ReadWriteCloser) *Client {
-	c := &Client{transport: transport, records: make(chan json.RawMessage, 32), done: make(chan struct{})}
+	c := &Client{transport: transport, records: make(chan inboundRecord, 32), done: make(chan struct{})}
 	go c.read()
 	return c
 }
@@ -41,21 +50,23 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) read() {
-	defer c.Close()
+	defer close(c.records)
 	sc := bufio.NewScanner(c.transport)
 	sc.Buffer(make([]byte, 64<<10), MaxRecordBytes)
 	for sc.Scan() {
 		line := sc.Bytes()
 		if !utf8.Valid(line) || uniqueJSON(line) != nil {
+			_ = c.Close()
 			return
 		}
 		select {
-		case c.records <- append(json.RawMessage(nil), line...):
+		case c.records <- inboundRecord{raw: append(json.RawMessage(nil), line...), turn: c.turn.Load()}:
 		case <-c.done:
 			return
-		default:
-			return // bounded queue overflow is a protocol failure, never a drop
 		}
+	}
+	if sc.Err() != nil {
+		_ = c.Close()
 	}
 }
 
@@ -95,8 +106,25 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 		return err
 	}
 	id := "steadmesh-" + strconv.FormatUint(c.next.Add(1), 10)
-	if err := c.write(ctx, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
-		return err
+	sent := make(chan error, 1)
+	go func(result chan<- error) {
+		result <- c.write(ctx, map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+	}(sent)
+	// Drain inbound notifications while writing so an unsolicited metadata
+	// burst cannot deadlock two peers before the next request is consumed.
+	waitSent := func() error {
+		if sent == nil {
+			return nil
+		}
+		select {
+		case err := <-sent:
+			sent = nil
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.done:
+			return errors.New("acp: connection closed")
+		}
 	}
 	for {
 		if err := ctx.Err(); err != nil {
@@ -107,7 +135,15 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 			return ctx.Err()
 		case <-c.done:
 			return errors.New("acp: connection closed before response")
-		case line := <-c.records:
+		case err := <-sent:
+			sent = nil
+			if err != nil {
+				return err
+			}
+		case record, ok := <-c.records:
+			if !ok {
+				return errors.New("acp: EOF before response")
+			}
 			var m struct {
 				JSONRPC string          `json:"jsonrpc"`
 				ID      json.RawMessage `json:"id"`
@@ -116,7 +152,7 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 				Result  json.RawMessage `json:"result"`
 				Error   json.RawMessage `json:"error"`
 			}
-			if json.Unmarshal(line, &m) != nil || m.JSONRPC != "2.0" {
+			if json.Unmarshal(record.raw, &m) != nil || m.JSONRPC != "2.0" {
 				return errors.New("acp: invalid envelope")
 			}
 			if m.Method != "" {
@@ -124,6 +160,9 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 					return errors.New("acp: mixed envelope")
 				}
 				if len(m.ID) != 0 {
+					if err := waitSent(); err != nil {
+						return err
+					}
 					// No callback can override this policy. Requests for file, terminal,
 					// elicitation or other side effects receive method-not-found.
 					var reqID any
@@ -148,6 +187,11 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 				}
 				switch m.Method {
 				case "session/update":
+					if method == "session/prompt" && record.turn != c.turn.Load() {
+						if err := metadataUpdate(m.Params); err != nil {
+							return errors.New("acp: stale output outside active turn")
+						}
+					}
 					if update == nil {
 						return errors.New("acp: unexpected session update")
 					}
@@ -160,6 +204,9 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 				}
 				continue
 			}
+			if err := waitSent(); err != nil {
+				return err
+			}
 			var responseID string
 			if json.Unmarshal(m.ID, &responseID) != nil || responseID != id || len(m.Params) != 0 || len(m.Error) != 0 || len(m.Result) == 0 {
 				return errors.New("acp: invalid, failed or uncorrelated response")
@@ -169,6 +216,11 @@ func (c *Client) request(ctx context.Context, method string, params any, update 
 			}
 			if err := ctx.Err(); err != nil {
 				return err
+			}
+			select {
+			case <-c.done:
+				return errors.New("acp: connection closed")
+			default:
 			}
 			return nil
 		}
@@ -247,6 +299,9 @@ func (c *Client) Prompt(ctx context.Context, text string, emit func(Observation)
 			return Observation{}, err
 		}
 	}
+	c.turnSequence++
+	c.turn.Store(c.turnSequence)
+	defer c.turn.Store(0)
 	var res struct {
 		StopReason string `json:"stopReason"`
 	}

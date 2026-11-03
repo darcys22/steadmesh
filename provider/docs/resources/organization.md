@@ -589,6 +589,7 @@ Required:
 Optional:
 
 - `api` (String) anthropic_messages, openai_responses or openai_chat. When unset, the first API the harness speaks that the connection and model also serve.
+- `effort` (String) Portable reasoning effort; translated by the pinned harness. Unsupported values and conflicting native settings fail compilation. Omit for harness defaults. Labels do not imply equal cost across models.
 - `settings` (Map of String) Harness-specific model settings: effort (claude-code); reasoning_effort (codex); thinking, context_window, max_tokens, reasoning (pi).
 
 

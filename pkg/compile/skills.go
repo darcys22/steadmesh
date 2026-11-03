@@ -3,8 +3,10 @@ package compile
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
+	"github.com/darcys22/steadmesh/harnesses"
 	"github.com/darcys22/steadmesh/pkg/spec"
 )
 
@@ -36,10 +38,9 @@ func (c *compiler) checkSkills(o *spec.OrganizationSpec) {
 			continue
 		}
 		path := "seats." + key + ".skills"
-		switch o.HarnessProfiles[seat.HarnessProfile].Adapter {
-		case "claude-code", "codex", "pi":
-		default:
-			c.errf(path, "marketplace skills require a claude-code, codex or pi harness")
+		adapter := o.HarnessProfiles[seat.HarnessProfile].Adapter
+		if !slices.Contains(c.cat.Harnesses[adapter].Capabilities, harnesses.CapabilityManagedSkills) {
+			c.errf(path, "harness %q does not declare the %s capability required for marketplace skills", adapter, harnesses.CapabilityManagedSkills)
 		}
 		if p.Mode == "" {
 			p.Mode = spec.SkillModeExplicit

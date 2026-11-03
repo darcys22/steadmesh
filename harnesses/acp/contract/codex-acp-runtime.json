@@ -1,5 +1,5 @@
 {
-  "status": "Metadata and version inspection only; live protocol conformance pending",
+  "status": "ACP v1 initialization verified; session/new blocked by native sandbox socket-directory preflight; no model request executed",
   "packages": {
     "@agentclientprotocol/codex-acp": {
       "version": "2.5.0",
