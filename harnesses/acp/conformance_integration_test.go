@@ -76,6 +76,7 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 	}
 	ts := conformance.NewToolServer(t, "acp-fixture-token")
 	env := conformance.Env(dirs, ts, conformance.BuildTools(t))
+	env.ExtraEnv = append(env.ExtraEnv, "STEADMESH_EXECUTION=acp-conformance")
 	chain := conformance.NewModelChain(t, env.TokenFile, "acp-fixture-token", env.Generation)
 	env.Model = chain.Endpoint("test-model", "gpt-stub-1", harnesses.APIOpenAIResponses, map[string]string{"reasoning_effort": "low"})
 	chain.SetExecution("acp-conformance")
@@ -218,13 +219,8 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 		if stop.StopReason != "end_turn" {
 			t.Fatalf("tool probe stop: %+v", stop)
 		}
-		called := false
-		for _, c := range ts.Calls() {
-			if c.Name == "self" {
-				called = true
-			}
-		}
-		if !called {
+		calls := ts.Calls()
+		if len(calls) != 1 || calls[0].Name != "self" || calls[0].Generation != "3" || calls[0].Execution != "acp-conformance" {
 			t.Fatalf("platform self tool was not called: calls=%+v output=%q requests=%+v", ts.Calls(), output.String(), chain.Stub.Requests())
 		}
 		t.Log("read-only platform self tool reached fixture bridge")

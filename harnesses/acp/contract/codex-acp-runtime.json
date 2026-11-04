@@ -1,5 +1,5 @@
 {
-  "status": "ACP v1 initialization, session creation and one local-model-forwarder round trip passed in isolated CI; production adapter remains disabled",
+  "status": "ACP v1 initialization, session creation, local-model-forwarder round trip and real platform self-tool execution passed in isolated CI; production adapter remains disabled",
   "packages": {
     "@agentclientprotocol/codex-acp": {
       "version": "2.5.0",
@@ -13,9 +13,9 @@
     }
   },
   "evidence": {
-    "commit": "479fa56fd92ade2de8b6f61fe4c78976d6bcfe23",
-    "workflow_run": "https://github.com/darcys22/steadmesh/actions/runs/41742408565",
+    "commit": "5d91007561e14968762538e90ec20469ed34ec84",
+    "workflow_run": "https://github.com/darcys22/steadmesh/actions/runs/41744479722",
     "external_network": "disabled",
-    "scope": "model routing and seat authority assertions; no production adapter, live provider, native tool/skills/recovery claims"
+    "scope": "model routing, seat authority assertions and real platform self tool; no production adapter, live provider, managed skills or recovery claims"
   }
 }
