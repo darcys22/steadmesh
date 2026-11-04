@@ -232,6 +232,13 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 	// cannot hide behind immediate process teardown.
 	time.Sleep(time.Second)
 	for _, request := range chain.Stub.Requests() {
+		for _, tool := range request.Tools {
+			for _, native := range []string{"spawn_agent", "send_input", "wait_agent", "resume_agent", "close_agent", "spawn_agents_on_csv"} {
+				if tool == native || tool == "functions/"+native {
+					t.Fatalf("unexpected native subagent tool: %s", tool)
+				}
+			}
+		}
 		if request.Model != env.Model.ID {
 			t.Fatalf("auxiliary request escaped model pin: %+v", request)
 		}
