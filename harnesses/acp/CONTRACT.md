@@ -3,8 +3,8 @@
 ## Status and scope
 
 This package is **not a production harness**. It is deliberately absent from
-`harnesses/all` and the registry. `Prepare`, `StartOrResume`, `Deliver`, `Quiesce`
-and `Checkpoint` fail closed. No process is spawned, no Environment is retained,
+`harnesses/all` and the registry. The original disabled `Adapter` methods
+`Prepare`, `StartOrResume`, `Deliver`, `Quiesce` and `Checkpoint` fail closed. No process is spawned, no Environment is retained,
 no credential is written, and no default adapter changes. There is no enable flag.
 `DescribeCapabilities` advertises no operational tools, streaming, recovery,
 checkpoint or suspension capabilities. `Stop` only closes the event channel.
@@ -222,6 +222,75 @@ alone does not override model-catalog backend selection. Platform delegation
 and memory tools remain subject to the existing seat API authority. The fixture
 checks that native agent-spawning tools are not offered. This does not claim
 universal model enforcement for arbitrary ACP targets or untested native paths.
+### Unregistered restricted lifecycle experiment (Linux only)
+
+`NewRestricted(ExperimentalLauncher{...})` constructs a separate
+`RestrictedAdapter`; it does not replace `New`/`Adapter`, add a registry entry,
+change a runtime image, or enable a profile. The original disabled adapter's
+methods still fail closed as described above. The restricted adapter is only
+for an explicitly provisioned host satisfying the launcher's isolation contract.
+Mock lifecycle tests are not evidence of production isolation.
+
+- `Prepare` checks paths and the deterministic seat model/tool plan, owns a copy
+  of mutable configuration, and rejects all harness config, extra MCP servers,
+  nonempty managed skills and authorization errors. Static STEADMESH_EXECUTION
+  and alternate STEADMESH_EXECUTION_FILE overrides are rejected: the bridge
+  reads current attribution from the original runner-owned execution file.
+  It launches nothing and does
+  not claim executable-integrity verification. Runtime ownership/version checks
+  remain in the launcher and run before each prompt.
+- `StartOrResume` accepts only fresh or portable handoff recovery. Any supplied
+  native checkpoint becomes a portable fallback, never a `loadSession` request.
+  Explicit recovery replaces bootstrap recovery fields and retains unknown
+  operations for reconciliation. Startup itself does not launch a process.
+- Every `Deliver` invokes the launcher exactly once after refreshing managed
+  skill authorization. The launcher rechecks authorization before the prompt.
+  A new private HOME/CODEX_HOME and fresh native session are created each time.
+  There is no implicit conversation history between deliveries: platform handoff,
+  memory, message-history and operation tools are the durable context. The
+  startup handoff is a snapshot, so the agent is told to recover current context
+  using those tools. Bootstrap instructions, the original token/runner paths,
+  execution attribution, and seat model forwarder remain authoritative.
+- `TurnGuard` serializes delivery and owns interruption; `EventBus` owns the
+  stable stream and closes only after the active delivery unwinds. Consumers
+  must drain events. Cancellation takes precedence over a simultaneous terminal
+  success. `end_turn` alone means technical completion; `cancelled` means
+  interrupted; refusal and token/request limits mean failed. Tool updates are
+  correlated progress observations, not assertions of tool success or authority.
+  Raw launcher errors are not exposed as turn error strings.
+- `Checkpoint` atomically writes an owner-only portable descriptor in RunnerDir
+  with format `acp-portable-handoff-v1` and reference `none`. Its application
+  guarantee covers this descriptor only; it does not persist a native session,
+  transcript or process. The platform separately persists handoff updates. No
+  process snapshot, native resume or graceful suspension is advertised.
+- `Quiesce` waits for a turn boundary or interrupts at its deadline. `Stop`
+  cancels the owned turn and waits for launcher teardown; an expired caller
+  deadline may return before teardown finishes, but the event stream closes only
+  after delivery finishes. The production launcher bounds cancellation and owns
+  process-group cleanup. An injected test launcher must obey the same contract.
+
+This mode intentionally starts in the immutable neutral cwd, not WorkspaceDir.
+Workspace paths are explicit context only; native workspace instructions,
+configuration and skills are not discovered. Read-only native tools and denied
+ACP permissions do not confer workspace write access. The launcher restrictions
+and remaining production promotion gates above still apply.
+
+Offline tests cover lifecycle ordering, preparation without execution, copied
+model authority, recovery/unknown-operation preservation, sequential fresh
+launches, stream correlation and closure, stop-reason mapping, busy rejection,
+quiesce/stop/caller cancellation, deadline precedence, skill refresh failure,
+unsupported configuration, and portable checkpoint persistence. No credentials
+or remote model calls are used by these tests.
+
+The opt-in `TestExperimentalLauncherRestrictedLifecycle` uses the real wrapper
+and is selected by the isolated image's existing test prefix. It checks that
+Prepare/Start issue no model requests, readiness calls real `self`, delivery
+context does not leak into the next fresh session, explicit portable handoff and
+unknown operations reach the model, and checkpoint/stop/reconstruction use a
+fresh session with current model/tool execution fencing. Event collectors verify
+message/execution ownership through closure. Runtime-path absence skips this
+test; compilation or a skipped run does not establish real lifecycle evidence.
+
 ### Native permission-probe semantics
 
 The native escalation fixture requires an actual `session/request_permission`
