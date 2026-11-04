@@ -49,6 +49,9 @@ func (p peer) setup() {
 	if string(m["method"]) != `"initialize"` {
 		p.t.Errorf("initialize: %s", m["method"])
 	}
+	if !strings.Contains(string(m["params"]), `"sessionIndex"`) {
+		p.t.Error("pinned title extension not negotiated")
+	}
 	if strings.Contains(string(m["params"]), `"terminal":true`) {
 		p.t.Error("terminal advertised")
 	}
@@ -171,6 +174,11 @@ func TestSeatClientChecksSkillAuthorizationBeforePrompt(t *testing.T) {
 		defer close(done)
 		p := peer{t, b, bufio.NewReader(b)}
 		p.setup()
+		m := p.recv()
+		if string(m["method"]) != `"_session/rename"` {
+			t.Errorf("missing title suppression: %s", m["method"])
+		}
+		p.result(m, map[string]any{})
 		_ = b.SetReadDeadline(time.Now().Add(time.Second))
 		line, err := p.in.ReadBytes('\n')
 		if err == nil {
@@ -253,4 +261,25 @@ func TestClientRejectsAlreadyBufferedStaleOutput(t *testing.T) {
 	if err == nil || emitted {
 		t.Fatalf("stale output attributed to next prompt: %v", err)
 	}
+}
+
+func TestCodexTitlePinFailsClosed(t *testing.T) {
+	c, done := connectPeer(t, func(p peer) {
+		p.setup()
+		m := p.recv()
+		if string(m["method"]) != `"_session/rename"` || !strings.Contains(string(m["params"]), "Steadmesh managed session") {
+			t.Errorf("invalid pin: %s", m["params"])
+		}
+		p.send(map[string]any{"jsonrpc": "2.0", "id": m["id"], "error": map[string]any{"code": -32601, "message": "unsupported"}})
+	})
+	initSession(t, c)
+	if err := c.pinCodexSessionTitle(context.Background()); err == nil {
+		t.Fatal("accepted unsupported title pin")
+	}
+	select {
+	case <-c.done:
+	default:
+		t.Fatal("failed pin did not close transport")
+	}
+	<-done
 }

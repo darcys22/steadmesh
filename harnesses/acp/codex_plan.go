@@ -111,7 +111,9 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	config := map[string]any{
 		"model": env.Model.ID, "model_provider": "steadmesh", "approval_policy": "on-request", "sandbox_mode": "read-only",
 		"check_for_update_on_startup": false, "developer_instructions": harnesses.RenderBootstrap(env, ""),
-		"features":  map[string]bool{"plugins": false, "hooks": false},
+		"features":  map[string]bool{"plugins": false, "hooks": false, "multi_agent": false, "multi_agent_v2": false, "memories": false},
+		"agents":    map[string]bool{"enabled": false},
+		"memories":  map[string]bool{"generate_memories": false, "use_memories": false},
 		"analytics": map[string]bool{"enabled": false}, "feedback": map[string]bool{"enabled": false},
 		"model_providers": map[string]any{"steadmesh": map[string]any{
 			"name": "Steadmesh model proxy", "base_url": strings.TrimSuffix(env.Model.BaseURL, "/") + "/v1", "wire_api": "responses",
@@ -134,6 +136,14 @@ check_for_update_on_startup = false
 [features]
 hooks = false
 plugins = false
+multi_agent = false
+multi_agent_v2 = false
+memories = false
+[agents]
+enabled = false
+[memories]
+generate_memories = false
+use_memories = false
 [analytics]
 enabled = false
 [feedback]
@@ -147,7 +157,7 @@ requires_openai_auth = false
 `, quote(env.Model.ID), quote(strings.TrimSuffix(env.Model.BaseURL, "/")+"/v1"))
 	plan.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + env.HomeDir, "CODEX_HOME=" + filepath.Join(env.RunnerDir, "acp-codex"),
-		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8",
+		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8", "CODEX_ACP_PROMPT_SUGGESTIONS=false",
 		`DEFAULT_AUTH_REQUEST={"methodId":"api-key","_meta":{"api-key":{"apiKey":"steadmesh-placeholder"}}}`,
 	}
 	if env.TmpDir != "" {
@@ -260,5 +270,24 @@ func OpenCodexSession(ctx context.Context, transport io.ReadWriteCloser, env har
 		_ = c.Close()
 		return nil, err
 	}
+	if err := c.pinCodexSessionTitle(ctx); err != nil {
+		_ = c.Close()
+		return nil, err
+	}
 	return c, nil
+}
+
+// pinCodexSessionTitle disables the pinned target's automatic title generation.
+// ACP 2.5.0 otherwise makes an asynchronous request with a hard-coded model.
+// This target-specific extension must succeed before any model prompt.
+func (c *Client) pinCodexSessionTitle(ctx context.Context) error {
+	if !c.busy.TryLock() {
+		return errors.New("acp: concurrent call")
+	}
+	defer c.busy.Unlock()
+	if !c.initialized || c.session == "" {
+		return errors.New("acp: no session")
+	}
+	var result json.RawMessage
+	return c.request(ctx, "_session/rename", map[string]string{"sessionId": c.session, "title": "Steadmesh managed session"}, metadataUpdate, &result)
 }

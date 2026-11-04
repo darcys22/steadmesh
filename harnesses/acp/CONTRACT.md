@@ -175,3 +175,50 @@ generation and execution assertions. It made one request to the local modelstub,
 with external networking disabled. This verifies that narrow round trip, not
 real-model quality, native tool permissions, workspace-config safety, managed
 skills or durable recovery. The production adapter remains unregistered.
+
+### Experimental one-turn launcher (Linux only)
+
+`ExperimentalLauncher` is a host-facing helper, not a registered adapter. It
+checks root-owned, non-group/world-writable canonical runtime paths and an empty
+neutral cwd, including its ancestors. It rejects ancestor `.codex`, `.agents`
+and AGENTS files, additional MCP servers and nonempty managed skillsets. Each
+call creates its own owner-only HOME/CODEX_HOME outside the workspace, verifies
+the pinned version strings and successful exits, opens one session, sends one
+prompt, then kills the owned process group and waits for its leader. Stderr is
+drained to discard rather than exposing unredacted diagnostics. Failed process
+cleanup retains the invocation's private files instead of removing files a
+process might still use.
+
+The original runner/token and seat attribution remain attached to the platform
+bridge. Only the model runtime's HOME/CODEX_HOME/TMPDIR are replaced. The real
+workspace path remains in bootstrap context, while ACP and native tools start
+in the neutral directory. Workspace AGENTS/config/skills discovery is therefore
+intentionally different from the native coding adapter.
+
+This helper does not establish a sandbox: callers must supply the isolated,
+credential-free, non-root image and control system configuration, native skills,
+runtime dependencies and egress. Ownership checks are not proof that arbitrary
+host installations or their dependencies are trustworthy. Process groups are
+not a container boundary for descendants that deliberately detach. Native ACP
+permission denial is unchanged. Adversarial real-runtime configuration, tool,
+cancellation and portable recovery fixtures remain prerequisites to production
+registration; this change does not register or enable an adapter.
+
+
+### Auxiliary model requests
+
+Pinned ACP 2.5.0 normally starts asynchronous title and prompt-suggestion turns
+using a hard-coded model. The plan disables prompt suggestions explicitly, and
+the trusted session setup pins a fixed non-user title with the target-specific
+`_session/rename` extension before any prompt. A failed rename closes the client.
+This is required model-routing configuration, not cosmetic UI behavior. The real
+fixture leaves the session alive after a turn and checks every observed model
+request, so immediate process teardown cannot conceal auxiliary calls.
+
+The restricted plan also explicitly disables native agent backends and native
+memory extraction/use. In Codex 0.166.0, `agents.enabled=false` together with
+`features.multi_agent_v2=false` is needed; the older multi-agent feature flag
+alone does not override model-catalog backend selection. Platform delegation
+and memory tools remain subject to the existing seat API authority. The fixture
+checks that native agent-spawning tools are not offered. This does not claim
+universal model enforcement for arbitrary ACP targets or untested native paths.
