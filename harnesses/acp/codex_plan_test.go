@@ -27,7 +27,7 @@ func TestPlanUsesOnlyForwarderAndPlaceholder(t *testing.T) {
 			t.Fatalf("credential copied: %s", secret)
 		}
 	}
-	for _, expected := range []string{"http://127.0.0.1:5555/v1", "steadmesh-placeholder", "INITIAL_AGENT_MODE=read-only", "HTTPS_PROXY=http://gateway:8080"} {
+	for _, expected := range []string{"http://127.0.0.1:5555/v1", "steadmesh-placeholder", "INITIAL_AGENT_MODE=read-only", "CODEX_ACP_PROMPT_SUGGESTIONS=false", "HTTPS_PROXY=http://gateway:8080"} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("missing boundary: %s", expected)
 		}
