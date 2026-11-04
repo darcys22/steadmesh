@@ -10,9 +10,11 @@ path is unchanged when no policy is configured.
 
 ## Configure an approved chain
 
-Build `build/seat-bundle.Dockerfile` using `build/build.sh seat-bundle`, publish it
-through your normal image pipeline, and pin the resulting image digest. The
-bundle includes the same pinned Claude Code, Codex and Pi runtimes as the
+Releases publish `ghcr.io/darcys22/steadmesh/seat-bundle:<version>` for
+`linux/amd64` and `linux/arm64`. Resolve and pin the published image digest,
+just as for the single-harness seat images. For a custom image, build
+`build/seat-bundle.Dockerfile` using `build/build.sh seat-bundle` and publish it
+through your own image pipeline. The bundle includes the same pinned Claude Code, Codex and Pi runtimes as the
 separate seat images, with the same non-root user and platform token routing.
 No runtime download or installation is performed.
 
