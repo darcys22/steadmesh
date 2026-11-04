@@ -76,6 +76,7 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 	}
 	ts := conformance.NewToolServer(t, "acp-fixture-token")
 	env := conformance.Env(dirs, ts, conformance.BuildTools(t))
+	env.ExtraEnv = append(env.ExtraEnv, "STEADMESH_EXECUTION=acp-conformance")
 	chain := conformance.NewModelChain(t, env.TokenFile, "acp-fixture-token", env.Generation)
 	env.Model = chain.Endpoint("test-model", "gpt-stub-1", harnesses.APIOpenAIResponses, map[string]string{"reasoning_effort": "low"})
 	chain.SetExecution("acp-conformance")
@@ -96,6 +97,19 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 		t.Fatal("unsafe generated provider configuration")
 	}
 	if err := os.MkdirAll(filepath.Join(env.RunnerDir, "acp-codex"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	// This is a fresh fixture-owned directory, not user configuration. The
+	// pinned ACP target needs the custom provider at app-server startup too.
+	f, err := os.OpenFile(filepath.Join(env.RunnerDir, "acp-codex", "config.toml"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.WriteString(plan.StartupConfigTOML); err != nil {
+		_ = f.Close()
+		t.Fatal(err)
+	}
+	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
 	for _, check := range []struct {
@@ -195,5 +209,20 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 			}
 		}
 		t.Logf("pinned ACP round trip passed through local forwarder; %d model requests", len(requests))
+	})
+	t.Run("ReadOnlyToolBridge", func(t *testing.T) {
+		var output strings.Builder
+		stop, err := client.Prompt(ctx, harnesses.ProbePrompt, func(o Observation) { output.WriteString(o.Text) })
+		if err != nil {
+			fail(t, "tool probe", err)
+		}
+		if stop.StopReason != "end_turn" {
+			t.Fatalf("tool probe stop: %+v", stop)
+		}
+		calls := ts.Calls()
+		if len(calls) != 1 || calls[0].Name != "self" || calls[0].Generation != "3" || calls[0].Execution != "acp-conformance" {
+			t.Fatalf("platform self tool was not called: calls=%+v output=%q requests=%+v", ts.Calls(), output.String(), chain.Stub.Requests())
+		}
+		t.Log("read-only platform self tool reached fixture bridge")
 	})
 }

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -33,6 +35,8 @@ type SessionParams struct {
 	MCPServers []StdioServer `json:"mcpServers"`
 }
 
+var mcpName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
 func (p SessionParams) validate() error {
 	if !filepath.IsAbs(p.CWD) {
 		return errors.New("acp: absolute workspace required")
@@ -42,7 +46,7 @@ func (p SessionParams) validate() error {
 	}
 	names := map[string]bool{}
 	for _, s := range p.MCPServers {
-		if s.Name == "" || names[s.Name] || !filepath.IsAbs(s.Command) {
+		if !mcpName.MatchString(s.Name) || names[s.Name] || !filepath.IsAbs(s.Command) {
 			return errors.New("acp: invalid or duplicate MCP server")
 		}
 		names[s.Name] = true
@@ -64,6 +68,11 @@ func (p SessionParams) validate() error {
 type CodexPlan struct {
 	Env     []string
 	Session SessionParams
+	// StartupConfigTOML must be written by the trusted host to a fresh private
+	// CODEX_HOME/config.toml before launching the pinned runtime. ACP 2.5.0
+	// otherwise applies the provider only to the thread, not the app-server.
+	// It contains a placeholder, never a provider credential.
+	StartupConfigTOML string
 }
 
 // PlanCodex binds the official pinned target to the seat model forwarder and
@@ -116,6 +125,26 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	if err != nil {
 		return plan, err
 	}
+	quote := func(s string) string { b, _ := json.Marshal(s); return string(b) }
+	plan.StartupConfigTOML = fmt.Sprintf(`model = %s
+model_provider = "steadmesh"
+approval_policy = "on-request"
+sandbox_mode = "read-only"
+check_for_update_on_startup = false
+[features]
+hooks = false
+plugins = false
+[analytics]
+enabled = false
+[feedback]
+enabled = false
+[model_providers.steadmesh]
+name = "Steadmesh model proxy"
+base_url = %s
+wire_api = "responses"
+experimental_bearer_token = "steadmesh-placeholder"
+requires_openai_auth = false
+`, quote(env.Model.ID), quote(strings.TrimSuffix(env.Model.BaseURL, "/")+"/v1"))
 	plan.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + env.HomeDir, "CODEX_HOME=" + filepath.Join(env.RunnerDir, "acp-codex"),
 		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8",
@@ -173,6 +202,20 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	if err := plan.Session.validate(); err != nil {
 		return CodexPlan{}, err
 	}
+	// Start platform-authorized bridges with the native process. Required
+	// discovery prevents a prompt from racing the ACP session-only MCP reload.
+	// Their server enforces seat permissions; native ACP requests still deny.
+	for _, server := range plan.Session.MCPServers {
+		args, _ := json.Marshal(server.Args)
+		plan.StartupConfigTOML += fmt.Sprintf("\n[mcp_servers.%s]\ncommand = %s\nargs = %s\nrequired = true\nstartup_timeout_sec = 30\ntool_timeout_sec = 600\ndefault_tools_approval_mode = \"approve\"\n", quote(server.Name), quote(server.Command), args)
+		plan.StartupConfigTOML += fmt.Sprintf("[mcp_servers.%s.env]\n", quote(server.Name))
+		for _, variable := range server.Env {
+			plan.StartupConfigTOML += fmt.Sprintf("%s = %s\n", quote(variable.Name), quote(variable.Value))
+		}
+	}
+	// Native startup owns the bridge configuration. Do not request duplicate
+	// session servers: pinned ACP reports these as failed startup tool updates.
+	plan.Session.MCPServers = []StdioServer{}
 	return plan, nil
 }
 

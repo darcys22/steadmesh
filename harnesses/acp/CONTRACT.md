@@ -41,7 +41,7 @@ sets read-only/on-request mode, supplies
 the platform MCP bridge with the token-file path, retains authorized extra MCP
 servers, and allow-lists access-plugin proxy environment settings. It copies no
 ambient environment. Unsupported settings or environment overrides are errors.
-This plan is data, not permission to launch an executable.
+The plan also supplies placeholder-only `StartupConfigTOML`. A trusted host must write it into a fresh private CODEX_HOME before launch: pinned ACP 2.5.0 otherwise applies the provider only to the thread, while native app-server startup defaults to openai. The integration fixture creates this file exclusively with mode0600. The same file configures required platform-authorized MCP bridges with bridge-specific approval, while native ACP permissions remain deny-only. Session MCP declarations are empty to avoid the pinned target treating duplicate native/session definitions as failed startups. MCP names must be canonical ASCII letters, digits, underscores or hyphens. This plan is data, not permission to launch an executable.
 
 `OpenCodexSession` negotiates the exact target identity/version and starts a fresh
 session on a transport the trusted host already launched using that plan. It
@@ -64,13 +64,13 @@ self-reported version is not proof of executable integrity or confinement.
    Do not silently replace that guarantee with prompt text or cached files.
 3. Native session persistence, checkpoint ownership, process-group cancellation,
    quiesce ordering and portable recovery need end-to-end conformance.
-4. Real target initialization passes with the pinned package identity and ACP
-   v1, without model requests. `session/new` currently fails in this cloud test
-   environment while loading AGENTS.md, with the native sandbox helper reporting
-   `app-server socket directory must be a user-owned directory with mode 0700`.
-   Retrying with private test directories mode 0700 produced the same failure.
-   No model request ran. The root cause is not established; sandboxing was not
-   disabled. Full proxy/tool/permission runtime conformance remains blocked.
+4. Real target initialization, session creation, model routing and the platform
+   self tool pass in a clean isolated CI container. The earlier cloud sandbox
+   helper error was environment-specific; no security setting was weakened.
+   Production promotion still requires adversarial workspace-configuration,
+   permissions, cancellation and recovery evidence. Workspace config can override
+   user startup config and recursively preserve MCP environment fields, so a
+   provider round trip or MCP name allowlist alone is not enough.
 
 ## Why not wrap acpx and enable it?
 
@@ -82,7 +82,7 @@ independent implementation against [ACP v1 prompt turns](https://agentclientprot
 and [session setup](https://agentclientprotocol.com/protocol/v1/session-setup),
 not a claim that raw ACP and a particular acpx CLI output are interchangeable.
 No acpx CLI is used. Target package metadata is recorded in
-`contract/codex-acp-runtime.json`; this is not a runtime-conformance claim.
+`contract/codex-acp-runtime.json`; the recorded runtime evidence is deliberately limited to its stated checks.
 
 ## Compatibility gates before a runnable adapter
 
@@ -92,10 +92,10 @@ until the full boundary is proven.
 
 | Boundary | Required evidence | Current limitation |
 | --- | --- | --- |
-| Model proxy | Exact model ID/API/settings and every request routed through `Environment.Model.BaseURL`; placeholder key only; test no native provider fallback | ACP model selection does not standardize Steadmesh endpoint configuration. `PlanCodex` maps the pinned target to a loopback Responses forwarder; real-agent verification is still required. |
+| Model proxy | Exact model ID/API/settings and every request routed through `Environment.Model.BaseURL`; placeholder key only; test no native provider fallback | ACP model selection does not standardize Steadmesh endpoint configuration. `PlanCodex` maps the pinned target to a loopback Responses forwarder; isolated real-agent routing is verified; malicious inherited config remains a promotion gate. |
 | Credentials and egress | Clean HOME/environment, platform token-file rotation, existing access-plugin proxy controls, no provider keys in the sandbox | Generic acpx invocation/inherited environment cannot establish isolation. This spike never launches it. |
 | Permissions | A seat-authority-aware request bridge with explicit denied/unknown handling; no blanket approvals; audit correlation | Only offline cancelled replies exist. Filesystem, terminal and other agent requests are rejected. |
-| Tools | Platform tool bridge plus authorized extra MCP servers, unchanged token/fencing authority and transport semantics; real readiness probe | ACP session/new supports MCP configuration, but a real transport/session client and stdio server mapping now exist; production launch and authority conformance remain unverified. Tool events are informational only. |
+| Tools | Platform tool bridge plus authorized extra MCP servers, unchanged token/fencing authority and transport semantics; real readiness probe | ACP session/new supports MCP configuration, but a real transport/session client and stdio server mapping now exist; isolated real self-tool execution is verified; production launch and adversarial authority conformance remain unverified. Tool events are informational only. |
 | Skills/instructions | Trusted bootstrap and per-turn `LoadSkills` refresh/revocation, fail closed on loader errors, correct native instruction precedence | No target-neutral mechanism proves skill revocation or prevents stale native caches. |
 | Recovery | Durable seat-volume session state, format/version identity, config revision checks, unknown-operation reconciliation, explicit portable handoff | ACP `loadSession` alone is not a Steadmesh application checkpoint. No recovery guarantee is advertised. |
 | Lifecycle | Serialized Deliver, concurrent Stop/Quiesce, bounded I/O, cancellation/timeout escalation, process-group cleanup and drained event ordering | The offline decoder does not own a process or claim operational interruption. |
@@ -138,8 +138,9 @@ go test -tags integration -run TestCodexACPProtocolConformance/Initialize -v ./h
 go test -tags integration -run TestCodexACPProtocolConformance -v ./harnesses/acp
 ```
 
-The first command passed. The full command is **blocked/failing** at
-`session/new` as described above, before the forwarder/model assertions can run.
+The first command passed in the cloud workspace. The full command was initially
+blocked there at `session/new`; the isolated CI image now passes the complete
+model-forwarder round trip without weakening sandboxing.
 Without explicitly selected runtimes this test skips; a skipped test is not
 runtime verification.
 
@@ -147,3 +148,30 @@ Promotion requires a separate reviewed change: pin one real target, implement
 and verify every boundary above with the real model forwarder and tool bridge,
 then register it and add runtime image/profile support. Do not enable first and
 silently downgrade missing capabilities later.
+
+### Isolated CI runtime check
+
+`ACP isolated conformance` builds a test-only image with the approved package
+versions and an integrity-pinned npm dependency tree. It runs the complete real
+runtime fixture with no external network, no host mounts or credentials, a
+read-only root filesystem and a private writable `/tmp`. It does not relax the
+container or native sandbox. The test must reach the local model forwarder and
+assert its model and seat authority; initialization alone does not pass the job.
+A sandbox/preflight failure is a failing check, not an optional skipped success.
+This job still does not enable the production adapter or prove all promotion
+gates. The clean-runner outcome is recorded below.
+
+The first isolated CI run built the image, initialized ACP, and created a session
+without the cloud sandbox preflight failure. It then exposed a pinned-target
+provider mismatch before any model response: the thread used `steadmesh`, but
+the native app-server process still used its default `openai` provider. The
+follow-up startup configuration above addresses this mismatch. This is distinct
+from the earlier cloud preflight failure.
+
+The corrected run [41742408565](https://github.com/darcys22/steadmesh/actions/runs/41742408565)
+passed the complete fixture at commit479fa56: exact runtime initialization,
+session creation, streamed local-model output, and model ID plus seat token,
+generation and execution assertions. It made one request to the local modelstub,
+with external networking disabled. This verifies that narrow round trip, not
+real-model quality, native tool permissions, workspace-config safety, managed
+skills or durable recovery. The production adapter remains unregistered.

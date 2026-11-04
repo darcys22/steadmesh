@@ -21,7 +21,7 @@ func TestPlanUsesOnlyForwarderAndPlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	joined := strings.Join(plan.Env, "\n")
+	joined := strings.Join(plan.Env, "\n") + "\n" + plan.StartupConfigTOML
 	for _, secret := range []string{"ambient-secret", "must-not-copy"} {
 		if strings.Contains(joined, secret) {
 			t.Fatalf("credential copied: %s", secret)
@@ -32,7 +32,7 @@ func TestPlanUsesOnlyForwarderAndPlaceholder(t *testing.T) {
 			t.Fatalf("missing boundary: %s", expected)
 		}
 	}
-	if len(plan.Session.MCPServers) != 1 || plan.Session.MCPServers[0].Command != env.ToolCommand {
+	if len(plan.Session.MCPServers) != 0 || !strings.Contains(plan.StartupConfigTOML, `command = "/bin/steadmesh-tools"`) {
 		t.Fatal("missing platform bridge")
 	}
 }
@@ -46,6 +46,9 @@ func TestPlanRejectsBoundaryOverrides(t *testing.T) {
 		"bridge override": func(e *harnesses.Environment) { e.ExtraEnv = []string{"STEADMESH_TOKEN_FILE=/other"} },
 		"duplicate MCP": func(e *harnesses.Environment) {
 			e.MCPServers = []harnesses.MCPServer{{Name: "steadmesh", Command: "/evil"}}
+		},
+		"noncanonical MCP": func(e *harnesses.Environment) {
+			e.MCPServers = []harnesses.MCPServer{{Name: "other server", Command: "/other"}}
 		},
 		"relative MCP": func(e *harnesses.Environment) {
 			e.MCPServers = []harnesses.MCPServer{{Name: "other", Command: "relative"}}
@@ -82,5 +85,17 @@ func TestManagedSkillsAreRechecked(t *testing.T) {
 	}
 	if err := CheckManagedSkills(context.Background(), e); err == nil {
 		t.Fatal("unsupported skill set accepted")
+	}
+}
+
+func TestPlanPinsProviderAtNativeStartup(t *testing.T) {
+	p, err := PlanCodex(context.Background(), planEnv(), "/opt/codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`model_provider = "steadmesh"`, `[model_providers.steadmesh]`, `base_url = "http://127.0.0.1:5555/v1"`, `sandbox_mode = "read-only"`, `approval_policy = "on-request"`, `hooks = false`, `plugins = false`, `[mcp_servers."steadmesh"]`, `required = true`, `default_tools_approval_mode = "approve"`} {
+		if !strings.Contains(p.StartupConfigTOML, want) {
+			t.Fatalf("missing startup boundary %s", want)
+		}
 	}
 }
