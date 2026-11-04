@@ -111,7 +111,9 @@ func PlanCodex(ctx context.Context, env harnesses.Environment, codexPath string)
 	config := map[string]any{
 		"model": env.Model.ID, "model_provider": "steadmesh", "approval_policy": "on-request", "sandbox_mode": "read-only",
 		"check_for_update_on_startup": false, "developer_instructions": harnesses.RenderBootstrap(env, ""),
-		"features":  map[string]bool{"plugins": false, "hooks": false},
+		"features":  map[string]bool{"plugins": false, "hooks": false, "multi_agent": false, "multi_agent_v2": false, "memories": false},
+		"agents":    map[string]bool{"enabled": false},
+		"memories":  map[string]bool{"generate_memories": false, "use_memories": false},
 		"analytics": map[string]bool{"enabled": false}, "feedback": map[string]bool{"enabled": false},
 		"model_providers": map[string]any{"steadmesh": map[string]any{
 			"name": "Steadmesh model proxy", "base_url": strings.TrimSuffix(env.Model.BaseURL, "/") + "/v1", "wire_api": "responses",
@@ -134,6 +136,14 @@ check_for_update_on_startup = false
 [features]
 hooks = false
 plugins = false
+multi_agent = false
+multi_agent_v2 = false
+memories = false
+[agents]
+enabled = false
+[memories]
+generate_memories = false
+use_memories = false
 [analytics]
 enabled = false
 [feedback]
