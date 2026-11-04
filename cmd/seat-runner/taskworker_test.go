@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/darcys22/steadmesh/harnesses"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,6 +22,29 @@ import (
 	"github.com/darcys22/steadmesh/pkg/spec"
 	"github.com/darcys22/steadmesh/pkg/taskworker"
 )
+
+// failingTaskWorkerTool is a test-owned replacement for the platform tool bridge.
+// These task-worker cases must not make tool calls. Keep accidental calls failing
+// without depending on false's location (/usr/bin on macOS, /bin on some Linuxes).
+func failingTaskWorkerTool(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "unexpected-tool-call")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestFailingTaskWorkerTool(t *testing.T) {
+	tool := failingTaskWorkerTool(t)
+	// The fixture must not rely on an external false executable or PATH.
+	cmd := exec.Command(tool, "call", "unexpected", "{}")
+	cmd.Env = []string{"PATH="}
+	var exitErr *exec.ExitError
+	if err := cmd.Run(); !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+		t.Fatalf("expected failing tool exit 1, got %v", err)
+	}
+}
 
 func TestTaskWorkerFilesRejectEscapeAndOversize(t *testing.T) {
 	dir := t.TempDir()
@@ -63,7 +88,7 @@ func TestTaskWorkerRunsFreshAndReturnsArtifactsWithoutSeatLease(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	cfg := Config{PlatformURL: srv.URL, TokenFile: token, ToolCommand: "/bin/false", WorkspaceDir: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"), RunnerDir: filepath.Join(root, "runner"), TmpDir: filepath.Join(root, "tmp")}
+	cfg := Config{PlatformURL: srv.URL, TokenFile: token, ToolCommand: failingTaskWorkerTool(t), WorkspaceDir: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"), RunnerDir: filepath.Join(root, "runner"), TmpDir: filepath.Join(root, "tmp")}
 	r, err := NewRunner(cfg, slog.New(slog.NewTextHandler(io.Discard, nil)), DefaultAdapters)
 	if err != nil {
 		t.Fatal(err)
@@ -120,7 +145,7 @@ func TestTaskWorkerStructuredOutput(t *testing.T) {
 				}
 			}))
 			defer srv.Close()
-			cfg := Config{PlatformURL: srv.URL, TokenFile: token, ToolCommand: "/bin/false", WorkspaceDir: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"), RunnerDir: filepath.Join(root, "runner"), TmpDir: filepath.Join(root, "tmp")}
+			cfg := Config{PlatformURL: srv.URL, TokenFile: token, ToolCommand: failingTaskWorkerTool(t), WorkspaceDir: filepath.Join(root, "workspace"), HomeDir: filepath.Join(root, "home"), RunnerDir: filepath.Join(root, "runner"), TmpDir: filepath.Join(root, "tmp")}
 			factory := func(name string) (harnesses.Adapter, error) {
 				a, err := DefaultAdapters(name)
 				if tc.name != "oversized" {
