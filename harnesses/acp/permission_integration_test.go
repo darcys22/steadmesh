@@ -186,6 +186,9 @@ func TestExperimentalLauncherNativePermissionConformance(t *testing.T) {
 	if _, err := client.NewSession(ctx, plan.Session); err != nil {
 		t.Fatal(err)
 	}
+	if err := client.pinCodexSessionTitle(ctx); err != nil {
+		t.Fatal(err)
+	}
 	// A preliminary model request reveals the actual offered tool names. Do not
 	// silently replace a missing native tool with a platform tool or text claim.
 	if _, err := client.Prompt(ctx, "hello before native permission probe", nil); err != nil {
