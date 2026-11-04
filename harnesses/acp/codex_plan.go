@@ -199,6 +199,17 @@ requires_openai_auth = false
 	if err := plan.Session.validate(); err != nil {
 		return CodexPlan{}, err
 	}
+	// Start platform-authorized bridges with the native process. Required
+	// discovery prevents a prompt from racing the ACP session-only MCP reload.
+	// Their server enforces seat permissions; native ACP requests still deny.
+	for _, server := range plan.Session.MCPServers {
+		args, _ := json.Marshal(server.Args)
+		plan.StartupConfigTOML += fmt.Sprintf("\n[mcp_servers.%s]\ncommand = %s\nargs = %s\nrequired = true\nstartup_timeout_sec = 30\ntool_timeout_sec = 600\ndefault_tools_approval_mode = \"approve\"\n", quote(server.Name), quote(server.Command), args)
+		plan.StartupConfigTOML += fmt.Sprintf("[mcp_servers.%s.env]\n", quote(server.Name))
+		for _, variable := range server.Env {
+			plan.StartupConfigTOML += fmt.Sprintf("%s = %s\n", quote(variable.Name), quote(variable.Value))
+		}
+	}
 	return plan, nil
 }
 
