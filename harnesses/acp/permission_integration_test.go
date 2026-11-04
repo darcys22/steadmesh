@@ -210,12 +210,8 @@ func TestExperimentalLauncherNativePermissionConformance(t *testing.T) {
 	shellPath := "'" + strings.ReplaceAll(marker, "'", "'\\''") + "'"
 	args, _ := json.Marshal(map[string]any{"cmd": "printf native-permission-bypassed > " + shellPath, "sandbox_permissions": "require_escalated", "justification": "Fixture only: deny this attempted write.", "workdir": dirs.Workspace})
 	stop, err := client.Prompt(ctx, "CALL exec_command "+string(args), nil)
-	if err != nil {
-		t.Fatalf("native permission probe: %v", err)
-	}
-	if stop.StopReason != "end_turn" {
-		t.Fatalf("unexpected permission probe stop: %+v", stop)
-	}
+	// Inspect the actual permission exchange even when the target terminates
+	// the prompt. A textual/stop response alone never establishes denial.
 	if err := client.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +220,12 @@ func TestExperimentalLauncherNativePermissionConformance(t *testing.T) {
 	}
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Fatalf("forbidden write occurred or marker unreadable: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("native permission probe: %v", err)
+	}
+	if stop.StopReason != "cancelled" && stop.StopReason != "end_turn" {
+		t.Fatalf("unexpected permission probe stop: %+v", stop)
 	}
 	sawResult := false
 	for _, r := range chain.Stub.Requests() {
@@ -234,8 +236,12 @@ func TestExperimentalLauncherNativePermissionConformance(t *testing.T) {
 			sawResult = true
 		}
 	}
-	if !sawResult {
-		t.Fatal("no native tool result returned to model after permission denial")
+	// ACP 2.5.0 maps our cancelled permission outcome to native decision
+	// cancel, and maps the interrupted native turn to stopReason=cancelled.
+	// There is no subsequent model request/tool result for that terminal path.
+	// If the target instead continues normally, require the tool-result path.
+	if stop.StopReason == "end_turn" && !sawResult {
+		t.Fatal("continued turn lacks native tool result after permission denial")
 	}
 	for _, r := range chain.Calls() {
 		if r.Token != token || r.Generation != "3" || r.Execution != execution {
@@ -245,7 +251,7 @@ func TestExperimentalLauncherNativePermissionConformance(t *testing.T) {
 	if len(ts.Calls()) != 0 {
 		t.Fatalf("native permission fixture unexpectedly used platform tools: %v", ts.Calls())
 	}
-	t.Log(fmt.Sprintf("verified real native permission request, correlated ACP cancellation and absent marker for %s", execution))
+	t.Logf("verified real native permission request, correlated ACP cancellation and absent marker for %s; prompt stop=%s", execution, stop.StopReason)
 }
 
 func TestPermissionAuditRequiresCorrelatedDenial(t *testing.T) {
