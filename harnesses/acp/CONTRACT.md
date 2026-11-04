@@ -175,3 +175,31 @@ generation and execution assertions. It made one request to the local modelstub,
 with external networking disabled. This verifies that narrow round trip, not
 real-model quality, native tool permissions, workspace-config safety, managed
 skills or durable recovery. The production adapter remains unregistered.
+
+### Experimental one-turn launcher (Linux only)
+
+`ExperimentalLauncher` is a host-facing helper, not a registered adapter. It
+checks root-owned, non-group/world-writable canonical runtime paths and an empty
+neutral cwd, including its ancestors. It rejects ancestor `.codex`, `.agents`
+and AGENTS files, additional MCP servers and nonempty managed skillsets. Each
+call creates its own owner-only HOME/CODEX_HOME outside the workspace, verifies
+the pinned version strings and successful exits, opens one session, sends one
+prompt, then kills the owned process group and waits for its leader. Stderr is
+drained to discard rather than exposing unredacted diagnostics. Failed process
+cleanup retains the invocation's private files instead of removing files a
+process might still use.
+
+The original runner/token and seat attribution remain attached to the platform
+bridge. Only the model runtime's HOME/CODEX_HOME/TMPDIR are replaced. The real
+workspace path remains in bootstrap context, while ACP and native tools start
+in the neutral directory. Workspace AGENTS/config/skills discovery is therefore
+intentionally different from the native coding adapter.
+
+This helper does not establish a sandbox: callers must supply the isolated,
+credential-free, non-root image and control system configuration, native skills,
+runtime dependencies and egress. Ownership checks are not proof that arbitrary
+host installations or their dependencies are trustworthy. Process groups are
+not a container boundary for descendants that deliberately detach. Native ACP
+permission denial is unchanged. Adversarial real-runtime configuration, tool,
+cancellation and portable recovery fixtures remain prerequisites to production
+registration; this change does not register or enable an adapter.
