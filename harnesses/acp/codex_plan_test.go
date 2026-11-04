@@ -93,7 +93,8 @@ func TestPlanPinsProviderAtNativeStartup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`model_provider = "steadmesh"`, `[model_providers.steadmesh]`, `base_url = "http://127.0.0.1:5555/v1"`, `sandbox_mode = "read-only"`, `approval_policy = "on-request"`, `hooks = false`, `plugins = false`, `[mcp_servers."steadmesh"]`, `required = true`, `default_tools_approval_mode = "approve"`} {
+	for _, want := range []string{`model_provider = "steadmesh"`, `[model_providers.steadmesh]`, `base_url = "http://127.0.0.1:5555/v1"`, `sandbox_mode = "read-only"`, `approval_policy = "on-request"`, `hooks = false`, `plugins = false`, `multi_agent_v2 = false`, `multi_agent = false`, `[agents]
+enabled = false`, `generate_memories = false`, `use_memories = false`, `[mcp_servers."steadmesh"]`, `required = true`, `default_tools_approval_mode = "approve"`} {
 		if !strings.Contains(p.StartupConfigTOML, want) {
 			t.Fatalf("missing startup boundary %s", want)
 		}

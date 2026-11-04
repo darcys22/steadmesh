@@ -214,6 +214,14 @@ the trusted session setup pins a fixed non-user title with the target-specific
 This is required model-routing configuration, not cosmetic UI behavior. The real
 fixture leaves the session alive after a turn and checks every observed model
 request, so immediate process teardown cannot conceal auxiliary calls.
+
+The restricted plan also explicitly disables native agent backends and native
+memory extraction/use. In Codex 0.166.0, `agents.enabled=false` together with
+`features.multi_agent_v2=false` is needed; the older multi-agent feature flag
+alone does not override model-catalog backend selection. Platform delegation
+and memory tools remain subject to the existing seat API authority. The fixture
+checks that native agent-spawning tools are not offered. This does not claim
+universal model enforcement for arbitrary ACP targets or untested native paths.
 ### Unregistered restricted lifecycle experiment (Linux only)
 
 `NewRestricted(ExperimentalLauncher{...})` constructs a separate
