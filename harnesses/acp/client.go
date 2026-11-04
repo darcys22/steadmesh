@@ -244,7 +244,13 @@ func (c *Client) Initialize(ctx context.Context, name, version string) error {
 			Version string `json:"version"`
 		} `json:"agentInfo"`
 	}
-	err := c.request(ctx, "initialize", map[string]any{"protocolVersion": 1, "clientInfo": map[string]string{"name": "steadmesh", "version": "experimental"}, "clientCapabilities": map[string]any{"fs": map[string]bool{"readTextFile": false, "writeTextFile": false}, "terminal": false}}, nil, &res)
+	capabilities := map[string]any{"fs": map[string]bool{"readTextFile": false, "writeTextFile": false}, "terminal": false}
+	// The pinned target gates explicit titles behind its sessionIndex extension.
+	// Declare only that extension, not filesystem, terminal or approval support.
+	if name == CodexACPName && version == CodexACPVersion {
+		capabilities["_meta"] = map[string]any{"jetbrains": map[string]any{"air": map[string]any{"version": 1, "capabilities": []string{"sessionIndex"}}}}
+	}
+	err := c.request(ctx, "initialize", map[string]any{"protocolVersion": 1, "clientInfo": map[string]string{"name": "steadmesh", "version": "experimental"}, "clientCapabilities": capabilities}, nil, &res)
 	if err != nil {
 		return err
 	}
