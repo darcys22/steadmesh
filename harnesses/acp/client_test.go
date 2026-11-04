@@ -49,6 +49,9 @@ func (p peer) setup() {
 	if string(m["method"]) != `"initialize"` {
 		p.t.Errorf("initialize: %s", m["method"])
 	}
+	if !strings.Contains(string(m["params"]), `"sessionIndex"`) {
+		p.t.Error("pinned title extension not negotiated")
+	}
 	if strings.Contains(string(m["params"]), `"terminal":true`) {
 		p.t.Error("terminal advertised")
 	}
