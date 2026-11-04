@@ -186,6 +186,9 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 		if _, err := client.NewSession(ctx, plan.Session); err != nil {
 			fail(t, "session/new", err)
 		}
+		if err := client.pinCodexSessionTitle(ctx); err != nil {
+			fail(t, "pin session title", err)
+		}
 		var output strings.Builder
 		stop, err := client.Prompt(ctx, "hello", func(o Observation) { output.WriteString(o.Text) })
 		if err != nil {
@@ -225,4 +228,12 @@ func TestCodexACPProtocolConformance(t *testing.T) {
 		}
 		t.Log("read-only platform self tool reached fixture bridge")
 	})
+	// Keep the session alive after the turn so title/suggestion background calls
+	// cannot hide behind immediate process teardown.
+	time.Sleep(time.Second)
+	for _, request := range chain.Stub.Requests() {
+		if request.Model != env.Model.ID {
+			t.Fatalf("auxiliary request escaped model pin: %+v", request)
+		}
+	}
 }

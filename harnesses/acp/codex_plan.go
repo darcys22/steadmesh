@@ -147,7 +147,7 @@ requires_openai_auth = false
 `, quote(env.Model.ID), quote(strings.TrimSuffix(env.Model.BaseURL, "/")+"/v1"))
 	plan.Env = []string{
 		"PATH=/usr/local/bin:/usr/bin:/bin", "HOME=" + env.HomeDir, "CODEX_HOME=" + filepath.Join(env.RunnerDir, "acp-codex"),
-		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8",
+		"CODEX_PATH=" + codexPath, "CODEX_CONFIG=" + string(data), "MODEL_PROVIDER=steadmesh", "INITIAL_AGENT_MODE=read-only", "NO_BROWSER=1", "LANG=C.UTF-8", "CODEX_ACP_PROMPT_SUGGESTIONS=false",
 		`DEFAULT_AUTH_REQUEST={"methodId":"api-key","_meta":{"api-key":{"apiKey":"steadmesh-placeholder"}}}`,
 	}
 	if env.TmpDir != "" {
@@ -260,5 +260,24 @@ func OpenCodexSession(ctx context.Context, transport io.ReadWriteCloser, env har
 		_ = c.Close()
 		return nil, err
 	}
+	if err := c.pinCodexSessionTitle(ctx); err != nil {
+		_ = c.Close()
+		return nil, err
+	}
 	return c, nil
+}
+
+// pinCodexSessionTitle disables the pinned target's automatic title generation.
+// ACP 2.5.0 otherwise makes an asynchronous request with a hard-coded model.
+// This target-specific extension must succeed before any model prompt.
+func (c *Client) pinCodexSessionTitle(ctx context.Context) error {
+	if !c.busy.TryLock() {
+		return errors.New("acp: concurrent call")
+	}
+	defer c.busy.Unlock()
+	if !c.initialized || c.session == "" {
+		return errors.New("acp: no session")
+	}
+	var result json.RawMessage
+	return c.request(ctx, "_session/rename", map[string]string{"sessionId": c.session, "title": "Steadmesh managed session"}, metadataUpdate, &result)
 }

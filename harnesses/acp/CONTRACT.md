@@ -203,3 +203,14 @@ not a container boundary for descendants that deliberately detach. Native ACP
 permission denial is unchanged. Adversarial real-runtime configuration, tool,
 cancellation and portable recovery fixtures remain prerequisites to production
 registration; this change does not register or enable an adapter.
+
+
+### Auxiliary model requests
+
+Pinned ACP 2.5.0 normally starts asynchronous title and prompt-suggestion turns
+using a hard-coded model. The plan disables prompt suggestions explicitly, and
+the trusted session setup pins a fixed non-user title with the target-specific
+`_session/rename` extension before any prompt. A failed rename closes the client.
+This is required model-routing configuration, not cosmetic UI behavior. The real
+fixture leaves the session alive after a turn and checks every observed model
+request, so immediate process teardown cannot conceal auxiliary calls.

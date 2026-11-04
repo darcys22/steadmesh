@@ -152,6 +152,9 @@ func (l ExperimentalLauncher) Run(ctx context.Context, env harnesses.Environment
 	if _, err := c.NewSession(ctx, plan.Session); err != nil {
 		return zero, err
 	}
+	if err := c.pinCodexSessionTitle(ctx); err != nil {
+		return zero, err
+	}
 	result, err := c.Prompt(ctx, prompt, emit)
 	if cleanupErr := p.Close(); err == nil {
 		err = cleanupErr
