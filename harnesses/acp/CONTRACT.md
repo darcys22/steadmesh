@@ -222,3 +222,27 @@ alone does not override model-catalog backend selection. Platform delegation
 and memory tools remain subject to the existing seat API authority. The fixture
 checks that native agent-spawning tools are not offered. This does not claim
 universal model enforcement for arbitrary ACP targets or untested native paths.
+### Native permission-probe semantics
+
+The native escalation fixture requires an actual `session/request_permission`
+for its sentinel-writing command, a correlated client response with outcome
+`cancelled` and no selected approval option, and no sentinel file. Those checks
+run before interpreting the prompt's terminal status. Neither marker absence
+alone nor an assistant's textual claim proves denial.
+
+In pinned ACP 2.5.0, `CodexApprovalHandler.selectedDecision` returns no selection
+for a cancelled outcome; `handleCommandExecution` then returns native decision
+`cancel`. An interrupted native turn maps to prompt `stopReason: "cancelled"`.
+These paths are visible in the [pinned distribution](https://unpkg.com/@agentclientprotocol/codex-acp@2.5.0/dist/index.js)
+at lines 38478–38500, 38559–38563 and 53380–53404. The isolated permission run
+[41747220471](https://github.com/darcys22/steadmesh/actions/runs/41747220471)
+reached that cancelled prompt outcome. Its original assertion incorrectly
+required `end_turn` before auditing the permission exchange, so that run alone
+did not establish the correlated denial/no-write assertions.
+
+The corrected fixture accepts the terminal cancelled path only alongside the
+mandatory permission audit and no-write checks. It does not require a subsequent
+model tool result when the native turn has intentionally stopped. If a target
+returns `end_turn` instead, a native tool result must still reach the model.
+Read-only sandboxing, on-request approval and the deny-only ACP client are
+unchanged. A fresh passing isolated run is required to establish this gate.
