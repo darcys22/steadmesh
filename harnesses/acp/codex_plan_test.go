@@ -32,7 +32,7 @@ func TestPlanUsesOnlyForwarderAndPlaceholder(t *testing.T) {
 			t.Fatalf("missing boundary: %s", expected)
 		}
 	}
-	if len(plan.Session.MCPServers) != 1 || plan.Session.MCPServers[0].Command != env.ToolCommand {
+	if len(plan.Session.MCPServers) != 0 || !strings.Contains(plan.StartupConfigTOML, `command = "/bin/steadmesh-tools"`) {
 		t.Fatal("missing platform bridge")
 	}
 }
@@ -46,6 +46,9 @@ func TestPlanRejectsBoundaryOverrides(t *testing.T) {
 		"bridge override": func(e *harnesses.Environment) { e.ExtraEnv = []string{"STEADMESH_TOKEN_FILE=/other"} },
 		"duplicate MCP": func(e *harnesses.Environment) {
 			e.MCPServers = []harnesses.MCPServer{{Name: "steadmesh", Command: "/evil"}}
+		},
+		"noncanonical MCP": func(e *harnesses.Environment) {
+			e.MCPServers = []harnesses.MCPServer{{Name: "other server", Command: "/other"}}
 		},
 		"relative MCP": func(e *harnesses.Environment) {
 			e.MCPServers = []harnesses.MCPServer{{Name: "other", Command: "relative"}}

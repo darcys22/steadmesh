@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -34,6 +35,8 @@ type SessionParams struct {
 	MCPServers []StdioServer `json:"mcpServers"`
 }
 
+var mcpName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
 func (p SessionParams) validate() error {
 	if !filepath.IsAbs(p.CWD) {
 		return errors.New("acp: absolute workspace required")
@@ -43,7 +46,7 @@ func (p SessionParams) validate() error {
 	}
 	names := map[string]bool{}
 	for _, s := range p.MCPServers {
-		if s.Name == "" || names[s.Name] || !filepath.IsAbs(s.Command) {
+		if !mcpName.MatchString(s.Name) || names[s.Name] || !filepath.IsAbs(s.Command) {
 			return errors.New("acp: invalid or duplicate MCP server")
 		}
 		names[s.Name] = true
@@ -210,6 +213,9 @@ requires_openai_auth = false
 			plan.StartupConfigTOML += fmt.Sprintf("%s = %s\n", quote(variable.Name), quote(variable.Value))
 		}
 	}
+	// Native startup owns the bridge configuration. Do not request duplicate
+	// session servers: pinned ACP reports these as failed startup tool updates.
+	plan.Session.MCPServers = []StdioServer{}
 	return plan, nil
 }
 
